@@ -1,0 +1,85 @@
+name: '1.0$(Rev:.r)'
+trigger:
+- master
+
+variables:
+  buildAgentVmImage: 'windows-latest'
+  serviceConnection: 'niobium-billing'
+  resourceGroupName: 'niobium-billing'
+
+pool:
+  vmImage: $(buildAgentVmImage)
+
+resources: 
+  repositories:
+  - repository: devops
+    type: git
+    name: cod/Cod.Infrastructures
+    ref: master
+
+stages:
+- stage: Production
+  jobs:
+  - template: pipelines/jobs/GenericDotnetBuild.yml@devops
+    parameters:
+      projectToPublish: '**/Niobium.Billing.csproj'
+
+  - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
+    parameters:
+      azureServiceConnection: $(serviceConnection)
+      resourceGroupName: $(resourceGroupName)
+      appNamePrefix: 'niobiumbilling'
+      enableStagingSlot: true
+      allowedOrigins: ['https://www.niobium.co.nz']
+      checkoutDevopsStep:
+        checkout: devops
+
+  - job: Table
+    dependsOn: 
+      - Infrastructure
+    condition: succeeded()
+    pool:
+      vmImage: $(buildAgentVmImage)
+    variables:
+      functionAppPrincipalId: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalId']]
+    steps:
+    - checkout: devops
+    - template: pipelines/steps/newStorageAccount.yml@devops
+      parameters:
+        azureServiceConnection: $(serviceConnection)
+        resourceGroupName: $(resourceGroupName)
+        storageAccountName: 'niobiumbillingdb'
+        contributorPrincipalId: $(functionAppPrincipalId)
+
+  - job: Configuration
+    dependsOn:
+      - Infrastructure
+      - Table
+    condition: succeeded()
+    pool:
+      vmImage: $(buildAgentVmImage)
+    variables:
+      functionAppName: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppName']]
+      functionAppHostname: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppHostname']]
+      tableFQDN: $[dependencies.Table.outputs['newStorageAccountProperties.tableFQDN']]
+    steps:
+    - checkout: none
+    - task: AzureAppServiceSettings@1
+      displayName: 'Update AppSettings'
+      inputs:
+        azureSubscription: $(serviceConnection)
+        appName: $(functionAppName)
+        resourceGroupName: $(resourceGroupName)
+        appSettings: |
+          [
+            {
+              "name": "StorageTableOptions:FullyQualifiedDomainName",
+              "value": "$(tableFQDN)",
+              "slotSetting": false
+            }
+          ]
+      
+  - template: pipelines/jobs/FunctionAppDeploy.yml@devops
+    parameters:
+      serviceConnection: $(serviceConnection)
+      resourceGroupName: $(resourceGroupName)
