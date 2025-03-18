@@ -13,6 +13,7 @@ pool:
 resources: 
   repositories:
   - repository: devops
+    endpoint: CodRepo
     type: git
     name: cod/Cod.Infrastructures
     ref: master
@@ -30,7 +31,7 @@ stages:
       resourceGroupName: $(resourceGroupName)
       appNamePrefix: 'niobiumbilling'
       enableStagingSlot: true
-      allowedOrigins: ['https://www.niobium.co.nz']
+      allowedOrigins: 'https://www.niobium.co.nz'
       checkoutDevopsStep:
         checkout: devops
 
