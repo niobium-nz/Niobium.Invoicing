@@ -29,8 +29,9 @@ stages:
       azureServiceConnection: $(serviceConnection)
       resourceGroupName: $(resourceGroupName)
       appNamePrefix: 'niobiumbilling'
+      enableKeyVault: true
       enableStagingSlot: true
-      allowedOrigins: ['https://www.niobium.co.nz']
+      allowedOrigins: 'https://www.niobium.co.nz'
       checkoutDevopsStep:
         checkout: devops
 
@@ -62,6 +63,7 @@ stages:
       functionAppName: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppName']]
       functionAppHostname: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppHostname']]
       tableFQDN: $[dependencies.Table.outputs['newStorageAccountProperties.tableFQDN']]
+      keyVaultUrl: $[dependencies.Infrastructure.outputs['infrastructureOutputs.keyVaultUrl']]
     steps:
     - checkout: none
     - task: AzureAppServiceSettings@1
@@ -75,6 +77,11 @@ stages:
             {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
               "value": "$(tableFQDN)",
+              "slotSetting": false
+            },
+            {
+              "name": "BillingOptions:InvoiceTokenSecret",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET/)",
               "slotSetting": false
             }
           ]

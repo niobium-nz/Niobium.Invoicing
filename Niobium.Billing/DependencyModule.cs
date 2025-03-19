@@ -1,12 +1,30 @@
 ﻿using Cod;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Niobium.Billing
 {
     public static class DependencyModule
     {
-        public static IServiceCollection AddBilling(this IServiceCollection services)
+        private static volatile bool loaded;
+
+        public static IServiceCollection AddBilling(this IServiceCollection services, IConfiguration configuration)
         {
+            return services.AddBilling(configuration.Bind);
+        }
+
+        public static IServiceCollection AddBilling(this IServiceCollection services, Action<BillingOptions>? options = null)
+        {
+            if (loaded)
+            {
+                return services;
+            }
+            loaded = true;
+
+            services.Configure<BillingOptions>(o =>
+            {
+                options?.Invoke(o);
+            });
             return services.RegisterDomain<InvoiceDomain, Invoice>();
         }
     }

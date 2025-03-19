@@ -7,7 +7,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Niobium.Billing;
+using System.Text;
 
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 Host.CreateDefaultBuilder(args)
     .ConfigureFunctionsWebApplication(builder =>
     {
@@ -20,7 +22,7 @@ Host.CreateDefaultBuilder(args)
                 .ConfigureFunctionsApplicationInsights()
                 .AddDatabase(context.Configuration.GetRequiredSection(nameof(StorageTableOptions)))
                     .PostConfigure<StorageTableOptions>(opt => opt.EnableInteractiveIdentity = isDevelopment)
-                .AddBilling();
+                .AddBilling(context.Configuration.GetRequiredSection(nameof(BillingOptions)));
     })
     .UseDefaultServiceProvider((_, options) =>
     {

@@ -1,4 +1,5 @@
 ﻿using Cod;
+using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -6,6 +7,7 @@ using System.Text.RegularExpressions;
 namespace Niobium.Billing
 {
     public partial class InvoiceDomain(
+        IOptions<BillingOptions> config,
         Lazy<IRepository<Invoice>> repo,
         Lazy<IRepository<InvoiceItem>> itemRepo,
         IEnumerable<IDomainEventHandler<IDomain<Invoice>>> eventHandlers)
@@ -18,11 +20,11 @@ namespace Niobium.Billing
         {
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
             var json = JsonSerializer.SerializeObject(invoice, JsonSerializationFormat.PascalCase);
-            var hash = SHA.SHA256Hash(json, 16);
+            var hash = SHA.SHA256Hash(json, config.Value.InvoiceTokenSecret, 16);
             return hash.Equals(token, StringComparison.InvariantCultureIgnoreCase);
         }
 
-        public async Task<string?> GetHtmlOutputAsync(string token)
+        public async Task<string> GetHTMLOutputAsync(string token)
         {
             var valid = await VerifyTokenAsync(token);
             if (!valid)
@@ -79,7 +81,7 @@ namespace Niobium.Billing
                             .Replace("{{ContactName}}", invoice.ContactName)
                             .Replace("{{PaymentInstructions}}", invoice.PaymentInstructions)
                             .Replace("{{Subtotal}}", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d))
-                            .Replace("{{Tax}}", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d))
+                            .Replace("{{TaxAmount}}", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d))
                             .Replace("{{TaxRate}}", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d))
                             .Replace("{{GrandTotal}}", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d));
 
@@ -134,7 +136,7 @@ namespace Niobium.Billing
             string billingPeriod = string.Empty;
             if (invoice.BillingPeriodStartDay != null && invoice.BillingPeriodEndDay == null)
             {
-                billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToMonthDay(culture);
+                billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonth(culture);
             }
             else if (invoice.BillingPeriodStartDay != null && invoice.BillingPeriodEndDay != null)
             {
@@ -159,7 +161,7 @@ namespace Niobium.Billing
 
         private static async Task<string?> GetEmbededResourceAsStringAsync(string resourceName)
         {
-            var assembly = typeof(GetHtmlInvoice).Assembly;
+            var assembly = typeof(GetHTMLInvoice).Assembly;
             using (var stream = assembly.GetManifestResourceStream(resourceName))
             {
                 if (stream == null)
