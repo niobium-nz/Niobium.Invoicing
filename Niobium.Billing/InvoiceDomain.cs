@@ -14,6 +14,7 @@ namespace Niobium.Billing
           : GenericDomain<Invoice>(repo, eventHandlers)
     {
         private static readonly Regex InvoiceLineRegex = CreateInvoiceLineRegex();
+        private static string? template;
         private const string TemplateResourceName = "Niobium.Billing.InvoiceTemplate.html";
 
         public async Task<bool> VerifyTokenAsync(string token)
@@ -36,7 +37,8 @@ namespace Niobium.Billing
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
 
-            var template = await GetEmbededResourceAsStringAsync(TemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
+            template ??= await GetEmbededResourceAsStringAsync(TemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
+
             var itemTemplateMatch = InvoiceLineRegex.Match(template);
             if (!itemTemplateMatch.Success)
             {
