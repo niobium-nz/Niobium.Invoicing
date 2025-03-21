@@ -23,7 +23,7 @@ stages:
   jobs:
   - template: pipelines/jobs/GenericDotnetBuild.yml@devops
     parameters:
-      projectToPublish: '**/Niobium.Billing.csproj'
+      projectToPublish: '**/Niobium.Billing.Functions.csproj'
 
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
     parameters:
