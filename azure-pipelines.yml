@@ -23,6 +23,7 @@ stages:
   jobs:
   - template: pipelines/jobs/GenericDotnetBuild.yml@devops
     parameters:
+      nugetVSTSFeedID: 'Niobium/niobium'
       projectToPublish: '**/Niobium.Billing.Functions.csproj'
 
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops

@@ -1,6 +1,6 @@
 ﻿using Cod;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Billing
 {
     public class Invoice
     {

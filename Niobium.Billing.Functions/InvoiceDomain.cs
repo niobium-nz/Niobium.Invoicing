@@ -1,11 +1,10 @@
 ﻿using Cod;
 using Microsoft.Extensions.Options;
-using Niobium.Billing.Functions;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Niobium.Billing
+namespace Niobium.Billing.Functions
 {
     public partial class InvoiceDomain(
         IOptions<BillingOptions> config,
@@ -23,7 +22,7 @@ namespace Niobium.Billing
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
             var json = JsonSerializer.SerializeObject(invoice, JsonSerializationFormat.PascalCase);
             var hash = SHA.SHA256Hash(json, config.Value.InvoiceTokenSecret, 16);
-            return hash.Equals(token, StringComparison.InvariantCultureIgnoreCase);
+            return hash.Equals(token, StringComparison.OrdinalIgnoreCase);
         }
 
         public async Task<string> GetHTMLOutputAsync(string token)
