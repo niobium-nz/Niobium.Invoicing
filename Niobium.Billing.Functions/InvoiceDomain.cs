@@ -1,5 +1,6 @@
 ﻿using Cod;
 using Microsoft.Extensions.Options;
+using Niobium.Billing.Functions;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,7 +16,7 @@ namespace Niobium.Billing
     {
         private static readonly Regex InvoiceLineRegex = CreateInvoiceLineRegex();
         private static string? template;
-        private const string TemplateResourceName = "Niobium.Billing.InvoiceTemplate.html";
+        private const string TemplateResourceName = "Niobium.Billing.Functions.InvoiceTemplate.html";
 
         public async Task<bool> VerifyTokenAsync(string token)
         {

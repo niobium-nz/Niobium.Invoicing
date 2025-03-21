@@ -6,7 +6,7 @@ using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Niobium.Billing;
+using Niobium.Billing.Functions;
 using System.Text;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);

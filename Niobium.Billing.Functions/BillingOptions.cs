@@ -1,4 +1,4 @@
-﻿namespace Niobium.Billing
+﻿namespace Niobium.Billing.Functions
 {
     public class BillingOptions
     {

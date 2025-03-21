@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Niobium.Billing
+namespace Niobium.Billing.Functions
 {
     public static class DependencyModule
     {
