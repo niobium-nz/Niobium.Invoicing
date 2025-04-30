@@ -17,23 +17,17 @@ namespace Niobium.Billing.Functions
         private static string? template;
         private const string TemplateResourceName = "Niobium.Billing.Functions.InvoiceTemplate.html";
 
-        public async Task<bool> VerifyTokenAsync(string token)
-        {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
-            var json = JsonSerializer.SerializeObject(invoice, JsonSerializationFormat.PascalCase);
-            var hash = SHA.SHA256Hash(json, config.Value.InvoiceTokenSecret, 16);
-            return hash.Equals(token, StringComparison.OrdinalIgnoreCase);
-        }
-
         public async Task<string> GetHTMLOutputAsync(string token)
         {
-            var valid = await VerifyTokenAsync(token);
+            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
+            var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID())).ToArrayAsync();
+
+            var valid = VerifyToken(invoice, items, token);
             if (!valid)
             {
                 throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
             }
 
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
 
@@ -48,9 +42,8 @@ namespace Niobium.Billing.Functions
             var itemTemplate = itemTemplateMatch.Value;
             string result = BuildInvoiceHtml(template, invoice, timezone, culture);
 
-            var items = itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()));
             var itemsHtml = new StringBuilder();
-            await foreach (var item in items)
+            foreach (var item in items)
             {
                 string itemHtml = BuildInvoiceLineHtml(itemTemplate, item);
                 itemsHtml.Append(itemHtml);
@@ -58,6 +51,21 @@ namespace Niobium.Billing.Functions
             result = result.Replace(itemTemplate, itemsHtml.ToString());
 
             return result;
+        }
+
+        private bool VerifyToken(Invoice invoice, IEnumerable<InvoiceItem> items, string token)
+        {
+            var json = new StringBuilder();
+            var main = JsonSerializer.SerializeObject(invoice, JsonSerializationFormat.PascalCase);
+            json.Append(main);
+            foreach (var item in items)
+            {
+                var child = JsonSerializer.SerializeObject(item, JsonSerializationFormat.PascalCase);
+                json.Append(child);
+            }
+
+            var hash = SHA.SHA256Hash(json.ToString(), config.Value.InvoiceTokenSecret, 16);
+            return hash.Equals(token, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildInvoiceLineHtml(string itemTemplate, InvoiceItem item)
