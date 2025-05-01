@@ -1,4 +1,5 @@
 ﻿using Cod;
+using Cod.Platform.Notification.Email;
 using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Text;
@@ -10,19 +11,23 @@ namespace Niobium.Billing.Functions
         IOptions<BillingOptions> config,
         Lazy<IRepository<Invoice>> repo,
         Lazy<IRepository<InvoiceItem>> itemRepo,
+        IEmailNotificationClient sender,
         IEnumerable<IDomainEventHandler<IDomain<Invoice>>> eventHandlers)
           : GenericDomain<Invoice>(repo, eventHandlers)
     {
         private static readonly Regex InvoiceLineRegex = CreateInvoiceLineRegex();
-        private static string? template;
-        private const string TemplateResourceName = "Niobium.Billing.Functions.InvoiceTemplate.html";
+        private static string? invoiceTemplate;
+        private static string? emailTemplate;
+        private const string InvoiceTemplateResourceName = "Niobium.Billing.Functions.InvoiceTemplate.html";
+        private const string EmailTemplateResourceName = "Niobium.Billing.Functions.EmailTemplate.html";
 
-        public async Task<string> GetHTMLOutputAsync(string token)
+        public async Task<string> GetHTMLOutputAsync(string token, CancellationToken cancellationToken)
         {
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
-            var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID())).ToArrayAsync();
+            var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
+                .ToArrayAsync(cancellationToken: cancellationToken);
 
-            var valid = VerifyToken(invoice, items, token);
+            var valid = VerifyAccessToken(invoice, items, token);
             if (!valid)
             {
                 throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
@@ -31,16 +36,16 @@ namespace Niobium.Billing.Functions
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
 
-            template ??= await GetEmbededResourceAsStringAsync(TemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
+            invoiceTemplate ??= await GetEmbededResourceAsStringAsync(InvoiceTemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
 
-            var itemTemplateMatch = InvoiceLineRegex.Match(template);
+            var itemTemplateMatch = InvoiceLineRegex.Match(invoiceTemplate);
             if (!itemTemplateMatch.Success)
             {
                 throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice line template.");
             }
 
             var itemTemplate = itemTemplateMatch.Value;
-            string result = BuildInvoiceHtml(template, invoice, timezone, culture);
+            string result = BuildInvoiceHtml(invoiceTemplate, invoice, timezone, culture);
 
             var itemsHtml = new StringBuilder();
             foreach (var item in items)
@@ -53,7 +58,34 @@ namespace Niobium.Billing.Functions
             return result;
         }
 
-        private bool VerifyToken(Invoice invoice, IEnumerable<InvoiceItem> items, string token)
+        public async Task<bool> SendHTMLEmailAsync(CancellationToken cancellationToken)
+        {
+            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
+            var email = await GetHTMLEmailAsync(cancellationToken);
+            return await sender.SendAsync(
+                config.Value.InvoiceEmailSenderAddress,
+                [invoice.RecipientEmail],
+                $"Invoice {invoice.GetID()} from {invoice.BillerName} for {invoice.BilleeName}",
+                email,
+                cancellationToken);
+        }
+
+        private async Task<string> GetHTMLEmailAsync(CancellationToken cancellationToken)
+        {
+            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
+            emailTemplate ??= await GetEmbededResourceAsStringAsync(EmailTemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing email template.");
+            TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
+            CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
+            var result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);
+            var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
+                .ToArrayAsync(cancellationToken: cancellationToken);
+            var token = BuildAccessToken(invoice, items);
+            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Issuer}/invoices/{invoice.GetID()}?token={token}";
+            result = result.Replace("{{InvoiceURL}}", invoiceURL);
+            return result;
+        }
+
+        private string BuildAccessToken(Invoice invoice, IEnumerable<InvoiceItem> items)
         {
             var json = new StringBuilder();
             var main = JsonSerializer.SerializeObject(invoice, JsonSerializationFormat.PascalCase);
@@ -64,8 +96,13 @@ namespace Niobium.Billing.Functions
                 json.Append(child);
             }
 
-            var hash = SHA.SHA256Hash(json.ToString(), config.Value.InvoiceTokenSecret, 16);
-            return hash.Equals(token, StringComparison.OrdinalIgnoreCase);
+            return SHA.SHA256Hash(json.ToString(), config.Value.InvoiceTokenSecret, 16);
+        }
+
+        private bool VerifyAccessToken(Invoice invoice, IEnumerable<InvoiceItem> items, string token)
+        {
+            var expectation = BuildAccessToken(invoice, items);
+            return expectation.Equals(token, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildInvoiceLineHtml(string itemTemplate, InvoiceItem item)

@@ -82,6 +82,10 @@ namespace Niobium.Billing
 
         public required string Culture { get; set; }
 
+        public required string RecipientEmail { get; set; }
+
+        public long SettledCents { get; set; }
+
         public long GetID() => ParseID(CreatedAt);
 
         public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => CreatedAt.ToLocal(timeZoneInfo);

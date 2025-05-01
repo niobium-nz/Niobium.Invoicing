@@ -12,7 +12,8 @@ namespace Niobium.Billing.Functions
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "{issuer}/invoices/{invoice}")] HttpRequest req,
             Guid issuer,
             long invoice,
-            [FromQuery(Name = "token")] string token)
+            [FromQuery(Name = "token")] string token,
+            CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(token)
                 || invoice <= 0
@@ -21,8 +22,8 @@ namespace Niobium.Billing.Functions
                 return new NotFoundResult();
             }
 
-            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice));
-            var html = await domain.GetHTMLOutputAsync(token);
+            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken);
+            var html = await domain.GetHTMLOutputAsync(token, cancellationToken);
 
             return new ContentResult
             {

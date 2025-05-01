@@ -76,6 +76,11 @@ stages:
         appSettings: |
           [
             {
+                "name": "ResendServiceOptions:GlobalAPIKey",
+                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/RESEND-API-KEY/)",
+                "slotSetting": false
+            },
+            {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
               "value": "$(tableFQDN)",
               "slotSetting": false
@@ -83,6 +88,16 @@ stages:
             {
               "name": "BillingOptions:InvoiceTokenSecret",
               "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET/)",
+              "slotSetting": false
+            },
+            {
+              "name": "BillingOptions:GetInvoiceEndpoint",
+              "value": "https://billing.niobium.co.nz",
+              "slotSetting": false
+            },
+            {
+              "name": "BillingOptions:InvoiceEmailSenderAddress",
+              "value": "billing@niobium.co.nz",
               "slotSetting": false
             }
           ]

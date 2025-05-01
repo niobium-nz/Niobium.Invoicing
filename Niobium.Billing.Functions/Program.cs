@@ -1,5 +1,6 @@
 using Cod.Database.StorageTable;
 using Cod.Platform;
+using Cod.Platform.Notification.Email.Resend;
 using Cod.Platform.StorageTable;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
@@ -22,7 +23,8 @@ Host.CreateDefaultBuilder(args)
                 .ConfigureFunctionsApplicationInsights()
                 .AddDatabase(context.Configuration.GetRequiredSection(nameof(StorageTableOptions)))
                     .PostConfigure<StorageTableOptions>(opt => opt.EnableInteractiveIdentity = isDevelopment)
-                .AddBilling(context.Configuration.GetRequiredSection(nameof(BillingOptions)));
+                .AddBilling(context.Configuration.GetRequiredSection(nameof(BillingOptions)))
+                .AddNotification(context.Configuration.GetRequiredSection(nameof(ResendServiceOptions)));
     })
     .UseDefaultServiceProvider((_, options) =>
     {
