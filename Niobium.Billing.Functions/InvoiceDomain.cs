@@ -27,10 +27,13 @@ namespace Niobium.Billing.Functions
             var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
 
-            var valid = VerifyAccessToken(invoice, items, token);
-            if (!valid)
+            if (config.Value.IsGetInvoiceVerifyToken)
             {
-                throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
+                var valid = VerifyAccessToken(invoice, items, token);
+                if (!valid)
+                {
+                    throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
+                }
             }
 
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
