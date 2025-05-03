@@ -86,8 +86,8 @@ stages:
               "slotSetting": false
             },
             {
-              "name": "BillingOptions:InvoiceTokenSecret",
-              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET/)",
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET-SALT/)",
               "slotSetting": false
             },
             {

@@ -86,6 +86,8 @@ namespace Niobium.Billing
 
         public long SettledCents { get; set; }
 
+        public string? Token { get; set; }
+
         public long GetID() => ParseID(CreatedAt);
 
         public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => CreatedAt.ToLocal(timeZoneInfo);

@@ -24,17 +24,13 @@ namespace Niobium.Billing.Functions
         public async Task<string> GetHTMLOutputAsync(string token, CancellationToken cancellationToken)
         {
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
+            if (!string.IsNullOrWhiteSpace(invoice.Token) && !invoice.Token.Equals(token, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
+            }
+
             var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
-
-            if (config.Value.IsGetInvoiceVerifyToken)
-            {
-                var valid = VerifyAccessToken(invoice, items, token);
-                if (!valid)
-                {
-                    throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
-                }
-            }
 
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
@@ -82,30 +78,32 @@ namespace Niobium.Billing.Functions
             var result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);
             var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
-            var token = BuildAccessToken(invoice, items);
-            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Issuer}/invoices/{invoice.GetID()}?token={token}";
+            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Issuer}/invoices/{invoice.GetID()}";
+            if (!string.IsNullOrWhiteSpace(invoice.Token))
+            {
+                invoiceURL += $"?token={invoice.Token}";
+            }
+
             result = result.Replace("{{InvoiceURL}}", invoiceURL);
             return result;
         }
 
-        private string BuildAccessToken(Invoice invoice, IEnumerable<InvoiceItem> items)
+        private static string BuildAccessToken(Invoice invoice, IEnumerable<InvoiceItem> items, string salt)
         {
-            var json = new StringBuilder();
-            var main = JsonSerializer.SerializeObject(invoice, JsonSerializationFormat.PascalCase);
-            json.Append(main);
+            var data = new StringBuilder();
+            data.Append(invoice.GrandTotalCents);
+            data.Append(invoice.GrandTotalCurrency);
             foreach (var item in items)
             {
-                var child = JsonSerializer.SerializeObject(item, JsonSerializationFormat.PascalCase);
-                json.Append(child);
+                data.Append(item.LineTotalCents);
+                data.Append(item.LineTotalCurrency);
             }
 
-            return SHA.SHA256Hash(json.ToString(), config.Value.InvoiceTokenSecret, 16);
-        }
+            var issuer = invoice.Issuer.ToString("N");
+            var invoiceID = invoice.GetID().ToString().PadLeft(12, '0');
+            var secret = $"{salt[..4]}{issuer.Substring(8, 16)}{invoiceID[..12]}";
 
-        private bool VerifyAccessToken(Invoice invoice, IEnumerable<InvoiceItem> items, string token)
-        {
-            var expectation = BuildAccessToken(invoice, items);
-            return expectation.Equals(token, StringComparison.OrdinalIgnoreCase);
+            return SHA.SHA256Hash(data.ToString(), secret, 16);
         }
 
         private static string BuildInvoiceLineHtml(string itemTemplate, InvoiceItem item)
