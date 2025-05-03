@@ -23,10 +23,10 @@ namespace Niobium.Billing.Functions
 
         public async Task<string> GetHTMLOutputAsync(string token, CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
+            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             if (!string.IsNullOrWhiteSpace(invoice.Token) && !invoice.Token.Equals(token, StringComparison.OrdinalIgnoreCase))
             {
-                throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.");
+                throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.") { Reference = invoice.GetFullID() };
             }
 
             var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
@@ -40,7 +40,7 @@ namespace Niobium.Billing.Functions
             var itemTemplateMatch = InvoiceLineRegex.Match(invoiceTemplate);
             if (!itemTemplateMatch.Success)
             {
-                throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice line template.");
+                throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing invoice line template.") { Reference = invoice.GetFullID() };
             }
 
             var itemTemplate = itemTemplateMatch.Value;
@@ -59,7 +59,7 @@ namespace Niobium.Billing.Functions
 
         public async Task<bool> SendHTMLEmailAsync(CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
+            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             var email = await GetHTMLEmailAsync(cancellationToken);
             return await sender.SendAsync(
                 config.Value.InvoiceEmailSenderAddress,
@@ -71,8 +71,8 @@ namespace Niobium.Billing.Functions
 
         private async Task<string> GetHTMLEmailAsync(CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.");
-            emailTemplate ??= await GetEmbededResourceAsStringAsync(EmailTemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing email template.");
+            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            emailTemplate ??= await GetEmbededResourceAsStringAsync(EmailTemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing email template.") { Reference = invoice.GetFullID() };
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
             var result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);

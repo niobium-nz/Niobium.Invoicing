@@ -92,6 +92,12 @@ namespace Niobium.Billing
 
         public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => CreatedAt.ToLocal(timeZoneInfo);
 
+        public string GetFullID() => BuildFullID(Issuer, GetID());
+
+        public static string BuildFullID(Guid issuer, long id) => BuildFullID(issuer.ToString(), id.ToString());
+
+        public static string BuildFullID(string partitionKey, string rowKey) => $"{rowKey}@{partitionKey}";
+
         public static long ParseID(DateTimeOffset created) => created.ToReverseUnixTimeMilliseconds();
 
         public static string BuildPartitionKey(Guid issuer) => issuer.ToString();
