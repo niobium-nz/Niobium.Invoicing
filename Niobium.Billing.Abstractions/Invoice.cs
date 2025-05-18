@@ -8,10 +8,10 @@ namespace Niobium.Billing
         public required Guid Issuer { get; set; }
 
         [EntityKey(EntityKeyKind.RowKey)]
-        public required DateTimeOffset CreatedAt { get; set; }
+        public required DateTimeOffset Created { get; set; }
 
         [EntityKey(EntityKeyKind.Timestamp)]
-        public DateTimeOffset? UpdatedAt { get; set; }
+        public DateTimeOffset? Timestamp { get; set; }
 
         [EntityKey(EntityKeyKind.ETag)]
         public string? ETag { get; set; }
@@ -88,9 +88,9 @@ namespace Niobium.Billing
 
         public string? Token { get; set; }
 
-        public long GetID() => ParseID(CreatedAt);
+        public long GetID() => ParseID(Created);
 
-        public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => CreatedAt.ToLocal(timeZoneInfo);
+        public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => Created.ToLocal(timeZoneInfo);
 
         public string GetFullID() => BuildFullID(Issuer, GetID());
 

@@ -53,6 +53,7 @@ stages:
         resourceGroupName: $(resourceGroupName)
         storageAccountName: 'niobiumbillingdb'
         contributorPrincipalId: $(functionAppPrincipalId)
+        allowedOrigins: 'https://localhost:7182,https://billing.niobium.co.nz'
 
   - job: Configuration
     dependsOn:
@@ -83,6 +84,36 @@ stages:
             {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
               "value": "$(tableFQDN)",
+              "slotSetting": false
+            },
+            {
+              "name": "StorageTableOptions:Key",
+                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:IDTokenAudience",
+              "value": "95b52e52-dc79-4ac0-a53f-1acb10238888",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:IDTokenPublicKey",
+              "value": "-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlmuIHhRUT+IvTdTajuOEdPZ75pqJrajOyDdJqf42siofTKHCPCZqtWaftL8Jae5VMHUNCflXzm9aKTLgerAxrGyCL3BkZj/dj4KjbeFoY1Akz5EJd5qjRNtzdoqUkDsuaigJTDDhyHvdVKRHzYAJSKgiw9CLRkzyKDZAp1Fxm2xICzRoF9OfH0jv5Qn11gkMHrkVkB6nv7QD3EGS2rnDwKudjnlsvgjpoNMMNvY7EHqkuxjHdGh4Hy7M3UXl50Bft9ky3gKeCgpvVYRPXHdT6k3e+81J7liEJYdVb5taPeNf3wB8WCP8Xc7FO6vod9ziDIkJv+xqUWYtlyGZBGTBrQIDAQAB-----END PUBLIC KEY-----",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/ACCESS-TOKEN-SECRET/)",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenIssuer",
+              "value": "Niobium.Billing.Functions",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenAudience",
+              "value": "Niobium.Billing.Portal",
               "slotSetting": false
             },
             {

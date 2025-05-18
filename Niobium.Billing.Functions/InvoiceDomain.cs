@@ -62,9 +62,9 @@ namespace Niobium.Billing.Functions
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             var email = await GetHTMLEmailAsync(cancellationToken);
             return await sender.SendAsync(
-                config.Value.InvoiceEmailSenderAddress,
+                new EmailAddress { DisplayName = invoice.BillerName ?? invoice.ContactName, Address = config.Value.InvoiceEmailSenderAddress },
                 [invoice.RecipientEmail],
-                $"Invoice {invoice.GetID()} from {invoice.BillerName} for {invoice.BilleeName}",
+                $"Invoice {invoice.GetID()} from {invoice.BillerName ?? invoice.ContactName} for {invoice.BilleeName}",
                 email,
                 cancellationToken);
         }

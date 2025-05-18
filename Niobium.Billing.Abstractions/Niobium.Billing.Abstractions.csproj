@@ -28,6 +28,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cod.Abstractions" Version="2.2.26" />
+    <PackageReference Include="Cod.Abstractions" Version="2.2.43" />
+    <PackageReference Include="Cod.Profile" Version="2.2.43" />
   </ItemGroup>
 </Project>
