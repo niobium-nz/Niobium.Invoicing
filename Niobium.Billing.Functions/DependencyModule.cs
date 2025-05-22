@@ -1,4 +1,6 @@
 ﻿using Cod;
+using Cod.Platform;
+using Cod.Platform.StorageTable;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,7 +27,8 @@ namespace Niobium.Billing.Functions
             {
                 options?.Invoke(o);
             });
-            return services.RegisterDomain<InvoiceDomain, Invoice>();
+            return services.RegisterDomain<InvoiceDomain, Invoice>()
+                .AddTransient<IResourceControl, OwnershipControl<InvoiceItem, Invoice>>();
         }
     }
 }

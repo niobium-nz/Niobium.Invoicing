@@ -8,7 +8,7 @@ namespace Niobium.Billing
         public required DateTimeOffset Invoice { get; set; }
 
         [EntityKey(EntityKeyKind.RowKey)]
-        public required int LineNumber { get; set; }
+        public required long ID { get; set; }
 
         [EntityKey(EntityKeyKind.Timestamp)]
         public DateTimeOffset? UpdatedAt { get; set; }
