@@ -4,15 +4,19 @@ namespace Niobium.Billing
 {
     public class Customer : ITrackable
     {
+        [EntityKey(EntityKeyKind.PartitionKey)]
         public Guid Biller { get; set; }
 
+        [EntityKey(EntityKeyKind.RowKey)]
         public Guid ID { get; set; }
 
+        [EntityKey(EntityKeyKind.Timestamp)]
         public DateTimeOffset? Timestamp { get; set; }
 
-        public DateTimeOffset? Created { get; set; }
-
+        [EntityKey(EntityKeyKind.ETag)]
         public string? ETag { get; set; }
+
+        public DateTimeOffset? Created { get; set; }
 
         public string? AddressLine1 { get; set; }
 
