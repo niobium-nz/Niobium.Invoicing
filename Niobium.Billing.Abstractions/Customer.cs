@@ -24,7 +24,7 @@ namespace Niobium.Billing
 
         public string? BusinessID { get; set; }
 
-        public string? BusinessName { get; set; }
+        public string? Name { get; set; }
 
         public string? City { get; set; }
 

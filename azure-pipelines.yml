@@ -2,6 +2,15 @@ name: '1.0$(Rev:.r)'
 trigger:
 - master
 
+parameters:
+- name: updateInfrastructure
+  type: boolean
+  default: false
+  displayName: Update Infrastructure
+  values:
+    - true
+    - false
+
 variables:
   buildAgentVmImage: 'windows-latest'
   serviceConnection: 'niobium-billing'
@@ -19,13 +28,16 @@ resources:
     ref: master
 
 stages:
-- stage: Production
+- stage: Build
   jobs:
   - template: pipelines/jobs/GenericDotnetBuild.yml@devops
     parameters:
       nugetVSTSFeedID: 'Niobium/niobium'
       projectToPublish: '**/Niobium.Billing.Functions.csproj'
 
+- stage: Infrastructure
+  condition: and(succeeded(), eq(parameters.updateInfrastructure, true))
+  jobs:
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
     parameters:
       azureServiceConnection: $(serviceConnection)
@@ -55,6 +67,8 @@ stages:
         contributorPrincipalId: $(functionAppPrincipalId)
         allowedOrigins: 'https://localhost:7182,https://billing.niobium.co.nz'
 
+- stage: Deployment
+  jobs:
   - job: Configuration
     dependsOn:
       - Infrastructure
