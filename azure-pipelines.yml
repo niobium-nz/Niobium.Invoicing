@@ -36,7 +36,7 @@ stages:
       projectToPublish: '**/Niobium.Billing.Functions.csproj'
 
 - stage: Infrastructure
-  condition: and(succeeded(), eq(parameters.updateInfrastructure, true))
+  condition: and(succeeded(), eq(${{ parameters.updateInfrastructure }}, true))
   jobs:
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
     parameters:
