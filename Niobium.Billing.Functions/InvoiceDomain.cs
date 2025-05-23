@@ -78,7 +78,7 @@ namespace Niobium.Billing.Functions
             var result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);
             var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
-            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Issuer}/invoices/{invoice.GetID()}";
+            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Biller}/invoices/{invoice.GetID()}";
             if (!string.IsNullOrWhiteSpace(invoice.Token))
             {
                 invoiceURL += $"?token={invoice.Token}";
@@ -99,7 +99,7 @@ namespace Niobium.Billing.Functions
                 data.Append(item.LineTotalCurrency);
             }
 
-            var issuer = invoice.Issuer.ToString("N");
+            var issuer = invoice.Biller.ToString("N");
             var invoiceID = invoice.GetID().ToString().PadLeft(12, '0');
             var secret = $"{salt[..4]}{issuer.Substring(8, 16)}{invoiceID[..12]}";
 

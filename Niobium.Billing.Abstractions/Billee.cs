@@ -2,7 +2,7 @@
 
 namespace Niobium.Billing
 {
-    public class Customer : ITrackable
+    public class Billee : ITrackable
     {
         [EntityKey(EntityKeyKind.PartitionKey)]
         public Guid Biller { get; set; }
@@ -41,5 +41,15 @@ namespace Niobium.Billing
         public string? TimeZone { get; set; }
 
         public string? Zipcode { get; set; }
+
+        public static string GetPartitionKey(Guid biller)
+        {
+            return biller.ToKey();
+        }
+
+        public static string GetRowKey(Guid billee)
+        {
+            return billee.ToKey();
+        }
     }
 }

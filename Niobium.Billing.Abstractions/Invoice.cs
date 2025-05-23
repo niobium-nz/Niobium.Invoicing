@@ -5,7 +5,7 @@ namespace Niobium.Billing
     public class Invoice
     {
         [EntityKey(EntityKeyKind.PartitionKey)]
-        public required Guid Issuer { get; set; }
+        public required Guid Biller { get; set; }
 
         [EntityKey(EntityKeyKind.RowKey)]
         public required DateTimeOffset Created { get; set; }
@@ -31,6 +31,8 @@ namespace Niobium.Billing
         public string? BillerBusinessID { get; set; }
 
         public string? BillerTaxID { get; set; }
+
+        public required Guid Billee { get; set; }
 
         public required string BilleeName { get; set; }
 
@@ -92,15 +94,15 @@ namespace Niobium.Billing
 
         public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => Created.ToLocal(timeZoneInfo);
 
-        public string GetFullID() => BuildFullID(Issuer, GetID());
+        public string GetFullID() => BuildFullID(Biller, GetID());
 
-        public static string BuildFullID(Guid issuer, long id) => BuildFullID(issuer.ToString(), id.ToString());
+        public static string BuildFullID(Guid biller, long id) => BuildFullID(biller.ToString(), id.ToString());
 
         public static string BuildFullID(string partitionKey, string rowKey) => $"{rowKey}@{partitionKey}";
 
         public static long ParseID(DateTimeOffset created) => created.ToReverseUnixTimeMilliseconds();
 
-        public static string BuildPartitionKey(Guid issuer) => issuer.ToString();
+        public static string BuildPartitionKey(Guid biller) => biller.ToString();
 
         public static string BuildRowKey(long id) => id.ToReverseUnixTimestamp();
     }
