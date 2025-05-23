@@ -28,14 +28,14 @@ resources:
     ref: master
 
 stages:
-- stage: Build
+- stage: BuildApp
   jobs:
   - template: pipelines/jobs/GenericDotnetBuild.yml@devops
     parameters:
       nugetVSTSFeedID: 'Niobium/niobium'
       projectToPublish: '**/Niobium.Billing.Functions.csproj'
 
-- stage: Infrastructure
+- stage: UpdateInfrastructure
   condition: and(succeeded(), eq(${{ parameters.updateInfrastructure }}, true))
   jobs:
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
@@ -52,7 +52,6 @@ stages:
   - job: Table
     dependsOn: 
       - Infrastructure
-    condition: succeeded()
     pool:
       vmImage: $(buildAgentVmImage)
     variables:
@@ -67,13 +66,10 @@ stages:
         contributorPrincipalId: $(functionAppPrincipalId)
         allowedOrigins: 'https://localhost:7182,https://billing.niobium.co.nz'
 
-- stage: Deployment
+- stage: DeployApp
+  condition: succeeded()
   jobs:
   - job: Configuration
-    dependsOn:
-      - Infrastructure
-      - Table
-    condition: succeeded()
     pool:
       vmImage: $(buildAgentVmImage)
     variables:
