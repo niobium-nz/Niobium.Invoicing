@@ -2,7 +2,7 @@
 
 namespace Niobium.Billing
 {
-    public class Billee : ITrackable
+    public class Customer : ITrackable
     {
         public Guid Biller { get; set; }
 

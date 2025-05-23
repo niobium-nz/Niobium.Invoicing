@@ -31,7 +31,7 @@ Host.CreateDefaultBuilder(args)
                     .AddDatabaseResourceTokenSupport(identityOptions)
                     .GrantDatabasePersonalizedEntitlementTo(nameof(Invoice))
                     .GrantDatabasePersonalizedEntitlementTo(nameof(Billable))
-                    .GrantDatabasePersonalizedEntitlementTo(nameof(Billee))
+                    .GrantDatabasePersonalizedEntitlementTo(nameof(Customer))
                 .AddIdentity(identityOptions)
                 .AddBilling(context.Configuration.GetRequiredSection(nameof(BillingOptions)))
                 .AddNotification(context.Configuration.GetRequiredSection(nameof(ResendServiceOptions)));
