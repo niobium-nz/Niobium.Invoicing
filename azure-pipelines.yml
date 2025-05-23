@@ -36,8 +36,9 @@ stages:
       projectToPublish: '**/Niobium.Billing.Functions.csproj'
 
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
-    condition: and(succeeded(), eq(${{ parameters.updateInfrastructure }}, true))
+    condition: succeeded()
     parameters:
+      enabled: ${{ parameters.updateInfrastructure }}
       azureServiceConnection: $(serviceConnection)
       resourceGroupName: $(resourceGroupName)
       appNamePrefix: 'niobiumbilling'
