@@ -1,6 +1,6 @@
 ﻿namespace Niobium.Billing
 {
-    public enum BillingPeriodKind
+    public enum BillingPeriodKind : int
     {
         Daily = 0,
 
