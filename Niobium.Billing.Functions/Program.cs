@@ -1,3 +1,4 @@
+using Cod;
 using Cod.Database.StorageTable;
 using Cod.Platform;
 using Cod.Platform.Identity;
@@ -29,10 +30,14 @@ Host.CreateDefaultBuilder(args)
                 .AddDatabase(context.Configuration.GetRequiredSection(nameof(StorageTableOptions)))
                     .PostConfigure<StorageTableOptions>(opt => opt.EnableInteractiveIdentity = isDevelopment)
                     .AddDatabaseResourceTokenSupport(identityOptions)
-                    .GrantDatabasePersonalizedEntitlementTo(nameof(Invoice), Cod.DatabasePermissions.Query | Cod.DatabasePermissions.Add)
-                    .GrantDatabaseEntitlementTo(nameof(InvoiceItem))
-                    .GrantDatabasePersonalizedEntitlementTo(nameof(Billable))
-                    .GrantDatabasePersonalizedEntitlementTo(nameof(Billee))
+                    .GrantDatabasePersonalizedEntitlementTo(nameof(Invoice), 
+                        DatabasePermissions.Query | DatabasePermissions.Add)
+                    .GrantDatabaseEntitlementTo(nameof(InvoiceItem),
+                        DatabasePermissions.Query | DatabasePermissions.Add)
+                    .GrantDatabasePersonalizedEntitlementTo(nameof(Billable),
+                        DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete)
+                    .GrantDatabasePersonalizedEntitlementTo(nameof(Billee), 
+                    DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete | DatabasePermissions.Update)
                 .AddIdentity(identityOptions)
                 .AddBilling(context.Configuration.GetRequiredSection(nameof(BillingOptions)))
                 .AddNotification(context.Configuration.GetRequiredSection(nameof(ResendServiceOptions)));

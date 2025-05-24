@@ -67,9 +67,9 @@ namespace Niobium.Billing.Functions
 
             var email = await GetHTMLEmailAsync(cancellationToken);
             return await sender.SendAsync(
-                new EmailAddress { DisplayName = invoice.BillerName ?? invoice.ContactName, Address = config.Value.InvoiceEmailSenderAddress },
+                new EmailAddress { DisplayName = invoice.ContactName ?? invoice.BillerName, Address = config.Value.InvoiceEmailSenderAddress },
                 [invoice.RecipientEmail],
-                $"Invoice {invoice.GetID()} from {invoice.BillerName ?? invoice.ContactName} for {invoice.BilleeName}",
+                $"Invoice {invoice.GetID()} from {invoice.BillerName} for {invoice.BilleeName}",
                 email,
                 cancellationToken);
         }
@@ -78,17 +78,17 @@ namespace Niobium.Billing.Functions
         {
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             emailTemplate ??= await GetEmbededResourceAsStringAsync(EmailTemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing email template.") { Reference = invoice.GetFullID() };
+
             TimeZoneInfo timezone = TimeZoneInfo.FindSystemTimeZoneById(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
+
             var result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);
             var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
-            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Biller}/invoices/{invoice.GetID()}";
-            if (!string.IsNullOrWhiteSpace(invoice.Token))
-            {
-                invoiceURL += $"?token={invoice.Token}";
-            }
+            invoice.Token = BuildAccessToken(invoice, items, config.Value.InvoiceTokenSecretSalt);
+            await SaveAsync(cancellationToken: cancellationToken);
 
+            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Biller}/invoices/{invoice.GetID()}?token={invoice.Token}";
             result = result.Replace("{{InvoiceURL}}", invoiceURL);
             return result;
         }
@@ -114,7 +114,7 @@ namespace Niobium.Billing.Functions
         private static string BuildInvoiceLineHtml(string itemTemplate, InvoiceItem item)
         {
             return itemTemplate.Replace("{{Subject}}", item.Subject)
-                                .Replace("{{Description}}", item.Description ?? string.Empty)
+                                .Replace("{{Description}}", item.Description)
                                 .Replace("{{UnitPrice}}", Currency.Parse(item.UnitPriceCurrency).ToDisplayLocal(item.UnitPriceCents / 100d))
                                 .Replace("{{Quantity}}", item.Quantity.ToString())
                                 .Replace("{{LineTotal}}", Currency.Parse(item.LineTotalCurrency).ToDisplayLocal(item.LineTotalCents / 100d));
@@ -124,15 +124,23 @@ namespace Niobium.Billing.Functions
         {
             var result = template.Replace("{{BillDate}}", invoice.GetBillDate(timeZone).ToYearMonthDayInNames(culture))
                             .Replace("{{BillerName}}", invoice.BillerName)
+                            .Replace("{{BillerBusinessID}}", invoice.BillerBusinessID)
+                            .Replace("{{BillerTaxID}}", invoice.BillerTaxID)
                             .Replace("{{BillerAddressLine1}}", invoice.BillerAddressLine1)
                             .Replace("{{BillerAddressCity}}", invoice.BillerAddressCity)
                             .Replace("{{BillerAddressZipcode}}", invoice.BillerAddressZipcode)
                             .Replace("{{BilleeName}}", invoice.BilleeName)
+                            .Replace("{{BilleeBusinessID}}", invoice.BilleeBusinessID)
                             .Replace("{{BilleeAddressLine1}}", invoice.BilleeAddressLine1)
+                            .Replace("{{BilleeAddressLine2}}", invoice.BilleeAddressLine2)
                             .Replace("{{BilleeAddressCity}}", invoice.BilleeAddressCity)
                             .Replace("{{BilleeAddressZipcode}}", invoice.BilleeAddressZipcode)
                             .Replace("{{ContactName}}", invoice.ContactName)
                             .Replace("{{PaymentInstructions}}", invoice.PaymentInstructions)
+                            .Replace("{{Particulars}}", invoice.Particulars)
+                            .Replace("{{Reference}}", invoice.Reference)
+                            .Replace("{{ContactPhoneNumber}}", invoice.ContactPhoneNumber)
+                            .Replace("{{ContactEmailAddress}}", invoice.ContactEmailAddress)
                             .Replace("{{Subtotal}}", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d))
                             .Replace("{{TaxAmount}}", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d))
                             .Replace("{{TaxRate}}", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d))
@@ -146,56 +154,41 @@ namespace Niobium.Billing.Functions
                 ? result.Replace("{{BillerAddressLine2}}", $"{invoice.BillerAddressLine2}<br>")
                 : result.Replace("{{BillerAddressLine2}}", string.Empty);
 
-            result = invoice.BillerBusinessID != null
-                ? result.Replace("{{BillerBusinessID}}", invoice.BillerBusinessID)
-                : result.Replace("{{BillerBusinessID}}", string.Empty);
-
-            result = invoice.BillerTaxID != null
-                ? result.Replace("{{BillerTaxID}}", invoice.BillerTaxID)
-                : result.Replace("{{BillerTaxID}}", string.Empty);
-
-            result = invoice.BilleeAddressLine2 != null
-                ? result.Replace("{{BilleeAddressLine2}}", invoice.BilleeAddressLine2)
-                : result.Replace("{{BilleeAddressLine2}}", string.Empty);
-
-            result = invoice.BilleeBusinessID != null
-                ? result.Replace("{{BilleeBusinessID}}", invoice.BilleeBusinessID)
-                : result.Replace("{{BilleeBusinessID}}", string.Empty);
-
-            result = invoice.Particulars != null
-                ? result.Replace("{{Particulars}}", invoice.Particulars)
-                : result.Replace("{{Particulars}}", string.Empty);
-
-            result = invoice.Reference != null
-                ? result.Replace("{{Reference}}", invoice.Reference)
-                : result.Replace("{{Reference}}", string.Empty);
-
-            result = invoice.ContactPhoneNumber != null
-                ? result.Replace("{{ContactPhoneNumber}}", invoice.ContactPhoneNumber)
-                : result.Replace("{{ContactPhoneNumber}}", string.Empty);
-
-            result = invoice.ContactEmailAddress != null
-                ? result.Replace("{{ContactEmailAddress}}", invoice.ContactEmailAddress)
-                : result.Replace("{{ContactEmailAddress}}", string.Empty);
-
             result = invoice.Terms != null
                 ? result.Replace("{{Terms}}", $"{invoice.Terms}<br>")
                 : result.Replace("{{Terms}}", string.Empty);
 
-            result = invoice.BillerLogo != null
-                ? result.Replace("{{BillerLogo}}", invoice.BillerLogo)
-                : result.Replace("{{BillerLogo}}", string.Empty);
-
             string billingPeriod = string.Empty;
-            if (invoice.BillingPeriodStartDay != null && invoice.BillingPeriodEndDay == null)
+            switch ((BillingPeriodKind)invoice.BillingPeriodKind)
             {
-                billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonth(culture);
-            }
-            else if (invoice.BillingPeriodStartDay != null && invoice.BillingPeriodEndDay != null)
-            {
-                var start = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
-                var end = invoice.BillingPeriodEndDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
-                billingPeriod = $"{start} - {end}";
+                case BillingPeriodKind.Daily:
+                    if (invoice.BillingPeriodStartDay.HasValue)
+                    {
+                        billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
+                    }
+                    break;
+                case BillingPeriodKind.Monthly:
+                    if (invoice.BillingPeriodStartDay.HasValue)
+                    {
+                        billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonth(culture);
+                    }
+                    break;
+                case BillingPeriodKind.Anually:
+                    if (invoice.BillingPeriodStartDay.HasValue)
+                    {
+                        billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).Year.ToString();
+                    }
+                    break;
+                case BillingPeriodKind.Range:
+                    if (invoice.BillingPeriodStartDay.HasValue && invoice.BillingPeriodEndDay.HasValue)
+                    {
+                        var start = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
+                        var end = invoice.BillingPeriodEndDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
+                        billingPeriod = $"{start} - {end}";
+                    }
+                    break;
+                default:
+                    break;
             }
             if (billingPeriod != string.Empty)
             {

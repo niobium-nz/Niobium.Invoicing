@@ -50,6 +50,8 @@ namespace Niobium.Billing
 
         public string? Reference { get; set; }
 
+        public int BillingPeriodKind { get; set; }
+
         public DateTimeOffset? BillingPeriodStartDay { get; set; }
 
         public DateTimeOffset? BillingPeriodEndDay { get; set; }
