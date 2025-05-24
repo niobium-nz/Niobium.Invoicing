@@ -60,6 +60,11 @@ namespace Niobium.Billing.Functions
         public async Task<bool> SendHTMLEmailAsync(CancellationToken cancellationToken)
         {
             var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            if (invoice.RecipientEmail == null)
+            {
+                return false;
+            }
+
             var email = await GetHTMLEmailAsync(cancellationToken);
             return await sender.SendAsync(
                 new EmailAddress { DisplayName = invoice.BillerName ?? invoice.ContactName, Address = config.Value.InvoiceEmailSenderAddress },
