@@ -20,13 +20,13 @@ namespace Niobium.Billing
 
         public required string BillerName { get; set; }
 
-        public required string BillerAddressLine1 { get; set; }
+        public string? BillerAddressLine1 { get; set; }
 
         public string? BillerAddressLine2 { get; set; }
 
-        public required string BillerAddressCity { get; set; }
+        public string? BillerAddressCity { get; set; }
 
-        public required string BillerAddressZipcode { get; set; }
+        public string? BillerAddressZipcode { get; set; }
 
         public string? BillerBusinessID { get; set; }
 
@@ -70,7 +70,7 @@ namespace Niobium.Billing
 
         public DateTimeOffset? DueBy { get; set; }
 
-        public required string ContactName { get; set; }
+        public string? ContactName { get; set; }
 
         public string? ContactPhoneNumber { get; set; }
         
@@ -84,7 +84,7 @@ namespace Niobium.Billing
 
         public required string Culture { get; set; }
 
-        public required string RecipientEmail { get; set; }
+        public string? RecipientEmail { get; set; }
 
         public long SettledCents { get; set; }
 

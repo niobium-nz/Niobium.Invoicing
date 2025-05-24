@@ -28,6 +28,8 @@ namespace Niobium.Billing
 
         public string? PaymentInstructions { get; set; }
 
+        public string? ContactName { get; set; }
+
         public string? Phone { get; set; }
 
         public string? TaxID { get; set; }
