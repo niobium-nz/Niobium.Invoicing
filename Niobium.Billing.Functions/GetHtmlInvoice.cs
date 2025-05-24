@@ -22,7 +22,7 @@ namespace Niobium.Billing.Functions
                 return new NotFoundResult();
             }
 
-            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken);
+            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
             var html = await domain.GetHTMLOutputAsync(token, cancellationToken);
 
             return new ContentResult

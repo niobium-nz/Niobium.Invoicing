@@ -15,7 +15,7 @@ namespace Niobium.Billing.Functions
             long invoice,
             CancellationToken cancellationToken)
         {
-            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken);
+            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
             var success = await domain.SendHTMLEmailAsync(cancellationToken);
             var statuscode = success ? HttpStatusCode.Created : HttpStatusCode.InternalServerError;
             return new StatusCodeResult((int)statuscode);

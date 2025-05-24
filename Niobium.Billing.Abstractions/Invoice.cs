@@ -36,13 +36,13 @@ namespace Niobium.Billing
 
         public required string BilleeName { get; set; }
 
-        public required string BilleeAddressLine1 { get; set; }
+        public string? BilleeAddressLine1 { get; set; }
 
         public string? BilleeAddressLine2 { get; set; }
 
-        public required string BilleeAddressCity { get; set; }
+        public string? BilleeAddressCity { get; set; }
 
-        public required string BilleeAddressZipcode { get; set; }
+        public string? BilleeAddressZipcode { get; set; }
 
         public string? BilleeBusinessID { get; set; }
 
@@ -78,7 +78,7 @@ namespace Niobium.Billing
 
         public string? Terms { get; set; }
 
-        public required string PaymentInstructions { get; set; }
+        public string? PaymentInstructions { get; set; }
 
         public required string TimeZone { get; set; }
 

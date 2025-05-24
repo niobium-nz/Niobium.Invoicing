@@ -8,11 +8,24 @@ namespace Niobium.Billing.Functions
 {
     internal static class IServiceCollectionExtensions
     {
-        public static IServiceCollection GrantDatabasePersonalizedEntitlementTo(this IServiceCollection services, string table)
+        public static IServiceCollection GrantDatabasePersonalizedEntitlementTo(this IServiceCollection services, string table, Cod.DatabasePermissions? permissions = null)
         {
+            permissions ??= Cod.DatabasePermissions.Query;
             services.GrantDatabasePersonalizedEntitlementTo(
                         sp => sp.GetRequiredService<IOptions<IdentityServiceOptions>>().Value.DefaultRole,
-                        Cod.DatabasePermissions.Query,
+                        permissions.Value,
+                        sp => table,
+                        sp => sp.GetRequiredService<IOptions<StorageTableOptions>>().Value.FullyQualifiedDomainName!);
+
+            return services;
+        }
+
+        public static IServiceCollection GrantDatabaseEntitlementTo(this IServiceCollection services, string table, Cod.DatabasePermissions? permissions = null)
+        {
+            permissions ??= Cod.DatabasePermissions.Query;
+            services.GrantDatabaseEntitlementTo(
+                        sp => sp.GetRequiredService<IOptions<IdentityServiceOptions>>().Value.DefaultRole,
+                        permissions.Value,
                         sp => table,
                         sp => sp.GetRequiredService<IOptions<StorageTableOptions>>().Value.FullyQualifiedDomainName!);
 

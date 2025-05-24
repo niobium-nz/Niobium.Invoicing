@@ -18,13 +18,9 @@ namespace Niobium.Billing
 
         public string? BusinessID { get; set; }
 
-        public string? BusinessName { get; set; }
+        public required string BusinessName { get; set; }
 
         public string? City { get; set; }
-
-        public string? Culture { get; set; }
-
-        public string? Currency { get; set; }
 
         public string? Email { get; set; }
 
@@ -36,8 +32,12 @@ namespace Niobium.Billing
 
         public string? TaxID { get; set; }
 
-        public string? TimeZone { get; set; }
-
         public string? Zipcode { get; set; }
+
+        public required string TimeZone { get; set; }
+
+        public required string Currency { get; set; }
+
+        public required string Culture { get; set; }
     }
 }

@@ -27,8 +27,8 @@ namespace Niobium.Billing.Functions
             {
                 options?.Invoke(o);
             });
-            return services.RegisterDomain<InvoiceDomain, Invoice>()
-                .AddTransient<IResourceControl, OwnershipControl<InvoiceItem, Invoice>>();
+            return services.AddDomain<InvoiceDomain, Invoice>()
+                .AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
         }
     }
 }
