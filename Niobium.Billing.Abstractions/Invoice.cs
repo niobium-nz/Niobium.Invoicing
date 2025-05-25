@@ -90,6 +90,8 @@ namespace Niobium.Billing
 
         public long SettledCents { get; set; }
 
+        public DateTimeOffset? Delivered { get; set; }
+
         public string? Token { get; set; }
 
         public long GetID() => ParseID(Created);

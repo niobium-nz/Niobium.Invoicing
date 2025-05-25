@@ -4,6 +4,13 @@ namespace Niobium.Billing
 {
     public static class InvoiceExtensions
     {
+        public static long FigureGrandTotalCents(this Invoice invoice, IEnumerable<InvoiceItem> items)
+        {
+            var subtotal = items.FigureSubTotalCents();
+            var tax = invoice.FigureTaxTotalCents(items);
+            return subtotal + tax;
+        }
+
         public static decimal FigureGrandTotal(this Invoice invoice, IEnumerable<InvoiceItem> items)
         {
             var subtotal = items.FigureSubTotal();
@@ -16,6 +23,12 @@ namespace Niobium.Billing
             var figure = invoice.FigureGrandTotal(items);
             var currency = Currency.Parse(invoice.GrandTotalCurrency);
             return currency.ToDisplayLocal(figure);
+        }
+
+        public static long FigureTaxTotalCents(this Invoice invoice, IEnumerable<InvoiceItem> items)
+        {
+            var taxable = items.FigureSubTotalCents();
+            return (long)Math.Round((taxable * (invoice.TaxRatePercentile / 10000m)), 0);
         }
 
         public static decimal FigureTaxTotal(this Invoice invoice, IEnumerable<InvoiceItem> items)
@@ -31,6 +44,11 @@ namespace Niobium.Billing
             return currency.ToDisplayLocal(figure);
         }
 
+        public static long FigureSubTotalCents(this IEnumerable<InvoiceItem> items)
+        {
+            return items.Sum(item => item.FigureLineTotalCents());
+        }
+
         public static decimal FigureSubTotal(this IEnumerable<InvoiceItem> items)
         {
             return items.Sum(item => item.FigureLineTotal());
@@ -43,9 +61,14 @@ namespace Niobium.Billing
             return currency.ToDisplayLocal(figure);
         }
 
+        public static long FigureLineTotalCents(this InvoiceItem item)
+        {
+            return item.UnitPriceCents * item.Quantity;
+        }
+
         public static decimal FigureLineTotal(this InvoiceItem item)
         {
-            return Math.Round(item.UnitPriceCents * item.Quantity / 100m, 2);
+            return Math.Round(item.FigureLineTotalCents() / 100m, 2);
         }
 
         public static string ToDisplayLineTotal(this InvoiceItem item)
