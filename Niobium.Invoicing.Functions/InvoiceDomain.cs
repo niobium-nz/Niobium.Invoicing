@@ -1,11 +1,12 @@
 ﻿using Cod;
+using Cod.Finance;
 using Cod.Platform.Notification.Email;
 using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Invoicing.Functions
 {
     public partial class InvoiceDomain(
         IOptions<BillingOptions> config,
@@ -18,12 +19,12 @@ namespace Niobium.Billing.Functions
         private static readonly Regex InvoiceLineRegex = CreateInvoiceLineRegex();
         private static string? invoiceTemplate;
         private static string? emailTemplate;
-        private const string InvoiceTemplateResourceName = "Niobium.Billing.Functions.InvoiceTemplate.html";
-        private const string EmailTemplateResourceName = "Niobium.Billing.Functions.EmailTemplate.html";
+        private const string InvoiceTemplateResourceName = "Niobium.Invoicing.Functions.InvoiceTemplate.html";
+        private const string EmailTemplateResourceName = "Niobium.Invoicing.Functions.EmailTemplate.html";
 
         public async Task UpdateAsync(Invoice invoice, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
         {
-            var existingInvoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            var existingInvoice = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             if (existingInvoice.Delivered.HasValue)
             {
                 throw new Cod.ApplicationException(InternalError.Conflict, "Invoice has been delivered.") { Reference = existingInvoice.GetFullID() };
@@ -57,7 +58,7 @@ namespace Niobium.Billing.Functions
 
         public async Task<string> GetHTMLOutputAsync(string token, CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            var invoice = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             if (!string.IsNullOrWhiteSpace(invoice.Token) && !invoice.Token.Equals(token, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Cod.ApplicationException(InternalError.Forbidden, "Invalid token.") { Reference = invoice.GetFullID() };
@@ -93,7 +94,7 @@ namespace Niobium.Billing.Functions
 
         public async Task<bool> SendHTMLEmailAsync(CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            var invoice = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             if (invoice.RecipientEmail == null)
             {
                 return false;
@@ -120,7 +121,7 @@ namespace Niobium.Billing.Functions
 
         private async Task<string> GetHTMLEmailAsync(string token, CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync() ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            var invoice = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             emailTemplate ??= await GetEmbededResourceAsStringAsync(EmailTemplateResourceName) ?? throw new Cod.ApplicationException(InternalError.InternalServerError, "Missing email template.") { Reference = invoice.GetFullID() };
 
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(invoice.TimeZone);

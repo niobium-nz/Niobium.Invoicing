@@ -33,7 +33,7 @@ stages:
   - template: pipelines/jobs/GenericDotnetBuild.yml@devops
     parameters:
       nugetVSTSFeedID: 'Niobium/niobium'
-      projectToPublish: '**/Niobium.Billing.Functions.csproj'
+      projectToPublish: '**/Niobium.Invoicing.Functions.csproj'
 
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
     parameters:
@@ -43,7 +43,7 @@ stages:
       appNamePrefix: 'niobiumbilling'
       enableKeyVault: true
       enableStagingSlot: true
-      allowedOrigins: 'https://www.niobium.co.nz'
+      allowedOrigins: 'https://invoicing.niobium.co.nz'
       checkoutDevopsStep:
         checkout: devops
 
@@ -63,7 +63,7 @@ stages:
         resourceGroupName: $(resourceGroupName)
         storageAccountName: 'niobiumbillingdb'
         contributorPrincipalId: $(functionAppPrincipalId)
-        allowedOrigins: 'https://localhost:7182,https://billing.niobium.co.nz'
+        allowedOrigins: 'https://localhost:7182,https://invoicing.niobium.co.nz'
 
   - job: Configuration
     dependsOn:
@@ -118,12 +118,12 @@ stages:
             },
             {
               "name": "IdentityServiceOptions:AccessTokenIssuer",
-              "value": "Niobium.Billing.Functions",
+              "value": "Niobium.Invoicing.Functions",
               "slotSetting": false
             },
             {
               "name": "IdentityServiceOptions:AccessTokenAudience",
-              "value": "Niobium.Billing.Portal",
+              "value": "Niobium.Invoicing.Portal",
               "slotSetting": false
             },
             {
@@ -133,7 +133,7 @@ stages:
             },
             {
               "name": "BillingOptions:GetInvoiceEndpoint",
-              "value": "https://billing.niobium.co.nz",
+              "value": "https://invoicing.niobium.co.nz",
               "slotSetting": false
             },
             {

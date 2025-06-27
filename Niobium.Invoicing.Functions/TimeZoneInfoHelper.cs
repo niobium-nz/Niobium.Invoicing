@@ -1,4 +1,4 @@
-﻿namespace Niobium.Billing.Functions
+﻿namespace Niobium.Invoicing.Functions
 {
     internal class TimeZoneInfoHelper
     {

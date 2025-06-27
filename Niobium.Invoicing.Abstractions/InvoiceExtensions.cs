@@ -1,6 +1,7 @@
 ﻿using Cod;
+using Cod.Finance;
 
-namespace Niobium.Billing
+namespace Niobium.Invoicing
 {
     public static class InvoiceExtensions
     {
@@ -28,7 +29,7 @@ namespace Niobium.Billing
         public static long FigureTaxTotalCents(this Invoice invoice, IEnumerable<InvoiceItem> items)
         {
             var taxable = items.FigureSubTotalCents();
-            return (long)Math.Round((taxable * (invoice.TaxRatePercentile / 10000m)), 0);
+            return (long)Math.Round(taxable * (invoice.TaxRatePercentile / 10000m), 0);
         }
 
         public static decimal FigureTaxTotal(this Invoice invoice, IEnumerable<InvoiceItem> items)

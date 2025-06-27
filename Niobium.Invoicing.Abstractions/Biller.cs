@@ -1,6 +1,6 @@
 ﻿using Cod.Profile;
 
-namespace Niobium.Billing
+namespace Niobium.Invoicing
 {
     public class Biller : IProfile
     {

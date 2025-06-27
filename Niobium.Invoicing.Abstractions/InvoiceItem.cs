@@ -1,6 +1,6 @@
 ﻿using Cod;
 
-namespace Niobium.Billing
+namespace Niobium.Invoicing
 {
     public class InvoiceItem
     {
@@ -30,9 +30,9 @@ namespace Niobium.Billing
 
         public long LineTotalCents { get; set; }
 
-        public long GetInvoiceID() => Billing.Invoice.ParseID(Invoice);
+        public long GetInvoiceID() => Invoicing.Invoice.ParseID(Invoice);
 
-        public static string BuildPartitionKey(long invoiceID) => Billing.Invoice.BuildRowKey(invoiceID);
+        public static string BuildPartitionKey(long invoiceID) => Invoicing.Invoice.BuildRowKey(invoiceID);
 
         public static string BuildRowKey(int id) => id.ToString();
     }

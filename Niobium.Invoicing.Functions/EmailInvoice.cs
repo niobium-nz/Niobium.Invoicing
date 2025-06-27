@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using System.Net;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Invoicing.Functions
 {
     public class EmailInvoice(IDomainRepository<InvoiceDomain, Invoice> repo)
     {

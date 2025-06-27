@@ -8,7 +8,7 @@ using System.Text.Json;
 using ApplicationException = Cod.ApplicationException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Invoicing.Functions
 {
     public class NewInvoice(IDomainRepository<InvoiceDomain, Invoice> repo, PrincipalParser principalParser)
     {

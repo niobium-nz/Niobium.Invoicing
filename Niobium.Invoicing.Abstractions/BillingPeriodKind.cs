@@ -1,4 +1,4 @@
-﻿namespace Niobium.Billing
+﻿namespace Niobium.Invoicing
 {
     public enum BillingPeriodKind : int
     {

@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Invoicing.Functions
 {
     public class Placeholder
     {

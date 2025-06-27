@@ -3,8 +3,9 @@ using Cod.Platform.Identity;
 using Cod.Platform.StorageTable;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Niobium.Invoicing.Functions;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Invoicing.Functions
 {
     internal static class IServiceCollectionExtensions
     {

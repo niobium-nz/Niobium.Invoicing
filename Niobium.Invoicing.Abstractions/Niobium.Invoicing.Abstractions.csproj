@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>Niobium.Billing</RootNamespace>
+    <RootNamespace>Niobium.Invoicing</RootNamespace>
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -28,8 +28,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cod.Abstractions" Version="2.2.47" />
-    <PackageReference Include="Cod.Helper" Version="2.2.47" />
-    <PackageReference Include="Cod.Profile" Version="2.2.47" />
+    <PackageReference Include="Cod.Abstractions" Version="2.2.92" />
+    <PackageReference Include="Cod.Helper" Version="2.2.92" />
+    <PackageReference Include="Cod.Profile" Version="2.2.92" />
+    <PackageReference Include="Cod.Finance" Version="2.2.92" />
   </ItemGroup>
 </Project>

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace Niobium.Billing.Functions
+namespace Niobium.Invoicing.Functions
 {
     public class GetHTMLInvoice(IDomainRepository<InvoiceDomain, Invoice> repo)
     {
