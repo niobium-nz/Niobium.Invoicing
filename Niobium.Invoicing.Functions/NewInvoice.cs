@@ -20,7 +20,7 @@ namespace Niobium.Invoicing.Functions
             CancellationToken cancellationToken)
         {
             var biller = await principalParser.GetClaimAsync<Guid>(req, ClaimTypes.NameIdentifier);
-            var request = await JsonSerializer.DeserializeAsync<NewInvoiceRequest>(req.Body, options: serializationOptions, cancellationToken: cancellationToken);
+            var request = await JsonSerializer.DeserializeAsync<IssueInvoiceCommand>(req.Body, options: serializationOptions, cancellationToken: cancellationToken);
             ArgumentNullException.ThrowIfNull(request);
 
             var domain = await repo.GetAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(request.Invoice.GetID()), cancellationToken: cancellationToken) ?? throw new ApplicationException(InternalError.NotFound);
@@ -28,13 +28,5 @@ namespace Niobium.Invoicing.Functions
 
             return new OkResult();
         }
-
-    }
-
-    public class NewInvoiceRequest
-    {
-        public required Invoice Invoice { get; set; }
-
-        public required InvoiceItem[] InvoiceItems { get; set; }
     }
 }

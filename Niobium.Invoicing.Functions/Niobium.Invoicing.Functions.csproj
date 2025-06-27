@@ -13,13 +13,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="EmailTemplate.html" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="EmailTemplate.html" />
-    <EmbeddedResource Include="InvoiceTemplate.html" />
-  </ItemGroup>
-  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Cod.Platform.StorageTable" Version="2.2.93" />
     <PackageReference Include="Cod.Platform.Notification.Email.Resend" Version="2.2.93" />
@@ -32,6 +25,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Niobium.Invoicing.Abstractions\Niobium.Invoicing.Abstractions.csproj" />
+    <ProjectReference Include="..\Niobium.Invoicing.Core\Niobium.Invoicing.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">

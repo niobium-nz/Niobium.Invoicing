@@ -17,6 +17,8 @@ variables:
   resourceGroupName: 'niobium-invoicing'
   appName: 'niobiuminvoicingFunc'
   tableDB: 'niobiuminvoicingdb'
+  serviceBusNamespace: 'niobiuminvoicingsb'
+  issueInvoiceCommandQueueName: 'issueinvoicecommand'
   enableStagingSlot: true
 
 pool:
@@ -67,6 +69,24 @@ stages:
         storageAccountName: $(tableDB)
         contributorPrincipalId: $(functionAppPrincipalId)
         allowedOrigins: 'https://localhost:7182,https://invoicing.niobium.co.nz'
+
+  - job: Messaging
+    dependsOn: 
+      - Infrastructure
+    condition: succeeded()
+    pool:
+      vmImage: $(buildAgentVmImage)
+    variables:
+      functionAppPrincipalId: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalId']]
+    steps:
+    - checkout: devops
+    - template: pipelines/steps/newServiceBus.yml@devops
+      parameters:
+        azureServiceConnection: $(serviceConnection)
+        resourceGroupName: $(resourceGroupName)
+        serviceBusNamespaceName: $(serviceBusNamespace)
+        serviceBusQueueNames: [$(issueInvoiceCommandQueueName)]
+        dataOwnerPrincipalId: $(functionAppPrincipalId)
 
   - job: Configuration
     dependsOn:

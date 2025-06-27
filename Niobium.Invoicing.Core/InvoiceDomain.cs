@@ -19,8 +19,8 @@ namespace Niobium.Invoicing.Functions
         private static readonly Regex InvoiceLineRegex = CreateInvoiceLineRegex();
         private static string? invoiceTemplate;
         private static string? emailTemplate;
-        private const string InvoiceTemplateResourceName = "Niobium.Invoicing.Functions.InvoiceTemplate.html";
-        private const string EmailTemplateResourceName = "Niobium.Invoicing.Functions.EmailTemplate.html";
+        private const string InvoiceTemplateResourceName = "Niobium.Invoicing.InvoiceTemplate.html";
+        private const string EmailTemplateResourceName = "Niobium.Invoicing.EmailTemplate.html";
 
         public async Task UpdateAsync(Invoice invoice, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
         {
@@ -247,7 +247,7 @@ namespace Niobium.Invoicing.Functions
 
         private static async Task<string?> GetEmbededResourceAsStringAsync(string resourceName)
         {
-            var assembly = typeof(GetHTMLInvoice).Assembly;
+            var assembly = typeof(InvoiceDomain).Assembly;
             using (var stream = assembly.GetManifestResourceStream(resourceName))
             {
                 if (stream == null)
