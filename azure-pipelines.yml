@@ -13,8 +13,11 @@ parameters:
 
 variables:
   buildAgentVmImage: 'windows-latest'
-  serviceConnection: 'niobium-billing'
-  resourceGroupName: 'niobium-billing'
+  serviceConnection: 'niobium-invoicing'
+  resourceGroupName: 'niobium-invoicing'
+  appName: 'niobiuminvoicingFunc'
+  tableDB: 'niobiuminvoicingdb'
+  enableStagingSlot: true
 
 pool:
   vmImage: $(buildAgentVmImage)
@@ -40,9 +43,9 @@ stages:
       enabled: ${{ parameters.updateInfrastructure }}
       azureServiceConnection: $(serviceConnection)
       resourceGroupName: $(resourceGroupName)
-      appNamePrefix: 'niobiumbilling'
+      appName: $(appName)
       enableKeyVault: true
-      enableStagingSlot: true
+      enableStagingSlot: ${{ variables.enableStagingSlot }}
       allowedOrigins: 'https://invoicing.niobium.co.nz'
       checkoutDevopsStep:
         checkout: devops
@@ -61,7 +64,7 @@ stages:
       parameters:
         azureServiceConnection: $(serviceConnection)
         resourceGroupName: $(resourceGroupName)
-        storageAccountName: 'niobiumbillingdb'
+        storageAccountName: $(tableDB)
         contributorPrincipalId: $(functionAppPrincipalId)
         allowedOrigins: 'https://localhost:7182,https://invoicing.niobium.co.nz'
 
@@ -73,47 +76,27 @@ stages:
     pool:
       vmImage: $(buildAgentVmImage)
     variables:
-      functionAppName: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppName']]
       tableFQDN: $[dependencies.Table.outputs['newStorageAccountProperties.tableFQDN']]
       keyVaultUrl: $[dependencies.Infrastructure.outputs['infrastructureOutputs.keyVaultUrl']]
     steps:
     - checkout: none
+    - pwsh: Write-Output "##vso[task.setvariable variable=slotName;]production"
+      displayName: "Deploy to Production"
+      condition: eq('${{ variables.enableStagingSlot }}', false)
+    - pwsh: Write-Output "##vso[task.setvariable variable=slotName;]staging"
+      displayName: "Deploy to Staging"
+      condition: eq('${{ variables.enableStagingSlot }}', true)
     - task: AzureAppServiceSettings@1
       displayName: 'Update AppSettings'
       inputs:
         azureSubscription: $(serviceConnection)
-        appName: $(functionAppName)
+        appName: $(appName)
         resourceGroupName: $(resourceGroupName)
         appSettings: |
           [
             {
-                "name": "ResendServiceOptions:GlobalAPIKey",
-                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/RESEND-API-KEY/)",
-                "slotSetting": false
-            },
-            {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
               "value": "$(tableFQDN)",
-              "slotSetting": false
-            },
-            {
-              "name": "StorageTableOptions:Key",
-                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
-              "slotSetting": false
-            },
-            {
-              "name": "IdentityServiceOptions:IDTokenAudience",
-              "value": "95b52e52-dc79-4ac0-a53f-1acb10238888",
-              "slotSetting": false
-            },
-            {
-              "name": "IdentityServiceOptions:IDTokenPublicKey",
-              "value": "-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlmuIHhRUT+IvTdTajuOEdPZ75pqJrajOyDdJqf42siofTKHCPCZqtWaftL8Jae5VMHUNCflXzm9aKTLgerAxrGyCL3BkZj/dj4KjbeFoY1Akz5EJd5qjRNtzdoqUkDsuaigJTDDhyHvdVKRHzYAJSKgiw9CLRkzyKDZAp1Fxm2xICzRoF9OfH0jv5Qn11gkMHrkVkB6nv7QD3EGS2rnDwKudjnlsvgjpoNMMNvY7EHqkuxjHdGh4Hy7M3UXl50Bft9ky3gKeCgpvVYRPXHdT6k3e+81J7liEJYdVb5taPeNf3wB8WCP8Xc7FO6vod9ziDIkJv+xqUWYtlyGZBGTBrQIDAQAB-----END PUBLIC KEY-----",
-              "slotSetting": false
-            },
-            {
-              "name": "IdentityServiceOptions:AccessTokenSecret",
-              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/ACCESS-TOKEN-SECRET/)",
               "slotSetting": false
             },
             {
@@ -127,8 +110,13 @@ stages:
               "slotSetting": false
             },
             {
-              "name": "BillingOptions:InvoiceTokenSecretSalt",
-              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET-SALT/)",
+              "name": "IdentityServiceOptions:IDTokenAudience",
+              "value": "95b52e52-dc79-4ac0-a53f-1acb10238888",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:IDTokenPublicKey",
+              "value": "-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlmuIHhRUT+IvTdTajuOEdPZ75pqJrajOyDdJqf42siofTKHCPCZqtWaftL8Jae5VMHUNCflXzm9aKTLgerAxrGyCL3BkZj/dj4KjbeFoY1Akz5EJd5qjRNtzdoqUkDsuaigJTDDhyHvdVKRHzYAJSKgiw9CLRkzyKDZAp1Fxm2xICzRoF9OfH0jv5Qn11gkMHrkVkB6nv7QD3EGS2rnDwKudjnlsvgjpoNMMNvY7EHqkuxjHdGh4Hy7M3UXl50Bft9ky3gKeCgpvVYRPXHdT6k3e+81J7liEJYdVb5taPeNf3wB8WCP8Xc7FO6vod9ziDIkJv+xqUWYtlyGZBGTBrQIDAQAB-----END PUBLIC KEY-----",
               "slotSetting": false
             },
             {
@@ -140,10 +128,54 @@ stages:
               "name": "BillingOptions:InvoiceEmailSenderAddress",
               "value": "billing@niobium.co.nz",
               "slotSetting": false
+            },
+            {
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET-SALT/)",
+              "slotSetting": true
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/ACCESS-TOKEN-SECRET/)",
+              "slotSetting": true
+            },
+            {
+                "name": "ResendServiceOptions:GlobalAPIKey",
+                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/RESEND-API-KEY/)",
+                "slotSetting": true
+            },
+            {
+              "name": "StorageTableOptions:Key",
+                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
+              "slotSetting": true
             }
           ]
-      
+    - task: AzureAppServiceSettings@1
+      displayName: 'Update AppSettings'
+      inputs:
+        azureSubscription: $(serviceConnection)
+        appName: $(appName)
+        slotName: $(slotName)
+        resourceGroupName: $(resourceGroupName)
+        appSettings: |
+          [
+            
+            {
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "1234567890",
+              "slotSetting": true
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "012345678901234567890123456789AB",
+              "slotSetting": true
+            }
+          ]
+
   - template: pipelines/jobs/FunctionAppDeploy.yml@devops
     parameters:
+      appName: $(appName)
       serviceConnection: $(serviceConnection)
       resourceGroupName: $(resourceGroupName)
+      enableStagingSlot: ${{ variables.enableStagingSlot }}
+      autoSwapSlots: true
