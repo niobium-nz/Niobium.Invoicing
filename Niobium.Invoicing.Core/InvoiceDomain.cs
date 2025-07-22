@@ -22,7 +22,7 @@ namespace Niobium.Invoicing.Functions
         private const string InvoiceTemplateResourceName = "Niobium.Invoicing.InvoiceTemplate.html";
         private const string EmailTemplateResourceName = "Niobium.Invoicing.EmailTemplate.html";
 
-        public async Task UpdateAsync(Invoice invoice, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
+        public async Task UpdateAsync(IssueInvoiceRequest update, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
         {
             var entity = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
             if (entity.Delivered.HasValue)
@@ -42,15 +42,15 @@ namespace Niobium.Invoicing.Functions
                 item.LineTotalCents = item.FigureLineTotalCents();
             }
 
-            entity.Terms = invoice.Terms?.Trim();
-            entity.PaymentInstructions = invoice.PaymentInstructions?.Trim();
-            entity.BillingPeriodKind = invoice.BillingPeriodKind;
-            entity.BillingPeriodStartDay = invoice.BillingPeriodStartDay;
-            entity.BillingPeriodEndDay = invoice.BillingPeriodEndDay;
-            entity.DueBy = invoice.DueBy;
+            entity.Terms = update.Terms?.Trim();
+            entity.PaymentInstructions = update.PaymentInstructions?.Trim();
+            entity.BillingPeriodKind = update.BillingPeriodKind;
+            entity.BillingPeriodStartDay = update.BillingPeriodStartDay;
+            entity.BillingPeriodEndDay = update.BillingPeriodEndDay;
+            entity.DueBy = update.DueBy;
             entity.SubtotalCents = invoiceItems.FigureSubTotalCents();
-            entity.TaxCents = invoice.FigureTaxTotalCents(invoiceItems);
-            entity.GrandTotalCents = invoice.FigureGrandTotalCents(invoiceItems);
+            entity.TaxCents = entity.FigureTaxTotalCents(invoiceItems);
+            entity.GrandTotalCents = entity.FigureGrandTotalCents(invoiceItems);
 
             await SaveAsync(cancellationToken: cancellationToken);
             await itemRepo.Value.CreateAsync(invoiceItems, cancellationToken: cancellationToken);

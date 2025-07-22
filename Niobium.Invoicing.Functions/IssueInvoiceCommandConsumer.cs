@@ -38,6 +38,6 @@ public class IssueInvoiceCommandConsumer(
 
         var invoice = Invoice.BuildNew(command.ID, biller, command.Billee);
         var domain = await repo.BuildAsync(invoice, cancellationToken);
-        await domain.UpdateAsync(invoice, command.InvoiceItems, cancellationToken);
+        await domain.UpdateAsync(command, command.InvoiceItems, cancellationToken);
     }
 }

@@ -4,9 +4,9 @@
     {
         public long ID { get; set; }
 
-        public required Guid Biller { get; set; }
+        public required Guid BillerID { get; set; }
 
-        public required Guid Billee { get; set; }
+        public required Guid BilleeID { get; set; }
 
         public string? Particulars { get; set; }
 
@@ -21,6 +21,8 @@
         public DateTimeOffset? DueBy { get; set; }
 
         public string? Terms { get; set; }
+
+        public string? PaymentInstructions { get; set; }
 
         public required InvoiceItem[] InvoiceItems { get; set; }
 

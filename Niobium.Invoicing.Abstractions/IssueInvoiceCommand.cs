@@ -1,29 +1,14 @@
-﻿namespace Niobium.Invoicing
+﻿using Cod;
+
+namespace Niobium.Invoicing
 {
-    public class IssueInvoiceCommand
+    public class IssueInvoiceCommand : IssueInvoiceRequest, IUserInput
     {
-        public long ID { get; set; }
-
-        public required Guid Biller { get; set; }
-
         public required Billee Billee { get; set; }
 
-        public string? Particulars { get; set; }
-
-        public string? Reference { get; set; }
-
-        public int BillingPeriodKind { get; set; }
-
-        public DateTimeOffset? BillingPeriodStartDay { get; set; }
-
-        public DateTimeOffset? BillingPeriodEndDay { get; set; }
-
-        public DateTimeOffset? DueBy { get; set; }
-
-        public string? Terms { get; set; }
-
-        public required InvoiceItem[] InvoiceItems { get; set; }
-
-        public bool NotifyBillee { get; set; }
+        public void Sanitize()
+        {
+            BilleeID = Billee.ID;
+        }
     }
 }

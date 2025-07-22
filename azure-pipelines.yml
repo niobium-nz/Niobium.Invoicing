@@ -107,6 +107,32 @@ stages:
       displayName: "Deploy to Staging"
       condition: eq('${{ variables.enableStagingSlot }}', true)
     - task: AzureAppServiceSettings@1
+      displayName: 'Update $(slotName) AppSettings'
+      inputs:
+        azureSubscription: $(serviceConnection)
+        appName: $(appName)
+        slotName: $(slotName)
+        resourceGroupName: $(resourceGroupName)
+        appSettings: |
+          [
+            
+            {
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "1234567890",
+              "slotSetting": true
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "012345678901234567890123456789AB",
+              "slotSetting": true
+            },
+            {
+              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
+              "value": "true",
+              "slotSetting": true
+            }
+          ]
+    - task: AzureAppServiceSettings@1
       displayName: 'Update AppSettings'
       inputs:
         azureSubscription: $(serviceConnection)
@@ -172,32 +198,6 @@ stages:
             {
               "name": "StorageTableOptions:Key",
                 "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
-              "slotSetting": true
-            }
-          ]
-    - task: AzureAppServiceSettings@1
-      displayName: 'Update AppSettings'
-      inputs:
-        azureSubscription: $(serviceConnection)
-        appName: $(appName)
-        slotName: $(slotName)
-        resourceGroupName: $(resourceGroupName)
-        appSettings: |
-          [
-            
-            {
-              "name": "BillingOptions:InvoiceTokenSecretSalt",
-              "value": "1234567890",
-              "slotSetting": true
-            },
-            {
-              "name": "IdentityServiceOptions:AccessTokenSecret",
-              "value": "012345678901234567890123456789AB",
-              "slotSetting": true
-            },
-            {
-              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
-              "value": "true",
               "slotSetting": true
             }
           ]

@@ -27,7 +27,7 @@ public class NewInvoice(
             return new UnauthorizedResult();
         }
 
-        if (request.Biller != user)
+        if (request.BillerID != user)
         {
             return new ForbidResult("Biller does not match the authenticated user.");
         }
@@ -45,8 +45,8 @@ public class NewInvoice(
         }
 
         var billee = await billeeRepo.RetrieveAsync(
-            Billee.BuildPartitionKey(request.Biller),
-            Billee.BuildRowKey(request.Billee),
+            Billee.BuildPartitionKey(request.BillerID),
+            Billee.BuildRowKey(request.BilleeID),
             cancellationToken: cancellationToken);
         if (billee == null)
         {
@@ -60,7 +60,7 @@ public class NewInvoice(
         }
 
         var domain = await repo.BuildAsync(invoice, cancellationToken);
-        await domain.UpdateAsync(invoice, request.InvoiceItems, cancellationToken);
+        await domain.UpdateAsync(request, request.InvoiceItems, cancellationToken);
 
         return new OkResult();
     }
