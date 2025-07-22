@@ -48,7 +48,7 @@ stages:
       appName: $(appName)
       enableKeyVault: true
       enableStagingSlot: ${{ variables.enableStagingSlot }}
-      allowedOrigins: 'https://invoicing.niobium.co.nz'
+      allowedOrigins: 'https://localhost:7182,https://invoicing.niobium.co.nz'
       checkoutDevopsStep:
         checkout: devops
 
@@ -106,32 +106,6 @@ stages:
     - pwsh: Write-Output "##vso[task.setvariable variable=slotName;]staging"
       displayName: "Deploy to Staging"
       condition: eq('${{ variables.enableStagingSlot }}', true)
-    - task: AzureAppServiceSettings@1
-      displayName: 'Update $(slotName) AppSettings'
-      inputs:
-        azureSubscription: $(serviceConnection)
-        appName: $(appName)
-        slotName: $(slotName)
-        resourceGroupName: $(resourceGroupName)
-        appSettings: |
-          [
-            
-            {
-              "name": "BillingOptions:InvoiceTokenSecretSalt",
-              "value": "1234567890",
-              "slotSetting": true
-            },
-            {
-              "name": "IdentityServiceOptions:AccessTokenSecret",
-              "value": "012345678901234567890123456789AB",
-              "slotSetting": true
-            },
-            {
-              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
-              "value": "true",
-              "slotSetting": true
-            }
-          ]
     - task: AzureAppServiceSettings@1
       displayName: 'Update AppSettings'
       inputs:
@@ -198,6 +172,32 @@ stages:
             {
               "name": "StorageTableOptions:Key",
                 "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
+              "slotSetting": true
+            }
+          ]
+    - task: AzureAppServiceSettings@1
+      displayName: 'Update $(slotName) AppSettings'
+      inputs:
+        azureSubscription: $(serviceConnection)
+        appName: $(appName)
+        slotName: $(slotName)
+        resourceGroupName: $(resourceGroupName)
+        appSettings: |
+          [
+            
+            {
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "1234567890",
+              "slotSetting": true
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "012345678901234567890123456789AB",
+              "slotSetting": true
+            },
+            {
+              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
+              "value": "true",
               "slotSetting": true
             }
           ]
