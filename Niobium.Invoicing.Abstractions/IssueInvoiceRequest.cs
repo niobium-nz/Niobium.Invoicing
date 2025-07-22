@@ -1,12 +1,12 @@
 ﻿namespace Niobium.Invoicing
 {
-    public class IssueInvoiceCommand
+    public class IssueInvoiceRequest
     {
         public long ID { get; set; }
 
         public required Guid Biller { get; set; }
 
-        public required Billee Billee { get; set; }
+        public required Guid Billee { get; set; }
 
         public string? Particulars { get; set; }
 

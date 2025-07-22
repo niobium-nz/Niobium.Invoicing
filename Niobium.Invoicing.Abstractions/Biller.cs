@@ -34,7 +34,13 @@ namespace Niobium.Invoicing
 
         public string? TaxID { get; set; }
 
+        public int TaxRatePercentile { get; set; }
+
+        public string? TaxKind { get; set; }
+
         public string? Zipcode { get; set; }
+
+        public string? Template { get; set; }
 
         public required string TimeZone { get; set; }
 

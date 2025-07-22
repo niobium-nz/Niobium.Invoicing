@@ -35,5 +35,18 @@ namespace Niobium.Invoicing
         public static string BuildPartitionKey(long invoiceID) => Invoicing.Invoice.BuildRowKey(invoiceID);
 
         public static string BuildRowKey(int id) => id.ToString();
+
+        public static InvoiceItem BuildNew(long invoiceID, string currency)
+        {
+            return new()
+            {
+                Subject = string.Empty,
+                Quantity = 1,
+                Invoice = Invoicing.Invoice.ParseID(invoiceID),
+                ID = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                LineTotalCurrency = currency,
+                UnitPriceCurrency = currency,
+            };
+        }
     }
 }

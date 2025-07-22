@@ -140,6 +140,11 @@ stages:
               "slotSetting": false
             },
             {
+              "name": "ProfileOptions:ProfileServiceHost",
+              "value": "https://codidentityfunc.azurewebsites.net",
+              "slotSetting": false
+            },
+            {
               "name": "BillingOptions:GetInvoiceEndpoint",
               "value": "https://invoicing.niobium.co.nz",
               "slotSetting": false
@@ -188,6 +193,11 @@ stages:
             {
               "name": "IdentityServiceOptions:AccessTokenSecret",
               "value": "012345678901234567890123456789AB",
+              "slotSetting": true
+            },
+            {
+              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
+              "value": "true",
               "slotSetting": true
             }
           ]

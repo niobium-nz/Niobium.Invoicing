@@ -3,6 +3,7 @@ using Cod.Database.StorageTable;
 using Cod.Platform;
 using Cod.Platform.Identity;
 using Cod.Platform.Notification.Email.Resend;
+using Cod.Platform.Profile;
 using Cod.Platform.StorageTable;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
@@ -11,11 +12,11 @@ using Microsoft.IdentityModel.Logging;
 
 namespace Niobium.Invoicing.Functions
 {
-    public static class DependencyModule
+    internal static class DependencyModule
     {
         private static volatile bool loaded;
 
-        public static void AddBilling(this FunctionsApplicationBuilder builder)
+        public static void AddInvoicing(this FunctionsApplicationBuilder builder)
         {
             if (loaded)
             {
@@ -30,30 +31,20 @@ namespace Niobium.Invoicing.Functions
             builder.UsePlatformIdentity();
 
             var identityOptions = builder.Configuration.GetRequiredSection(nameof(IdentityServiceOptions));
+            builder.AddIdentity();
+            builder.AddProfile();
+            builder.AddNotification();
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
-            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Invoice),
-                DatabasePermissions.Query | DatabasePermissions.Add);
-            builder.Services.GrantDatabaseEntitlementTo(nameof(InvoiceItem),
-                DatabasePermissions.Query | DatabasePermissions.Add);
+            builder.Services.AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
+            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Invoice), DatabasePermissions.Query);
+            builder.Services.GrantDatabaseEntitlementTo(nameof(InvoiceItem), DatabasePermissions.Query);
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billable),
                 DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete);
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billee),
                 DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete | DatabasePermissions.Update);
-            builder.AddIdentity();
-            builder.AddNotification();
 
-            builder.Services.AddBilling(builder.Configuration.GetRequiredSection(nameof(BillingOptions)).Bind);
-        }
-
-        public static IServiceCollection AddBilling(this IServiceCollection services, Action<BillingOptions>? options = null)
-        {
-            services.Configure<BillingOptions>(o =>
-            {
-                options?.Invoke(o);
-            });
-            return services.AddDomain<InvoiceDomain, Invoice>()
-                .AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
+            builder.Services.AddInvoicing(builder.Configuration.GetRequiredSection(nameof(BillingOptions)).Bind);
         }
     }
 }

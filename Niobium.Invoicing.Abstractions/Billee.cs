@@ -42,12 +42,12 @@ namespace Niobium.Invoicing
 
         public required string TimeZone { get; set; }
 
-        public static string GetPartitionKey(Guid biller)
+        public static string BuildPartitionKey(Guid biller)
         {
             return biller.ToKey();
         }
 
-        public static string GetRowKey(Guid billee)
+        public static string BuildRowKey(Guid billee)
         {
             return billee.ToKey();
         }

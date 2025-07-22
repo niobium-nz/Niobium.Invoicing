@@ -1,32 +1,67 @@
 using Cod;
-using Cod.Platform.Identity;
+using Cod.Platform;
+using Cod.Profile;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using System.Security.Claims;
-using System.Text.Json;
-using ApplicationException = Cod.ApplicationException;
-using JsonSerializer = System.Text.Json.JsonSerializer;
+using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
 
-namespace Niobium.Invoicing.Functions
+namespace Niobium.Invoicing.Functions;
+
+public class NewInvoice(
+    IDomainRepository<InvoiceDomain, Invoice> repo,
+    IProfileService<Biller> profileService,
+    IRepository<Billee> billeeRepo)
 {
-    public class NewInvoice(IDomainRepository<InvoiceDomain, Invoice> repo, PrincipalParser principalParser)
+    private static readonly TimeSpan InvoiceCreateTimeMaxOffset = TimeSpan.FromMinutes(30);
+
+    [Function(nameof(NewInvoice))]
+    public async Task<IActionResult> Run(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "invoices")] HttpRequest req,
+        [FromBody] IssueInvoiceRequest request,
+        CancellationToken cancellationToken)
     {
-        private static readonly JsonSerializerOptions serializationOptions = new(JsonSerializerDefaults.Web);
-
-        [Function(nameof(NewInvoice))]
-        public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "invoices")] HttpRequest req,
-            CancellationToken cancellationToken)
+        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.NameIdentifier, out var user))
         {
-            var biller = await principalParser.GetClaimAsync<Guid>(req, ClaimTypes.NameIdentifier);
-            var request = await JsonSerializer.DeserializeAsync<IssueInvoiceCommand>(req.Body, options: serializationOptions, cancellationToken: cancellationToken);
-            ArgumentNullException.ThrowIfNull(request);
-
-            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(request.Invoice.GetID()), cancellationToken: cancellationToken) ?? throw new ApplicationException(InternalError.NotFound);
-            await domain.UpdateAsync(request.Invoice, request.InvoiceItems, cancellationToken);
-
-            return new OkResult();
+            return new UnauthorizedResult();
         }
+
+        if (request.Biller != user)
+        {
+            return new ForbidResult("Biller does not match the authenticated user.");
+        }
+
+        request.TryValidate(out var validationState);
+        if (!validationState.IsValid)
+        {
+            return validationState.MakeResponse();
+        }
+
+        var biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken);
+        if (biller == null)
+        {
+            return new NotFoundObjectResult("Biller does not exist.");
+        }
+
+        var billee = await billeeRepo.RetrieveAsync(
+            Billee.BuildPartitionKey(request.Biller),
+            Billee.BuildRowKey(request.Billee),
+            cancellationToken: cancellationToken);
+        if (billee == null)
+        {
+            return new NotFoundObjectResult("Billee does not exist.");
+        }
+
+        var invoice = Invoice.BuildNew(request.ID, biller, billee);
+        if (DateTimeOffset.UtcNow - invoice.Created > InvoiceCreateTimeMaxOffset)
+        {
+            return new ForbidResult("Invalid issue invoice request.");
+        }
+
+        var domain = await repo.BuildAsync(invoice, cancellationToken);
+        await domain.UpdateAsync(invoice, request.InvoiceItems, cancellationToken);
+
+        return new OkResult();
     }
 }

@@ -24,13 +24,13 @@ namespace Niobium.Invoicing.Functions
 
         public async Task UpdateAsync(Invoice invoice, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
         {
-            var existingInvoice = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
-            if (existingInvoice.Delivered.HasValue)
+            var entity = await GetEntityAsync(cancellationToken) ?? throw new Cod.ApplicationException(InternalError.NotFound, "Invoice not found.") { Reference = Invoice.BuildFullID(PartitionKey, RowKey) };
+            if (entity.Delivered.HasValue)
             {
-                throw new Cod.ApplicationException(InternalError.Conflict, "Invoice has been delivered.") { Reference = existingInvoice.GetFullID() };
+                throw new Cod.ApplicationException(InternalError.Conflict, "Invoice has been delivered.") { Reference = entity.GetFullID() };
             }
 
-            var existingInvoiceItems = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(existingInvoice.GetID()), cancellationToken: cancellationToken)
+            var existingInvoiceItems = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
             if (existingInvoiceItems.Length > 0)
             {
@@ -42,17 +42,17 @@ namespace Niobium.Invoicing.Functions
                 item.LineTotalCents = item.FigureLineTotalCents();
             }
 
-            invoice.Terms = invoice.Terms?.Trim();
-            invoice.PaymentInstructions = invoice.PaymentInstructions?.Trim();
-            invoice.BillingPeriodKind = invoice.BillingPeriodKind;
-            invoice.BillingPeriodStartDay = invoice.BillingPeriodStartDay;
-            invoice.BillingPeriodEndDay = invoice.BillingPeriodEndDay;
-            invoice.DueBy = invoice.DueBy;
-            invoice.SubtotalCents = invoiceItems.FigureSubTotalCents();
-            invoice.TaxCents = invoice.FigureTaxTotalCents(invoiceItems);
-            invoice.GrandTotalCents = invoice.FigureGrandTotalCents(invoiceItems);
+            entity.Terms = invoice.Terms?.Trim();
+            entity.PaymentInstructions = invoice.PaymentInstructions?.Trim();
+            entity.BillingPeriodKind = invoice.BillingPeriodKind;
+            entity.BillingPeriodStartDay = invoice.BillingPeriodStartDay;
+            entity.BillingPeriodEndDay = invoice.BillingPeriodEndDay;
+            entity.DueBy = invoice.DueBy;
+            entity.SubtotalCents = invoiceItems.FigureSubTotalCents();
+            entity.TaxCents = invoice.FigureTaxTotalCents(invoiceItems);
+            entity.GrandTotalCents = invoice.FigureGrandTotalCents(invoiceItems);
 
-            await Repository.UpdateAsync(invoice, cancellationToken: cancellationToken);
+            await SaveAsync(cancellationToken: cancellationToken);
             await itemRepo.Value.CreateAsync(invoiceItems, cancellationToken: cancellationToken);
         }
 

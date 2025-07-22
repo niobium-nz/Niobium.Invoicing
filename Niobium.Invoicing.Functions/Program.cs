@@ -13,5 +13,5 @@ builder.Services
     .AddApplicationInsightsTelemetryWorkerService()
     .ConfigureFunctionsApplicationInsights();
 
-builder.AddBilling();
+builder.AddInvoicing();
 builder.Build().Run();
