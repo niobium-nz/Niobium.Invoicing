@@ -54,7 +54,7 @@ namespace Niobium.Invoicing
 
         public string? Reference { get; set; }
 
-        public int BillingPeriodKind { get; set; }
+        public int InvoiceCycle { get; set; }
 
         public DateTimeOffset? BillingPeriodStartDay { get; set; }
 
@@ -104,7 +104,7 @@ namespace Niobium.Invoicing
 
         public long GetID() => ParseID(Created);
 
-        public DateTimeOffset GetBillDate(TimeZoneInfo timeZoneInfo) => Created.ToLocal(timeZoneInfo);
+        public DateTimeOffset GetCreated(TimeZoneInfo timeZoneInfo) => Created.ToLocal(timeZoneInfo);
 
         public string GetFullID() => BuildFullID(Biller, GetID());
 

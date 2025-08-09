@@ -44,7 +44,7 @@ namespace Niobium.Invoicing.Functions
 
             entity.Terms = update.Terms?.Trim();
             entity.PaymentInstructions = update.PaymentInstructions?.Trim();
-            entity.BillingPeriodKind = update.BillingPeriodKind;
+            entity.InvoiceCycle = update.InvoiceCycle;
             entity.BillingPeriodStartDay = update.BillingPeriodStartDay;
             entity.BillingPeriodEndDay = update.BillingPeriodEndDay;
             entity.DueBy = update.DueBy;
@@ -162,7 +162,7 @@ namespace Niobium.Invoicing.Functions
 
         private static string BuildInvoiceHtml(string template, Invoice invoice, TimeZoneInfo timeZone, CultureInfo culture)
         {
-            var result = template.Replace("{{BillDate}}", invoice.GetBillDate(timeZone).ToYearMonthDayInNames(culture))
+            var result = template.Replace("{{BillDate}}", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture))
                             .Replace("{{BillerName}}", invoice.BillerName)
                             .Replace("{{BillerBusinessID}}", invoice.BillerBusinessID)
                             .Replace("{{BillerTaxID}}", invoice.BillerTaxID)
@@ -199,27 +199,27 @@ namespace Niobium.Invoicing.Functions
                 : result.Replace("{{Terms}}", string.Empty);
 
             string billingPeriod = string.Empty;
-            switch ((BillingPeriodKind)invoice.BillingPeriodKind)
+            switch ((InvoiceCycle)invoice.InvoiceCycle)
             {
-                case BillingPeriodKind.Daily:
+                case InvoiceCycle.Daily:
                     if (invoice.BillingPeriodStartDay.HasValue)
                     {
                         billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
                     }
                     break;
-                case BillingPeriodKind.Monthly:
+                case InvoiceCycle.Monthly:
                     if (invoice.BillingPeriodStartDay.HasValue)
                     {
                         billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonth(culture);
                     }
                     break;
-                case BillingPeriodKind.Anually:
+                case InvoiceCycle.Anually:
                     if (invoice.BillingPeriodStartDay.HasValue)
                     {
                         billingPeriod = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).Year.ToString();
                     }
                     break;
-                case BillingPeriodKind.Range:
+                case InvoiceCycle.Range:
                     if (invoice.BillingPeriodStartDay.HasValue && invoice.BillingPeriodEndDay.HasValue)
                     {
                         var start = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);

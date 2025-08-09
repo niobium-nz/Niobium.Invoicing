@@ -12,7 +12,7 @@
 
         public string? Reference { get; set; }
 
-        public int BillingPeriodKind { get; set; }
+        public int InvoiceCycle { get; set; }
 
         public DateTimeOffset? BillingPeriodStartDay { get; set; }
 
