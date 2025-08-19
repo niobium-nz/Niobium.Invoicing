@@ -102,27 +102,54 @@ namespace Niobium.Invoicing
 
         public string? Template { get; set; }
 
-        public long GetID() => ParseID(Created);
+        public long GetID()
+        {
+            return ParseID(Created);
+        }
 
-        public DateTimeOffset GetCreated(TimeZoneInfo timeZoneInfo) => Created.ToLocal(timeZoneInfo);
+        public DateTimeOffset GetCreated(TimeZoneInfo timeZoneInfo)
+        {
+            return Created.ToLocal(timeZoneInfo);
+        }
 
-        public string GetFullID() => BuildFullID(Biller, GetID());
+        public string GetFullID()
+        {
+            return BuildFullID(Biller, GetID());
+        }
 
-        public static string BuildFullID(Guid biller, long id) => BuildFullID(biller.ToString(), id.ToString());
+        public static string BuildFullID(Guid biller, long id)
+        {
+            return BuildFullID(biller.ToString(), id.ToString());
+        }
 
-        public static string BuildFullID(string partitionKey, string rowKey) => $"{rowKey}@{partitionKey}";
+        public static string BuildFullID(string partitionKey, string rowKey)
+        {
+            return $"{rowKey}@{partitionKey}";
+        }
 
-        public static long ParseID(DateTimeOffset created) => created.ToReverseUnixTimeMilliseconds();
+        public static long ParseID(DateTimeOffset created)
+        {
+            return created.ToReverseUnixTimeMilliseconds();
+        }
 
-        public static DateTimeOffset ParseID(long id) => DateTimeOffsetExtensions.FromReverseUnixTimeMilliseconds(id);
+        public static DateTimeOffset ParseID(long id)
+        {
+            return DateTimeOffsetExtensions.FromReverseUnixTimeMilliseconds(id);
+        }
 
-        public static string BuildPartitionKey(Guid biller) => biller.ToString();
+        public static string BuildPartitionKey(Guid biller)
+        {
+            return biller.ToString();
+        }
 
-        public static string BuildRowKey(long id) => id.ToReverseUnixTimestamp();
+        public static string BuildRowKey(long id)
+        {
+            return id.ToReverseUnixTimestamp();
+        }
 
         public static Invoice BuildNew(long id, Biller biller, Billee billee)
         {
-            var result = new Invoice
+            Invoice result = new()
             {
                 Created = Invoice.ParseID(id),
 

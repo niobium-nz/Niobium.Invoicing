@@ -30,11 +30,20 @@ namespace Niobium.Invoicing
 
         public long LineTotalCents { get; set; }
 
-        public long GetInvoiceID() => Invoicing.Invoice.ParseID(Invoice);
+        public long GetInvoiceID()
+        {
+            return Invoicing.Invoice.ParseID(Invoice);
+        }
 
-        public static string BuildPartitionKey(long invoiceID) => Invoicing.Invoice.BuildRowKey(invoiceID);
+        public static string BuildPartitionKey(long invoiceID)
+        {
+            return Invoicing.Invoice.BuildRowKey(invoiceID);
+        }
 
-        public static string BuildRowKey(int id) => id.ToString();
+        public static string BuildRowKey(int id)
+        {
+            return id.ToString();
+        }
 
         public static InvoiceItem BuildNew(long invoiceID, string currency)
         {
