@@ -1,6 +1,6 @@
-﻿using Cod.Database.StorageTable;
-using Cod.Platform.Identity;
-using Cod.Platform.StorageTable;
+﻿using Niobium.Database.StorageTable;
+using Niobium.Platform.Identity;
+using Niobium.Platform.StorageTable;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Niobium.Invoicing.Functions;
@@ -9,9 +9,9 @@ namespace Niobium.Invoicing.Functions
 {
     internal static class IServiceCollectionExtensions
     {
-        public static IServiceCollection GrantDatabasePersonalizedEntitlementTo(this IServiceCollection services, string table, Cod.DatabasePermissions? permissions = null)
+        public static IServiceCollection GrantDatabasePersonalizedEntitlementTo(this IServiceCollection services, string table, DatabasePermissions? permissions = null)
         {
-            permissions ??= Cod.DatabasePermissions.Query;
+            permissions ??= DatabasePermissions.Query;
             services.GrantDatabasePersonalizedEntitlementTo(
                         sp => sp.GetRequiredService<IOptions<IdentityServiceOptions>>().Value.DefaultRole,
                         permissions.Value,
@@ -21,9 +21,9 @@ namespace Niobium.Invoicing.Functions
             return services;
         }
 
-        public static IServiceCollection GrantDatabaseEntitlementTo(this IServiceCollection services, string table, Cod.DatabasePermissions? permissions = null)
+        public static IServiceCollection GrantDatabaseEntitlementTo(this IServiceCollection services, string table, DatabasePermissions? permissions = null)
         {
-            permissions ??= Cod.DatabasePermissions.Query;
+            permissions ??= DatabasePermissions.Query;
             services.GrantDatabaseEntitlementTo(
                         sp => sp.GetRequiredService<IOptions<IdentityServiceOptions>>().Value.DefaultRole,
                         permissions.Value,

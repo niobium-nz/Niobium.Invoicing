@@ -7,9 +7,9 @@ namespace Niobium.Invoicing.Functions
     public class Placeholder
     {
         [Function(nameof(Auth))]
-        public IActionResult Auth([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = Cod.Identity.Constants.DefaultAccessTokenEndpoint)] HttpRequest req) => new OkResult();
+        public IActionResult Auth([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = Niobium.Identity.Constants.DefaultAccessTokenEndpoint)] HttpRequest req) => new OkResult();
 
         [Function(nameof(RSAS))]
-        public IActionResult RSAS([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = Cod.Identity.Constants.DefaultResourceTokenEndpoint)] HttpRequest req) => new OkResult();
+        public IActionResult RSAS([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = Niobium.Identity.Constants.DefaultResourceTokenEndpoint)] HttpRequest req) => new OkResult();
     }
 }

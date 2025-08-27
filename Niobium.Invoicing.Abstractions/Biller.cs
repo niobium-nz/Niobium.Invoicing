@@ -1,4 +1,4 @@
-﻿using Cod.Profile;
+﻿using Niobium.Profile;
 
 namespace Niobium.Invoicing
 {

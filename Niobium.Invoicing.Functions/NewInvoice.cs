@@ -1,6 +1,6 @@
-using Cod;
-using Cod.Platform;
-using Cod.Profile;
+using Niobium;
+using Niobium.Platform;
+using Niobium.Profile;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;

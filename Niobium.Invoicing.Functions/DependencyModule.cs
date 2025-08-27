@@ -1,10 +1,10 @@
-﻿using Cod;
-using Cod.Database.StorageTable;
-using Cod.Platform;
-using Cod.Platform.Identity;
-using Cod.Platform.Notification.Email.Resend;
-using Cod.Platform.Profile;
-using Cod.Platform.StorageTable;
+﻿using Niobium;
+using Niobium.Database.StorageTable;
+using Niobium.Platform;
+using Niobium.Platform.Identity;
+using Niobium.Platform.Notification.Email.Resend;
+using Niobium.Platform.Profile;
+using Niobium.Platform.StorageTable;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +30,6 @@ namespace Niobium.Invoicing.Functions
 
             builder.UsePlatformIdentity();
 
-            var identityOptions = builder.Configuration.GetRequiredSection(nameof(IdentityServiceOptions));
             builder.AddIdentity();
             builder.AddProfile();
             builder.AddNotification();

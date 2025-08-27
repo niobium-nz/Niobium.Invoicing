@@ -1,5 +1,5 @@
-﻿using Cod;
-using Cod.Finance;
+﻿using Niobium;
+using Niobium.Finance;
 
 namespace Niobium.Invoicing
 {

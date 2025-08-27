@@ -1,5 +1,5 @@
-﻿using Cod;
-using Cod.Profile;
+﻿using Niobium;
+using Niobium.Profile;
 
 namespace Niobium.Invoicing
 {
