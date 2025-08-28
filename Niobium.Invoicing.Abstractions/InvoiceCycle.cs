@@ -4,16 +4,19 @@ namespace Niobium.Invoicing
 {
     public enum InvoiceCycle : int
     {
+        [Display(Name = "Once")]
+        Once = 0,
+
         [Display(Name = "Daily")]
-        Daily = 0,
+        Daily = 1,
 
         [Display(Name = "Monthly")]
-        Monthly = 1,
+        Monthly = 2,
 
         [Display(Name = "Anually")]
-        Anually = 2,
+        Anually = 3,
 
         [Display(Name = "Custom Range")]
-        Range = 3
+        Range = 4
     }
 }
