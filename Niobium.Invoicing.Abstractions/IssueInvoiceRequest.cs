@@ -1,4 +1,6 @@
-﻿namespace Niobium.Invoicing
+﻿using Niobium.Finance;
+
+namespace Niobium.Invoicing
 {
     public class IssueInvoiceRequest
     {
@@ -25,6 +27,8 @@
         public string? PaymentInstructions { get; set; }
 
         public required InvoiceItem[] InvoiceItems { get; set; }
+
+        public Amount Settled { get; set; } = Amount.Zero;
 
         public bool NotifyBillee { get; set; }
     }

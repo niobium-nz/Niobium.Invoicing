@@ -51,6 +51,7 @@ namespace Niobium.Invoicing.Functions
             entity.SubtotalCents = invoiceItems.FigureSubTotalCents();
             entity.TaxCents = entity.FigureTaxTotalCents(invoiceItems);
             entity.GrandTotalCents = entity.FigureGrandTotalCents(invoiceItems);
+            entity.SettledCents = update.Settled.Cents;
 
             await SaveAsync(cancellationToken: cancellationToken);
             await itemRepo.Value.CreateAsync(invoiceItems, cancellationToken: cancellationToken);
