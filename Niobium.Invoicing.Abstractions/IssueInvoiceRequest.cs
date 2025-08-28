@@ -2,7 +2,7 @@
 {
     public class IssueInvoiceRequest
     {
-        public long ID { get; set; }
+        public long InvoiceID { get; set; }
 
         public required Guid BillerID { get; set; }
 

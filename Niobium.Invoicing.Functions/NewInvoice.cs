@@ -1,9 +1,8 @@
-using Niobium;
-using Niobium.Platform;
-using Niobium.Profile;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
+using Niobium.Platform;
+using Niobium.Profile;
 using System.Security.Claims;
 using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
 
@@ -22,7 +21,7 @@ public class NewInvoice(
         [FromBody] IssueInvoiceRequest request,
         CancellationToken cancellationToken)
     {
-        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.NameIdentifier, out var user))
+        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.NameIdentifier, out Guid user))
         {
             return new UnauthorizedResult();
         }
@@ -32,19 +31,19 @@ public class NewInvoice(
             return new ForbidResult("Biller does not match the authenticated user.");
         }
 
-        request.TryValidate(out var validationState);
+        request.TryValidate(out ValidationState? validationState);
         if (!validationState.IsValid)
         {
             return validationState.MakeResponse();
         }
 
-        var biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken);
+        Biller? biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken);
         if (biller == null)
         {
             return new NotFoundObjectResult("Biller does not exist.");
         }
 
-        var billee = await billeeRepo.RetrieveAsync(
+        Billee? billee = await billeeRepo.RetrieveAsync(
             Billee.BuildPartitionKey(request.BillerID),
             Billee.BuildRowKey(request.BilleeID),
             cancellationToken: cancellationToken);
@@ -53,13 +52,13 @@ public class NewInvoice(
             return new NotFoundObjectResult("Billee does not exist.");
         }
 
-        var invoice = Invoice.BuildNew(request.ID, biller, billee);
+        Invoice invoice = Invoice.BuildNew(request.InvoiceID, biller, billee);
         if (DateTimeOffset.UtcNow - invoice.Created > InvoiceCreateTimeMaxOffset)
         {
             return new ForbidResult("Invalid issue invoice request.");
         }
 
-        var domain = await repo.BuildAsync(invoice, cancellationToken);
+        InvoiceDomain domain = await repo.BuildAsync(invoice, cancellationToken);
         await domain.UpdateAsync(request, request.InvoiceItems, cancellationToken);
 
         return new OkResult();

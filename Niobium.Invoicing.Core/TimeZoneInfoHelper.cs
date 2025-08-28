@@ -4,12 +4,9 @@
     {
         public static TimeZoneInfo ParseTimeZoneFromIANA(string ianaTimeZoneID)
         {
-            if (!TryParseTimeZoneFromIANA(ianaTimeZoneID, out var result))
-            {
-                throw new ArgumentException($"Invalid IANA time zone ID: {ianaTimeZoneID}", nameof(ianaTimeZoneID));
-            }
-
-            return result;
+            return !TryParseTimeZoneFromIANA(ianaTimeZoneID, out TimeZoneInfo? result)
+                ? throw new ArgumentException($"Invalid IANA time zone ID: {ianaTimeZoneID}", nameof(ianaTimeZoneID))
+                : result;
         }
 
         public static bool TryParseTimeZoneFromIANA(string ianaTimeZoneID, out TimeZoneInfo timeZoneInfo)
@@ -20,7 +17,7 @@
                 return false;
             }
 
-            if (!TimeZoneInfo.TryConvertIanaIdToWindowsId(ianaTimeZoneID, out var windowsName))
+            if (!TimeZoneInfo.TryConvertIanaIdToWindowsId(ianaTimeZoneID, out string? windowsName))
             {
                 timeZoneInfo = null!;
                 return false;

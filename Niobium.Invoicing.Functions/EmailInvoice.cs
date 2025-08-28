@@ -1,4 +1,3 @@
-using Niobium;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -15,9 +14,9 @@ namespace Niobium.Invoicing.Functions
             long invoice,
             CancellationToken cancellationToken)
         {
-            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
-            var success = await domain.SendHTMLEmailAsync(cancellationToken);
-            var statuscode = success ? HttpStatusCode.Created : HttpStatusCode.InternalServerError;
+            InvoiceDomain domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
+            bool success = await domain.SendHTMLEmailAsync(cancellationToken);
+            HttpStatusCode statuscode = success ? HttpStatusCode.Created : HttpStatusCode.InternalServerError;
             return new StatusCodeResult((int)statuscode);
         }
     }

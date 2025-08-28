@@ -1,4 +1,3 @@
-using Niobium;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -22,8 +21,8 @@ namespace Niobium.Invoicing.Functions
                 return new NotFoundResult();
             }
 
-            var domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
-            var html = await domain.GetHTMLOutputAsync(token, cancellationToken);
+            InvoiceDomain domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
+            string html = await domain.GetHTMLOutputAsync(token, cancellationToken);
 
             return new ContentResult
             {

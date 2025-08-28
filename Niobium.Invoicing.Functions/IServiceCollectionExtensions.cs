@@ -1,9 +1,9 @@
-﻿using Niobium.Database.StorageTable;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Niobium.Database.StorageTable;
+using Niobium.Invoicing.Functions;
 using Niobium.Platform.Identity;
 using Niobium.Platform.StorageTable;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using Niobium.Invoicing.Functions;
 
 namespace Niobium.Invoicing.Functions
 {

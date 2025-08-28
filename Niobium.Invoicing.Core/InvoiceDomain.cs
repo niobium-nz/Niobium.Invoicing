@@ -1,7 +1,7 @@
-﻿using Niobium;
+﻿using Microsoft.Extensions.Options;
+using Niobium;
 using Niobium.Finance;
 using Niobium.Platform.Notification.Email;
-using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -24,20 +24,20 @@ namespace Niobium.Invoicing.Functions
 
         public async Task UpdateAsync(IssueInvoiceRequest update, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
         {
-            var entity = await GetEntityAsync(cancellationToken);
+            Invoice entity = await GetEntityAsync(cancellationToken);
             if (entity.Delivered.HasValue)
             {
                 throw new ApplicationException(InternalError.Conflict, "Invoice has been delivered.") { Reference = entity.GetFullID() };
             }
 
-            var existingInvoiceItems = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken)
+            InvoiceItem[] existingInvoiceItems = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
             if (existingInvoiceItems.Length > 0)
             {
                 await itemRepo.Value.DeleteAsync(existingInvoiceItems, cancellationToken: cancellationToken);
             }
 
-            foreach (var item in invoiceItems)
+            foreach (InvoiceItem item in invoiceItems)
             {
                 item.LineTotalCents = item.FigureLineTotalCents();
             }
@@ -58,13 +58,13 @@ namespace Niobium.Invoicing.Functions
 
         public async Task<string> GetHTMLOutputAsync(string token, CancellationToken cancellationToken)
         {
-            var entity = await GetEntityAsync(cancellationToken);
+            Invoice entity = await GetEntityAsync(cancellationToken);
             if (!string.IsNullOrWhiteSpace(entity.Token) && !entity.Token.Equals(token, StringComparison.OrdinalIgnoreCase))
             {
                 throw new ApplicationException(InternalError.Forbidden, "Invalid token.") { Reference = entity.GetFullID() };
             }
 
-            var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken)
+            InvoiceItem[] items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken)
                 .ToArrayAsync(cancellationToken: cancellationToken);
 
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(entity.TimeZone);
@@ -72,17 +72,17 @@ namespace Niobium.Invoicing.Functions
 
             invoiceTemplate ??= await GetEmbededResourceAsStringAsync(InvoiceTemplateResourceName) ?? throw new ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
 
-            var itemTemplateMatch = InvoiceLineRegex.Match(invoiceTemplate);
+            Match itemTemplateMatch = InvoiceLineRegex.Match(invoiceTemplate);
             if (!itemTemplateMatch.Success)
             {
                 throw new ApplicationException(InternalError.InternalServerError, "Missing invoice line template.") { Reference = entity.GetFullID() };
             }
 
-            var itemTemplate = itemTemplateMatch.Value;
+            string itemTemplate = itemTemplateMatch.Value;
             string result = BuildInvoiceHtml(invoiceTemplate, entity, timezone, culture);
 
-            var itemsHtml = new StringBuilder();
-            foreach (var item in items)
+            StringBuilder itemsHtml = new();
+            foreach (InvoiceItem? item in items)
             {
                 string itemHtml = BuildInvoiceLineHtml(itemTemplate, item);
                 itemsHtml.Append(itemHtml);
@@ -94,16 +94,16 @@ namespace Niobium.Invoicing.Functions
 
         public async Task<bool> SendHTMLEmailAsync(CancellationToken cancellationToken)
         {
-            var entity = await GetEntityAsync(cancellationToken);
+            Invoice entity = await GetEntityAsync(cancellationToken);
             if (entity.RecipientEmail == null)
             {
                 return false;
             }
-            var items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
-            var token = BuildAccessToken(entity, items, config.Value.InvoiceTokenSecretSalt);
+            InvoiceItem[] items = await itemRepo.Value.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
+            string token = BuildAccessToken(entity, items, config.Value.InvoiceTokenSecretSalt);
 
-            var email = await GetHTMLEmailAsync(token, cancellationToken);
-            var result = await sender.SendAsync(
+            string email = await GetHTMLEmailAsync(token, cancellationToken);
+            bool result = await sender.SendAsync(
                 new EmailAddress { DisplayName = entity.ContactName ?? entity.BillerName, Address = config.Value.InvoiceEmailSenderAddress },
                 [entity.RecipientEmail],
                 $"Invoice {entity.GetID()} from {entity.BillerName} for {entity.BilleeName}",
@@ -121,32 +121,32 @@ namespace Niobium.Invoicing.Functions
 
         private async Task<string> GetHTMLEmailAsync(string token, CancellationToken cancellationToken)
         {
-            var invoice = await GetEntityAsync(cancellationToken);
+            Invoice invoice = await GetEntityAsync(cancellationToken);
             emailTemplate ??= await GetEmbededResourceAsStringAsync(EmailTemplateResourceName) ?? throw new ApplicationException(InternalError.InternalServerError, "Missing email template.") { Reference = invoice.GetFullID() };
 
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(invoice.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(invoice.Culture, true);
 
-            var result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);
-            var invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Biller}/invoices/{invoice.GetID()}?token={token}";
+            string result = BuildInvoiceHtml(emailTemplate, invoice, timezone, culture);
+            string invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{invoice.Biller}/invoices/{invoice.GetID()}?token={token}";
             result = result.Replace("{{InvoiceURL}}", invoiceURL);
             return result;
         }
 
         private static string BuildAccessToken(Invoice invoice, IEnumerable<InvoiceItem> items, string salt)
         {
-            var data = new StringBuilder();
+            StringBuilder data = new();
             data.Append(invoice.GrandTotalCents);
             data.Append(invoice.GrandTotalCurrency);
-            foreach (var item in items)
+            foreach (InvoiceItem item in items)
             {
                 data.Append(item.LineTotalCents);
                 data.Append(item.LineTotalCurrency);
             }
 
-            var issuer = invoice.Biller.ToString("N");
-            var invoiceID = invoice.GetID().ToString().PadLeft(12, '0');
-            var secret = $"{salt[..4]}{issuer.Substring(8, 16)}{invoiceID[..12]}";
+            string issuer = invoice.Biller.ToString("N");
+            string invoiceID = invoice.GetID().ToString().PadLeft(12, '0');
+            string secret = $"{salt[..4]}{issuer.Substring(8, 16)}{invoiceID[..12]}";
 
             return SHA.SHA256Hash(data.ToString(), secret, 16);
         }
@@ -162,7 +162,7 @@ namespace Niobium.Invoicing.Functions
 
         private static string BuildInvoiceHtml(string template, Invoice invoice, TimeZoneInfo timeZone, CultureInfo culture)
         {
-            var result = template.Replace("{{BillDate}}", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture))
+            string result = template.Replace("{{BillDate}}", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture))
                             .Replace("{{BillerName}}", invoice.BillerName)
                             .Replace("{{BillerBusinessID}}", invoice.BillerBusinessID)
                             .Replace("{{BillerTaxID}}", invoice.BillerTaxID)
@@ -222,8 +222,8 @@ namespace Niobium.Invoicing.Functions
                 case InvoiceCycle.Range:
                     if (invoice.BillingPeriodStartDay.HasValue && invoice.BillingPeriodEndDay.HasValue)
                     {
-                        var start = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
-                        var end = invoice.BillingPeriodEndDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
+                        string start = invoice.BillingPeriodStartDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
+                        string end = invoice.BillingPeriodEndDay.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture);
                         billingPeriod = $"{start} - {end}";
                     }
                     break;
@@ -247,19 +247,15 @@ namespace Niobium.Invoicing.Functions
 
         private static async Task<string?> GetEmbededResourceAsStringAsync(string resourceName)
         {
-            var assembly = typeof(InvoiceDomain).Assembly;
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            System.Reflection.Assembly assembly = typeof(InvoiceDomain).Assembly;
+            using Stream? stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null)
             {
-                if (stream == null)
-                {
-                    return null;
-                }
-
-                using (var reader = new StreamReader(stream))
-                {
-                    return await reader.ReadToEndAsync();
-                }
+                return null;
             }
+
+            using StreamReader reader = new(stream);
+            return await reader.ReadToEndAsync();
         }
 
         [GeneratedRegex(@"<!-- Invoice Line Start -->[\s\S]*<!-- Invoice Line End -->", RegexOptions.Compiled)]

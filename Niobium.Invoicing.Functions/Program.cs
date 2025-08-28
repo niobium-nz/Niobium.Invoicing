@@ -7,7 +7,7 @@ using System.Text;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-var builder = FunctionsApplication.CreateBuilder(args);
+FunctionsApplicationBuilder builder = FunctionsApplication.CreateBuilder(args);
 builder.ConfigureFunctionsWebApplication();
 builder.Services
     .AddApplicationInsightsTelemetryWorkerService()

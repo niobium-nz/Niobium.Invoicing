@@ -1,6 +1,4 @@
-﻿using Niobium;
-
-namespace Niobium.Invoicing
+﻿namespace Niobium.Invoicing
 {
     public class Billable : ITrackable
     {

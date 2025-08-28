@@ -1,5 +1,4 @@
-﻿using Niobium;
-using Niobium.Profile;
+﻿using Niobium.Profile;
 
 namespace Niobium.Invoicing
 {

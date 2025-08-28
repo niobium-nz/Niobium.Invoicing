@@ -1,9 +1,8 @@
 using Azure.Messaging.ServiceBus;
-using Niobium;
-using Niobium.Messaging.ServiceBus;
-using Niobium.Profile;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Niobium.Messaging.ServiceBus;
+using Niobium.Profile;
 
 namespace Niobium.Invoicing.Functions;
 
@@ -18,26 +17,26 @@ public class IssueInvoiceCommandConsumer(
         ServiceBusReceivedMessage message,
         CancellationToken cancellationToken)
     {
-        if (!message.TryParse(out IssueInvoiceCommand? command, out var rawBody))
+        if (!message.TryParse(out IssueInvoiceCommand? command, out string? rawBody))
         {
-            var err = $"Failed to parse message {message.MessageId}";
+            string err = $"Failed to parse message {message.MessageId}";
             logger.LogError(err);
             throw new InvalidOperationException(err);
         }
 
-        command.TryValidate(out var validationState);
+        command.TryValidate(out ValidationState? validationState);
         if (!validationState.IsValid)
         {
-            var err = $"Validation failed for command {command.ID}: {validationState}";
+            string err = $"Validation failed for command {command.InvoiceID}: {validationState}";
             logger.LogError(err);
             throw new InvalidOperationException(err);
         }
 
-        var biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken)
+        Biller biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Biller does not exist.");
 
-        var invoice = Invoice.BuildNew(command.ID, biller, command.Billee);
-        var domain = await repo.BuildAsync(invoice, cancellationToken);
+        Invoice invoice = Invoice.BuildNew(command.InvoiceID, biller, command.Billee);
+        InvoiceDomain domain = await repo.BuildAsync(invoice, cancellationToken);
         await domain.UpdateAsync(command, command.InvoiceItems, cancellationToken);
     }
 }

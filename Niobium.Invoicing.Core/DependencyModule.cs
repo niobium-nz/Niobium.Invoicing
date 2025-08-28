@@ -1,6 +1,4 @@
-﻿using Niobium;
-using Niobium.Platform;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Niobium.Invoicing.Functions;
 
 namespace Niobium.Invoicing

@@ -1,14 +1,13 @@
-﻿using Niobium;
+﻿using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Logging;
 using Niobium.Database.StorageTable;
 using Niobium.Platform;
 using Niobium.Platform.Identity;
 using Niobium.Platform.Notification.Email.Resend;
 using Niobium.Platform.Profile;
 using Niobium.Platform.StorageTable;
-using Microsoft.Azure.Functions.Worker.Builder;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Logging;
 
 namespace Niobium.Invoicing.Functions
 {
@@ -25,7 +24,7 @@ namespace Niobium.Invoicing.Functions
 
             loaded = true;
 
-            var isDevelopment = builder.Configuration.IsDevelopmentEnvironment();
+            bool isDevelopment = builder.Configuration.IsDevelopmentEnvironment();
             IdentityModelEventSource.ShowPII = isDevelopment;
 
             builder.UsePlatformIdentity();
