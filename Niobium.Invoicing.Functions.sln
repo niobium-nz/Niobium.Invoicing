@@ -10,7 +10,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		azure-pipelines.yml = azure-pipelines.yml
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Niobium.Invoicing.Abstractions", "Niobium.Invoicing.Abstractions\Niobium.Invoicing.Abstractions.csproj", "{B8F846CA-F719-4EE3-9B00-28506EB2DB79}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Niobium.Invoicing.Contracts", "Niobium.Invoicing.Contracts\Niobium.Invoicing.Contracts.csproj", "{B8F846CA-F719-4EE3-9B00-28506EB2DB79}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Niobium.Invoicing.Core", "Niobium.Invoicing.Core\Niobium.Invoicing.Core.csproj", "{A993DAD4-887A-4E50-B0C4-E080A9194CA7}"
 EndProject

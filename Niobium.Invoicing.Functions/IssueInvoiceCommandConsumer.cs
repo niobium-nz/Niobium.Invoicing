@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Niobium.Messaging.ServiceBus;
+using Niobium.Platform.ServiceBus;
 using Niobium.Profile;
 
 namespace Niobium.Invoicing.Functions;
@@ -13,7 +14,7 @@ public class IssueInvoiceCommandConsumer(
 {
     [Function(nameof(IssueInvoiceCommandConsumer))]
     public async Task Run(
-        [ServiceBusTrigger("issueinvoicecommand", AutoCompleteMessages = true, Connection = nameof(ServiceBusOptions))]
+        [ServiceBusTrigger("issueinvoicecommand", AutoCompleteMessages = true, Connection = nameof(ServiceBusTriggerOptions))]
         ServiceBusReceivedMessage message,
         CancellationToken cancellationToken)
     {

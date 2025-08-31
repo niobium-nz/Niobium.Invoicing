@@ -31,7 +31,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\"/>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -40,9 +40,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Niobium.Abstractions" Version="3.0.8" />
-    <PackageReference Include="Niobium.Helper" Version="3.0.8" />
-    <PackageReference Include="Niobium.Profile" Version="3.0.8" />
-    <PackageReference Include="Niobium.Finance" Version="3.0.8" />
+    <PackageReference Include="Niobium.Abstractions" Version="3.2.9" />
+    <PackageReference Include="Niobium.Helper" Version="3.2.9" />
+    <PackageReference Include="Niobium.Profile" Version="3.2.9" />
+    <PackageReference Include="Niobium.Finance" Version="3.2.9" />
   </ItemGroup>
 </Project>

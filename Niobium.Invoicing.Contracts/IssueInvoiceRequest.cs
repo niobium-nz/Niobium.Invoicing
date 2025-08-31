@@ -26,7 +26,7 @@ namespace Niobium.Invoicing
 
         public string? PaymentInstructions { get; set; }
 
-        public required InvoiceItem[] InvoiceItems { get; set; }
+        public required List<InvoiceItem> InvoiceItems { get; set; }
 
         public Amount Settled { get; set; } = Amount.Zero;
 
