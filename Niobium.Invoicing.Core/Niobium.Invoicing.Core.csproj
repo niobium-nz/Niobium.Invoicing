@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Niobium.Platform.Notification.Email" Version="3.2.9" />
+    <PackageReference Include="Niobium.Platform.Notification.Email" Version="3.2.10" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
     <PackageReference Include="System.Linq.Async" Version="6.0.3" />
   </ItemGroup>
