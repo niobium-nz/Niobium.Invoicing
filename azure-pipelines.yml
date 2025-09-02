@@ -117,6 +117,51 @@ stages:
         appSettings: |
           [
             {
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET-SALT/)",
+              "slotSetting": true
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/ACCESS-TOKEN-SECRET/)",
+              "slotSetting": true
+            },
+            {
+                "name": "ResendServiceOptions:GlobalAPIKey",
+                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/RESEND-API-KEY/)",
+                "slotSetting": true
+            },
+            {
+              "name": "StorageTableOptions:Key",
+                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
+              "slotSetting": true
+            }
+          ]
+    - task: AzureAppServiceSettings@1
+      displayName: 'Update $(slotName) AppSettings'
+      inputs:
+        azureSubscription: $(serviceConnection)
+        appName: $(appName)
+        slotName: $(slotName)
+        resourceGroupName: $(resourceGroupName)
+        appSettings: |
+          [
+            {
+              "name": "BillingOptions:InvoiceTokenSecretSalt",
+              "value": "1234567890",
+              "slotSetting": true
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenSecret",
+              "value": "012345678901234567890123456789AB",
+              "slotSetting": true
+            },
+            {
+              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
+              "value": "true",
+              "slotSetting": true
+            },
+            {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
               "value": "$(tableFQDN)",
               "slotSetting": false
@@ -163,54 +208,8 @@ stages:
             },
             {
               "name": "BillingOptions:InvoiceEmailSenderAddress",
-              "value": "billing@niobium.co.nz",
+              "value": "invoice@niobium.co.nz",
               "slotSetting": false
-            },
-            {
-              "name": "BillingOptions:InvoiceTokenSecretSalt",
-              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET-SALT/)",
-              "slotSetting": true
-            },
-            {
-              "name": "IdentityServiceOptions:AccessTokenSecret",
-              "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/ACCESS-TOKEN-SECRET/)",
-              "slotSetting": true
-            },
-            {
-                "name": "ResendServiceOptions:GlobalAPIKey",
-                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/RESEND-API-KEY/)",
-                "slotSetting": true
-            },
-            {
-              "name": "StorageTableOptions:Key",
-                "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/STORAGE-TABLE-KEY/)",
-              "slotSetting": true
-            }
-          ]
-    - task: AzureAppServiceSettings@1
-      displayName: 'Update $(slotName) AppSettings'
-      inputs:
-        azureSubscription: $(serviceConnection)
-        appName: $(appName)
-        slotName: $(slotName)
-        resourceGroupName: $(resourceGroupName)
-        appSettings: |
-          [
-            
-            {
-              "name": "BillingOptions:InvoiceTokenSecretSalt",
-              "value": "1234567890",
-              "slotSetting": true
-            },
-            {
-              "name": "IdentityServiceOptions:AccessTokenSecret",
-              "value": "012345678901234567890123456789AB",
-              "slotSetting": true
-            },
-            {
-              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
-              "value": "true",
-              "slotSetting": true
             }
           ]
 

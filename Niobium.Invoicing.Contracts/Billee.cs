@@ -28,7 +28,7 @@
 
         public string? Email { get; set; }
 
-        public string? Wechat { get; set; }
+        public string? InstantMessaging { get; set; }
 
         public string? Phone { get; set; }
 
