@@ -32,8 +32,8 @@ public class IssueInvoiceCommandConsumer(
             logger.LogError(err);
             throw new InvalidOperationException(err);
         }
-
-        Biller biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken)
+        
+        Biller biller = await profileService.RetrieveAsync(command.Tenant, command.BillerID, cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Biller does not exist.");
 
         Invoice invoice = Invoice.BuildNew(command.InvoiceID, biller, command.Billee);

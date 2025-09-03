@@ -6,6 +6,8 @@ namespace Niobium.Invoicing
     {
         public long InvoiceID { get; set; }
 
+        public required Guid Tenant { get; set; }
+
         public required Guid BillerID { get; set; }
 
         public required Guid BilleeID { get; set; }

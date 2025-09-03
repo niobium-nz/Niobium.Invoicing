@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Options;
 using Niobium.Platform;
 using Niobium.Profile;
 using System.Security.Claims;
@@ -21,7 +22,12 @@ public class NewInvoice(
         [FromBody] IssueInvoiceRequest request,
         CancellationToken cancellationToken)
     {
-        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.NameIdentifier, out Guid user))
+        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.Sid, out Guid user))
+        {
+            return new UnauthorizedResult();
+        }
+
+        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.GroupSid, out Guid tenant))
         {
             return new UnauthorizedResult();
         }
@@ -31,13 +37,18 @@ public class NewInvoice(
             return new ForbidResult("Biller does not match the authenticated user.");
         }
 
+        if (request.Tenant != tenant)
+        {
+            return new ForbidResult("Tenant does not match the authenticated user.");
+        }
+
         request.TryValidate(out ValidationState? validationState);
         if (!validationState.IsValid)
         {
             return validationState.MakeResponse();
         }
 
-        Biller? biller = await profileService.RetrieveAsync(cancellationToken: cancellationToken);
+        Biller? biller = await profileService.RetrieveAsync(tenant, user, cancellationToken: cancellationToken);
         if (biller == null)
         {
             return new NotFoundObjectResult("Biller does not exist.");
