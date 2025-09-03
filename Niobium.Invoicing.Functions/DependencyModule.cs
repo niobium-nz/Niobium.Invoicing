@@ -30,7 +30,7 @@ namespace Niobium.Invoicing.Functions
             builder.UsePlatformIdentity();
 
             builder.AddIdentity();
-            builder.AddProfile();
+            builder.AddProfile(useServicePrincipalAuthentication: true);
             builder.AddNotification();
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
