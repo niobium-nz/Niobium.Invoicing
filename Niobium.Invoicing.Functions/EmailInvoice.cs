@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
+using Niobium.Invoicing.Flows;
 using System.Net;
 
 namespace Niobium.Invoicing.Functions
 {
-    public class EmailInvoice(IDomainRepository<InvoiceDomain, Invoice> repo)
+    public class EmailInvoice(EmailFlow flow)
     {
         [Function(nameof(EmailInvoice))]
         public async Task<IActionResult> Run(
@@ -14,8 +15,7 @@ namespace Niobium.Invoicing.Functions
             long invoice,
             CancellationToken cancellationToken)
         {
-            InvoiceDomain domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
-            bool success = await domain.SendHTMLEmailAsync(cancellationToken);
+            bool success = await flow.RunAsync(issuer, invoice, cancellationToken);
             HttpStatusCode statuscode = success ? HttpStatusCode.Created : HttpStatusCode.InternalServerError;
             return new StatusCodeResult((int)statuscode);
         }

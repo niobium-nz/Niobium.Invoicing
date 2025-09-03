@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Niobium.Invoicing.Functions;
+using Niobium.Invoicing.Domains;
+using Niobium.Invoicing.Options;
 
 namespace Niobium.Invoicing
 {

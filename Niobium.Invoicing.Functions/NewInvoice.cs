@@ -1,18 +1,14 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Options;
+using Niobium.Invoicing.Flows;
 using Niobium.Platform;
-using Niobium.Profile;
 using System.Security.Claims;
 using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
 
 namespace Niobium.Invoicing.Functions;
 
-public class NewInvoice(
-    IDomainRepository<InvoiceDomain, Invoice> repo,
-    IProfileService<Biller> profileService,
-    IRepository<Billee> billeeRepo)
+public class NewInvoice(UpsertFlow flow)
 {
     private static readonly TimeSpan InvoiceCreateTimeMaxOffset = TimeSpan.FromMinutes(30);
 
@@ -48,30 +44,13 @@ public class NewInvoice(
             return validationState.MakeResponse();
         }
 
-        Biller? biller = await profileService.RetrieveAsync(tenant, user, cancellationToken: cancellationToken);
-        if (biller == null)
-        {
-            return new NotFoundObjectResult("Biller does not exist.");
-        }
-
-        Billee? billee = await billeeRepo.RetrieveAsync(
-            Billee.BuildPartitionKey(request.BillerID),
-            Billee.BuildRowKey(request.BilleeID),
-            cancellationToken: cancellationToken);
-        if (billee == null)
-        {
-            return new NotFoundObjectResult("Billee does not exist.");
-        }
-
-        Invoice invoice = Invoice.BuildNew(request.InvoiceID, biller, billee);
-        if (DateTimeOffset.UtcNow - invoice.Created > InvoiceCreateTimeMaxOffset)
+        DateTimeOffset invoiceCreateTime = DateTimeOffsetExtensions.FromReverseUnixTimeMilliseconds(request.InvoiceID);
+        if (DateTimeOffset.UtcNow - invoiceCreateTime > InvoiceCreateTimeMaxOffset)
         {
             return new ForbidResult("Invalid issue invoice request.");
         }
 
-        InvoiceDomain domain = await repo.BuildAsync(invoice, cancellationToken);
-        await domain.UpdateAsync(request, request.InvoiceItems, cancellationToken);
-
+        await flow.RunAsync(request, null, cancellationToken);
         return new OkResult();
     }
 }

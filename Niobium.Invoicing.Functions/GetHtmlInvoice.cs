@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
+using Niobium.Invoicing.Flows;
 
 namespace Niobium.Invoicing.Functions
 {
-    public class GetHTMLInvoice(IDomainRepository<InvoiceDomain, Invoice> repo)
+    public class GetHTMLInvoice(HTMLFlow flow)
     {
         [Function(nameof(GetHTMLInvoice))]
         public async Task<IActionResult> Run(
@@ -21,9 +22,7 @@ namespace Niobium.Invoicing.Functions
                 return new NotFoundResult();
             }
 
-            InvoiceDomain domain = await repo.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
-            string html = await domain.GetHTMLOutputAsync(token, cancellationToken);
-
+            string html = await flow.RunAsync(issuer, invoice, token, cancellationToken);
             return new ContentResult
             {
                 Content = html,

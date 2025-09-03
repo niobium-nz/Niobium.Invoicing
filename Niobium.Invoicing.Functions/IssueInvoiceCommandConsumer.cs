@@ -1,16 +1,13 @@
 using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Niobium.Invoicing.Flows;
 using Niobium.Messaging.ServiceBus;
 using Niobium.Platform.ServiceBus;
-using Niobium.Profile;
 
 namespace Niobium.Invoicing.Functions;
 
-public class IssueInvoiceCommandConsumer(
-    IDomainRepository<InvoiceDomain, Invoice> repo,
-    IProfileService<Biller> profileService,
-    ILogger<IssueInvoiceCommandConsumer> logger)
+public class IssueInvoiceCommandConsumer(UpsertFlow flow, ILogger<IssueInvoiceCommandConsumer> logger)
 {
     [Function(nameof(IssueInvoiceCommandConsumer))]
     public async Task Run(
@@ -32,12 +29,7 @@ public class IssueInvoiceCommandConsumer(
             logger.LogError(err);
             throw new InvalidOperationException(err);
         }
-        
-        Biller biller = await profileService.RetrieveAsync(command.Tenant, command.BillerID, cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException("Biller does not exist.");
 
-        Invoice invoice = Invoice.BuildNew(command.InvoiceID, biller, command.Billee);
-        InvoiceDomain domain = await repo.BuildAsync(invoice, cancellationToken);
-        await domain.UpdateAsync(command, command.InvoiceItems, cancellationToken);
+        await flow.RunAsync(command, command.Billee, cancellationToken);
     }
 }

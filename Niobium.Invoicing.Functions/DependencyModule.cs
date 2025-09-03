@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Logging;
 using Niobium.Database.StorageTable;
+using Niobium.Invoicing.Options;
 using Niobium.Platform;
 using Niobium.Platform.Identity;
 using Niobium.Platform.Notification.Email.Resend;
@@ -35,8 +36,8 @@ namespace Niobium.Invoicing.Functions
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
             builder.Services.AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
-            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Invoice), DatabasePermissions.Query);
-            builder.Services.GrantDatabaseEntitlementTo(nameof(InvoiceItem), DatabasePermissions.Query);
+            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Invoice));
+            builder.Services.GrantDatabaseEntitlementTo(nameof(InvoiceItem));
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billable),
                 DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete);
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billee),
