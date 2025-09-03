@@ -202,6 +202,11 @@ stages:
               "slotSetting": false
             },
             {
+              "name": "ProfileOptions:ProfileAppID",
+              "value": "e514f381-77cd-4ce9-ab6c-1a960fc7d9ed",
+              "slotSetting": false
+            },
+            {
               "name": "BillingOptions:GetInvoiceEndpoint",
               "value": "https://invoicing.niobium.co.nz",
               "slotSetting": false

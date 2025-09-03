@@ -20,11 +20,17 @@
 
         public string? AddressLine2 { get; set; }
 
+        public string? Suburb { get; set; }
+
         public string? BusinessID { get; set; }
 
         public required string Name { get; set; }
 
         public string? City { get; set; }
+
+        public string? State { get; set; }
+
+        public string? Country { get; set; }
 
         public string? Email { get; set; }
 

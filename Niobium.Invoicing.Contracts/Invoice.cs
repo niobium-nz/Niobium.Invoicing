@@ -27,7 +27,13 @@ namespace Niobium.Invoicing
 
         public string? BillerAddressLine2 { get; set; }
 
+        public string? BillerAddressSuburb { get; set; }
+
         public string? BillerAddressCity { get; set; }
+
+        public string? BillerAddressState { get; set; }
+
+        public string? BillerAddressCountry { get; set; }
 
         public string? BillerAddressZipcode { get; set; }
 
@@ -43,7 +49,13 @@ namespace Niobium.Invoicing
 
         public string? BilleeAddressLine2 { get; set; }
 
+        public string? BilleeAddressSuburb { get; set; }
+
         public string? BilleeAddressCity { get; set; }
+
+        public string? BilleeAddressState { get; set; }
+
+        public string? BilleeAddressCountry { get; set; }
 
         public string? BilleeAddressZipcode { get; set; }
 
@@ -153,9 +165,12 @@ namespace Niobium.Invoicing
                 Created = Invoice.ParseID(id),
 
                 Biller = biller.GetUser(),
-                BillerAddressCity = biller.City,
                 BillerAddressLine1 = biller.AddressLine1,
                 BillerAddressLine2 = biller.AddressLine2,
+                BillerAddressSuburb = biller.Suburb,
+                BillerAddressCity = biller.City,
+                BillerAddressState = biller.State,
+                BillerAddressCountry = biller.Country,
                 BillerAddressZipcode = biller.Zipcode,
                 BillerName = biller.BusinessName,
                 BillerBusinessID = biller.BusinessID,
@@ -172,9 +187,12 @@ namespace Niobium.Invoicing
                 Billee = billee.ID,
                 BilleeName = billee.Name,
                 BilleeBusinessID = billee.BusinessID,
-                BilleeAddressCity = billee.City,
                 BilleeAddressLine1 = billee.AddressLine1,
                 BilleeAddressLine2 = billee.AddressLine2,
+                BilleeAddressSuburb = billee.Suburb,
+                BilleeAddressState = billee.State,
+                BilleeAddressCountry = billee.Country,
+                BilleeAddressCity = billee.City,
                 BilleeAddressZipcode = billee.Zipcode,
                 RecipientEmail = billee.Email,
                 GrandTotalCurrency = billee.Currency,
