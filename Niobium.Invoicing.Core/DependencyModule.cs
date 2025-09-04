@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Options;
 
 namespace Niobium.Invoicing
@@ -21,7 +20,7 @@ namespace Niobium.Invoicing
             {
                 options?.Invoke(o);
             });
-            return services.AddDomain<InvoiceDomain, Invoice>();
+            return services.RegisterDomainComponents(typeof(DependencyModule));
         }
     }
 }
