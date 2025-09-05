@@ -2,15 +2,6 @@ name: '1.0$(Rev:.r)'
 trigger:
 - master
 
-parameters:
-- name: updateInfrastructure
-  type: boolean
-  default: false
-  displayName: Update Infrastructure
-  values:
-    - true
-    - false
-
 variables:
   buildAgentVmImage: 'windows-latest'
   serviceConnection: 'niobium-invoicing'
@@ -42,7 +33,6 @@ stages:
 
   - template: pipelines/jobs/FunctionAppInfrastructure.yml@devops
     parameters:
-      enabled: ${{ parameters.updateInfrastructure }}
       azureServiceConnection: $(serviceConnection)
       resourceGroupName: $(resourceGroupName)
       appName: $(appName)
