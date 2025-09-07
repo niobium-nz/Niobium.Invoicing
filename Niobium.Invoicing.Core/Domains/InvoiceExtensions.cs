@@ -30,37 +30,37 @@ namespace Niobium.Invoicing.Domains
             {
                 { "INVOICE_ID", invoice.GetID().ToString() },
                 { "BILL_DATE", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture) },
-                { ToSnakeCase(nameof(invoice.BillerName)), invoice.BillerName },
-                { ToSnakeCase(nameof(invoice.BillerBusinessID)), invoice.BillerBusinessID ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerTaxID)), invoice.BillerTaxID ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressLine1)), invoice.BillerAddressLine1 ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressLine1)), invoice.BillerAddressLine1 ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressSuburb)), invoice.BillerAddressSuburb ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressCity)), invoice.BillerAddressCity ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressState)), invoice.BillerAddressState ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressCountry)), !string.IsNullOrWhiteSpace(invoice.BillerAddressCountry) ? Country.Parse(invoice.BillerAddressCountry).ToString() : string.Empty },
-                { ToSnakeCase(nameof(invoice.BillerAddressZipcode)), invoice.BillerAddressZipcode ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeName)), invoice.BilleeName },
-                { ToSnakeCase(nameof(invoice.BilleeBusinessID)), invoice.BilleeBusinessID ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressLine1)), invoice.BilleeAddressLine1 ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressLine2)), invoice.BilleeAddressLine2 ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressSuburb)), invoice.BilleeAddressSuburb ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressCity)), invoice.BilleeAddressCity ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressState)), invoice.BilleeAddressState ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressCountry)), !string.IsNullOrWhiteSpace(invoice.BilleeAddressCountry) ? Country.Parse(invoice.BilleeAddressCountry).ToString() : string.Empty },
-                { ToSnakeCase(nameof(invoice.BilleeAddressZipcode)), invoice.BilleeAddressZipcode ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.ContactName)), invoice.ContactName ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.PaymentInstructions)), invoice.PaymentInstructions ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.Particulars)), invoice.Particulars ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.Reference)), invoice.Reference ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.ContactPhoneNumber)), invoice.ContactPhoneNumber ?? string.Empty },
-                { ToSnakeCase(nameof(invoice.ContactEmailAddress)), invoice.ContactEmailAddress ?? string.Empty },
+                { nameof(invoice.BillerName).ToSnakeCaseUpper(), invoice.BillerName },
+                { nameof(invoice.BillerBusinessID).ToSnakeCaseUpper(), invoice.BillerBusinessID ?? string.Empty },
+                { nameof(invoice.BillerTaxID).ToSnakeCaseUpper(), invoice.BillerTaxID ?? string.Empty },
+                { nameof(invoice.BillerAddressLine1).ToSnakeCaseUpper(), invoice.BillerAddressLine1 ?? string.Empty },
+                { nameof(invoice.BillerAddressLine1).ToSnakeCaseUpper(), invoice.BillerAddressLine1 ?? string.Empty },
+                { nameof(invoice.BillerAddressSuburb).ToSnakeCaseUpper(), invoice.BillerAddressSuburb ?? string.Empty },
+                { nameof(invoice.BillerAddressCity).ToSnakeCaseUpper(), invoice.BillerAddressCity ?? string.Empty },
+                { nameof(invoice.BillerAddressState).ToSnakeCaseUpper(), invoice.BillerAddressState ?? string.Empty },
+                { nameof(invoice.BillerAddressCountry).ToSnakeCaseUpper(), !string.IsNullOrWhiteSpace(invoice.BillerAddressCountry) ? Country.Parse(invoice.BillerAddressCountry).ToString() : string.Empty },
+                { nameof(invoice.BillerAddressZipcode).ToSnakeCaseUpper(), invoice.BillerAddressZipcode ?? string.Empty },
+                { nameof(invoice.BilleeName).ToSnakeCaseUpper(), invoice.BilleeName },
+                { nameof(invoice.BilleeBusinessID).ToSnakeCaseUpper(), invoice.BilleeBusinessID ?? string.Empty },
+                { nameof(invoice.BilleeAddressLine1).ToSnakeCaseUpper(), invoice.BilleeAddressLine1 ?? string.Empty },
+                { nameof(invoice.BilleeAddressLine2).ToSnakeCaseUpper(), invoice.BilleeAddressLine2 ?? string.Empty },
+                { nameof(invoice.BilleeAddressSuburb).ToSnakeCaseUpper(), invoice.BilleeAddressSuburb ?? string.Empty },
+                { nameof(invoice.BilleeAddressCity).ToSnakeCaseUpper(), invoice.BilleeAddressCity ?? string.Empty },
+                { nameof(invoice.BilleeAddressState).ToSnakeCaseUpper(), invoice.BilleeAddressState ?? string.Empty },
+                { nameof(invoice.BilleeAddressCountry).ToSnakeCaseUpper(), !string.IsNullOrWhiteSpace(invoice.BilleeAddressCountry) ? Country.Parse(invoice.BilleeAddressCountry).ToString() : string.Empty },
+                { nameof(invoice.BilleeAddressZipcode).ToSnakeCaseUpper(), invoice.BilleeAddressZipcode ?? string.Empty },
+                { nameof(invoice.ContactName).ToSnakeCaseUpper(), invoice.ContactName ?? string.Empty },
+                { nameof(invoice.PaymentInstructions).ToSnakeCaseUpper(), invoice.PaymentInstructions ?? string.Empty },
+                { nameof(invoice.Particulars).ToSnakeCaseUpper(), invoice.Particulars ?? string.Empty },
+                { nameof(invoice.Reference).ToSnakeCaseUpper(), invoice.Reference ?? string.Empty },
+                { nameof(invoice.ContactPhoneNumber).ToSnakeCaseUpper(), invoice.ContactPhoneNumber ?? string.Empty },
+                { nameof(invoice.ContactEmailAddress).ToSnakeCaseUpper(), invoice.ContactEmailAddress ?? string.Empty },
                 { "SUBTOTAL", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d) },
                 { "TAX_AMOUNT", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d) },
                 { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d) },
                 { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
-                { ToSnakeCase(nameof(invoice.BillerLogo)), invoice.BillerLogo != null ? $"<img src=\"{invoice.BillerLogo}\" class=\"biller-logo\" />" : string.Empty },
-                { ToSnakeCase(nameof(invoice.Terms)), invoice.Terms ?? string.Empty },
+                { nameof(invoice.BillerLogo).ToSnakeCaseUpper(), invoice.BillerLogo != null ? $"<img src=\"{invoice.BillerLogo}\" class=\"biller-logo\" />" : string.Empty },
+                { nameof(invoice.Terms).ToSnakeCaseUpper(), invoice.Terms ?? string.Empty },
             };
 
             string billingPeriod = string.Empty;
@@ -110,31 +110,6 @@ namespace Niobium.Invoicing.Domains
             parameters.Add("DUE", due);
 
             return parameters;
-        }
-
-        private static string ToSnakeCase(string text)
-        {
-            if (text.Length < 2)
-            {
-                return text.ToUpperInvariant();
-            }
-
-            StringBuilder sb = new();
-            sb.Append(char.ToUpperInvariant(text[0]));
-            for (int i = 1; i < text.Length; ++i)
-            {
-                char c = text[i];
-                if (char.IsUpper(c))
-                {
-                    sb.Append('_');
-                    sb.Append(char.ToUpperInvariant(c));
-                }
-                else
-                {
-                    sb.Append(c);
-                }
-            }
-            return sb.ToString();
         }
     }
 }

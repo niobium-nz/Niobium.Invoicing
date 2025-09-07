@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Text.RegularExpressions;
 
 namespace Niobium.Invoicing.Domains
 {
@@ -14,7 +15,13 @@ namespace Niobium.Invoicing.Domains
         {
             string itemTemplate = await GetInvoiceLineTemplateAsync(cancellationToken);
             InvoiceItem entity = await GetEntityAsync(cancellationToken);
-            return entity.BuildHTML(itemTemplate);
+            var parameters = entity.BuildTemplateParameters();
+            var html = itemTemplate;
+            foreach (var parameter in parameters)
+            {
+                html = html.Replace($"{{{{{parameter.Key}}}}}", parameter.Value);
+            }
+            return html;
         }
 
         public static async Task<string> GetInvoiceLineTemplateAsync(CancellationToken cancellationToken)
@@ -28,7 +35,7 @@ namespace Niobium.Invoicing.Domains
                 : itemTemplateMatch.Value;
         }
 
-        [GeneratedRegex(@"<!-- Invoice Line Start -->[\s\S]*<!-- Invoice Line End -->", RegexOptions.Compiled)]
+        [GeneratedRegex(@"<!-- INVOICE_ITEM START -->[\s\S]*<!-- INVOICE_ITEM END -->", RegexOptions.Compiled)]
         private static partial Regex CreateInvoiceLineRegex();
     }
 }

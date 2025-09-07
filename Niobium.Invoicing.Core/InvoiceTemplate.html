@@ -160,37 +160,37 @@
                         <br />
                         <span class="invoice-h2">Tax Invoice</span>
                     </span>
-                    {{BillerLogo}}
+                    {{BILLER_LOGO}}
                 </div>
                 <div class="invoice-header">
                     <div class="invoice-from">
                         <small>Bill to</small>
                         <address class="m-t-5 m-b-5">
-                            <strong class="text-inverse">{{BilleeName}}</strong><br>
-                            {{BilleeAddressLine1}}<br>
-                            {{BilleeAddressLine2}}<br>
-                            {{BilleeAddressCity}} {{BilleeAddressZipcode}}<br>
-                            {{BilleeBusinessID}}
+                            <strong class="text-inverse">{{BILLEE_NAME}}</strong><br>
+                            {{BILLEE_ADDRESS_LINE_1}}<br>
+                            {{BILLEE_ADDRESS_LINE_2}}<br>
+                            {{BILLEE_ADDRESS_CITY}} {{BILLEE_ADDRESS_ZIPCODE}}<br>
+                            {{BILLEE_BUSINESS_ID}}
                         </address>
                     </div>
                     <div class="invoice-to">
                         <small>Issued by</small>
                         <address class="m-t-5 m-b-5">
-                            <strong class="text-inverse">{{BillerName}}</strong><br>
-                            {{BillerAddressLine1}}<br>
-                            {{BillerAddressLine2}}
-                            {{BillerAddressCity}} {{BillerAddressZipcode}}<br>
-                            {{BillerBusinessID}}<br>
-                            {{BillerTaxID}}
+                            <strong class="text-inverse">{{BILLER_NAME}}</strong><br>
+                            {{BILLER_ADDRESS_LINE_1}}<br>
+                            {{BILLER_ADDRESS_LINE_2}}
+                            {{BILLER_ADDRESS_CITY}} {{BILLER_ADDRESS_ZIPCODE}}<br>
+                            {{BILLER_BUSINESS_ID}}<br>
+                            {{BILLER_TAX_ID}}
                         </address>
                     </div>
                     <div class="invoice-date">
-                        <div class="date text-inverse m-t-5">{{BillDate}}</div>
+                        <div class="date text-inverse m-t-5">{{BILL_DATE}}</div>
                         <div class="invoice-detail">
-                            Particulars: {{Particulars}}<br>
-                            Reference: {{Reference}}<br>
+                            Particulars: {{PARTICULARS}}<br>
+                            Reference: {{REFERENCE}}<br>
                         </div>
-                        <small>{{BillingPeriod}}</small>
+                        <small>{{BILLING_PERIOD}}</small>
                     </div>
                 </div>
                 <div class="invoice-content">
@@ -205,17 +205,17 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Invoice Line Start -->
+                                <!-- INVOICE_ITEM START -->
                                 <tr>
                                     <td>
-                                        <span class="text-inverse">{{Subject}}</span><br>
-                                        <small>{{Description}}</small>
+                                        <span class="text-inverse">{{SUBJECT}}</span><br>
+                                        <small>{{DESCRIPTION}}</small>
                                     </td>
-                                    <td class="text-center">{{UnitPrice}}</td>
-                                    <td class="text-center">{{Quantity}}</td>
-                                    <td class="text-right">{{LineTotal}}</td>
+                                    <td class="text-center">{{UNIT_PRICE}}</td>
+                                    <td class="text-center">{{QUANTITY}}</td>
+                                    <td class="text-right">{{LINE_TOTAL}}</td>
                                 </tr>
-                                <!-- Invoice Line End -->
+                                <!-- INVOICE_ITEM END -->
                             </tbody>
                         </table>
                     </div>
@@ -224,28 +224,28 @@
                             <div class="invoice-price-row">
                                 <div class="sub-price">
                                     <small>SUBTOTAL</small>
-                                    <span class="text-inverse">{{Subtotal}}</span>
+                                    <span class="text-inverse">{{SUBTOTAL}}</span>
                                 </div>
                                 <div class="sub-price">
                                     <i class="fa fa-plus text-muted"></i>
                                 </div>
                                 <div class="sub-price">
-                                    <small>GST ({{TaxRate}})</small>
-                                    <span class="text-inverse">{{TaxAmount}}</span>
+                                    <small>GST ({{TAX_RATE}})</small>
+                                    <span class="text-inverse">{{TAX_AMOUNT}}</span>
                                 </div>
                             </div>
                         </div>
                         <div class="invoice-price-right">
-                            <small>TOTAL AMOUNT DUE</small> <span class="f-w-600">{{GrandTotal}}</span>
+                            <small>TOTAL AMOUNT DUE</small> <span class="f-w-600">{{GRAND_TOTAL}}</span>
                         </div>
                     </div>
                 </div>
                 <div class="invoice-note">
                     <strong>Terms</strong><br>
-                    {{Terms}}
-                    * Make payable to {{PaymentInstructions}}<br>
-                    * {{Due}}<br>
-                    * If you have any questions concerning this invoice, contact {{ContactName}} <a href="tel:{{ContactPhoneNumber}}">{{ContactPhoneNumber}}</a> <a href="mailto:{{ContactEmailAddress}}">{{ContactEmailAddress}}</a>
+                    {{TERMS}}
+                    * Make payable to {{PAYMENT_INSTRUCTIONS}}<br>
+                    * {{DUE}}<br>
+                    * If you have any questions concerning this invoice, contact {{CONTACT_NAME}} <a href="tel:{{CONTACT_PHONE_NUMBER}}">{{CONTACT_PHONE_NUMBER}}</a> <a href="mailto:{{CONTACT_EMAIL_ADDRESS}}">{{CONTACT_EMAIL_ADDRESS}}</a>
                 </div>
                 <div class="invoice-footer">
                     <p class="text-center m-b-5 f-w-600">
