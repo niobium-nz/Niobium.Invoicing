@@ -10,8 +10,7 @@ namespace Niobium.Invoicing.Domains
         IEnumerable<IDomainEventHandler<IDomain<Invoice>>> eventHandlers)
           : GenericDomain<Invoice>(repo, eventHandlers)
     {
-        private static string? invoiceTemplate;
-        private static string? emailTemplate;
+        private static string? htmlTemplate;
 
         public async Task UpdateAsync(IssueInvoiceRequest update, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
         {
@@ -50,25 +49,26 @@ namespace Niobium.Invoicing.Domains
 
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(entity.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(entity.Culture, true);
-            invoiceTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.InvoiceTemplateResourceName, cancellationToken)
+            htmlTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.InvoiceTemplateResourceName, cancellationToken)
                 ?? throw new ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
+            var parameters = entity.BuildTemplateParameters(timezone, culture);
+            var html = htmlTemplate;
+            foreach (var parameter in parameters)
+            {
+                html = html.Replace($"{{{{{parameter.Key}}}}}", parameter.Value);
+            }
 
-            return entity.BuildHTML(invoiceTemplate, timezone, culture);
+            return html;
         }
 
-        public async Task<string> BuildEmailAsync(string token, CancellationToken cancellationToken)
+        public async Task<IReadOnlyDictionary<string, string>> BuildNotificationParametersAsync(string token, CancellationToken cancellationToken)
         {
             Invoice entity = await GetEntityAsync(cancellationToken);
-            emailTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.EmailTemplateResourceName, cancellationToken)
-                ?? throw new ApplicationException(InternalError.InternalServerError, "Missing email template.") { Reference = entity.GetFullID() };
-
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(entity.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(entity.Culture, true);
-
-            string result = entity.BuildHTML(emailTemplate, timezone, culture);
-            string invoiceURL = $"{config.Value.GetInvoiceEndpoint}/{entity.Biller}/invoices/{entity.GetID()}?token={token}";
-            result = result.Replace("{{InvoiceURL}}", invoiceURL);
-            return result;
+            var parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
+            parameters.Add("INVOICE_URL", $"{config.Value.GetInvoiceEndpoint}/{entity.Biller}/invoices/{entity.GetID()}?token={token}");
+            return parameters;
         }
 
         public async Task OnDeliveredAsync(string token, CancellationToken cancellationToken)

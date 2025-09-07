@@ -24,50 +24,44 @@ namespace Niobium.Invoicing.Domains
             return SHA.SHA256Hash(data.ToString(), secret, 16);
         }
 
-        public static string BuildHTML(this Invoice invoice, string template, TimeZoneInfo timeZone, CultureInfo culture)
+        public static IReadOnlyDictionary<string, string> BuildTemplateParameters(this Invoice invoice, TimeZoneInfo timeZone, CultureInfo culture)
         {
-            string result = template.Replace("{{BillDate}}", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture))
-                            .Replace("{{BillerName}}", invoice.BillerName)
-                            .Replace("{{BillerBusinessID}}", invoice.BillerBusinessID)
-                            .Replace("{{BillerTaxID}}", invoice.BillerTaxID)
-                            .Replace("{{BillerAddressLine1}}", invoice.BillerAddressLine1)
-                            .Replace("{{BillerAddressLine2}}", invoice.BillerAddressLine2)
-                            .Replace("{{BillerAddressSuburb}}", invoice.BillerAddressSuburb)
-                            .Replace("{{BillerAddressCity}}", invoice.BillerAddressCity)
-                            .Replace("{{BillerAddressState}}", invoice.BillerAddressState)
-                            .Replace("{{BillerAddressCountry}}", invoice.BillerAddressCountry)
-                            .Replace("{{BillerAddressZipcode}}", invoice.BillerAddressZipcode)
-                            .Replace("{{BilleeName}}", invoice.BilleeName)
-                            .Replace("{{BilleeBusinessID}}", invoice.BilleeBusinessID)
-                            .Replace("{{BilleeAddressLine1}}", invoice.BilleeAddressLine1)
-                            .Replace("{{BilleeAddressLine2}}", invoice.BilleeAddressLine2)
-                            .Replace("{{BilleeAddressSuburb}}", invoice.BilleeAddressSuburb)
-                            .Replace("{{BilleeAddressCity}}", invoice.BilleeAddressCity)
-                            .Replace("{{BilleeAddressState}}", invoice.BilleeAddressState)
-                            .Replace("{{BilleeAddressCountry}}", invoice.BilleeAddressCountry)
-                            .Replace("{{BilleeAddressZipcode}}", invoice.BilleeAddressZipcode)
-                            .Replace("{{ContactName}}", invoice.ContactName)
-                            .Replace("{{PaymentInstructions}}", invoice.PaymentInstructions)
-                            .Replace("{{Particulars}}", invoice.Particulars)
-                            .Replace("{{Reference}}", invoice.Reference)
-                            .Replace("{{ContactPhoneNumber}}", invoice.ContactPhoneNumber)
-                            .Replace("{{ContactEmailAddress}}", invoice.ContactEmailAddress)
-                            .Replace("{{Subtotal}}", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d))
-                            .Replace("{{TaxAmount}}", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d))
-                            .Replace("{{TaxRate}}", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d))
-                            .Replace("{{GrandTotal}}", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d));
-
-            result = invoice.BillerLogo != null
-                ? result.Replace("{{BillerLogo}}", $"<img src=\"{invoice.BillerLogo}\" class=\"biller-logo\" />")
-                : result.Replace("{{BillerLogo}}", string.Empty);
-
-            result = invoice.BillerAddressLine2 != null
-                ? result.Replace("{{BillerAddressLine2}}", $"{invoice.BillerAddressLine2}<br>")
-                : result.Replace("{{BillerAddressLine2}}", string.Empty);
-
-            result = invoice.Terms != null
-                ? result.Replace("{{Terms}}", $"{invoice.Terms}<br>")
-                : result.Replace("{{Terms}}", string.Empty);
+            var parameters = new Dictionary<string, string>
+            {
+                { "INVOICE_ID", invoice.GetID().ToString() },
+                { "BILL_DATE", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture) },
+                { ToSnakeCase(nameof(invoice.BillerName)), invoice.BillerName },
+                { ToSnakeCase(nameof(invoice.BillerBusinessID)), invoice.BillerBusinessID ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerTaxID)), invoice.BillerTaxID ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressLine1)), invoice.BillerAddressLine1 ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressLine1)), invoice.BillerAddressLine1 ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressSuburb)), invoice.BillerAddressSuburb ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressCity)), invoice.BillerAddressCity ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressState)), invoice.BillerAddressState ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressCountry)), !string.IsNullOrWhiteSpace(invoice.BillerAddressCountry) ? Country.Parse(invoice.BillerAddressCountry).ToString() : string.Empty },
+                { ToSnakeCase(nameof(invoice.BillerAddressZipcode)), invoice.BillerAddressZipcode ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeName)), invoice.BilleeName },
+                { ToSnakeCase(nameof(invoice.BilleeBusinessID)), invoice.BilleeBusinessID ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressLine1)), invoice.BilleeAddressLine1 ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressLine2)), invoice.BilleeAddressLine2 ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressSuburb)), invoice.BilleeAddressSuburb ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressCity)), invoice.BilleeAddressCity ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressState)), invoice.BilleeAddressState ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressCountry)), !string.IsNullOrWhiteSpace(invoice.BilleeAddressCountry) ? Country.Parse(invoice.BilleeAddressCountry).ToString() : string.Empty },
+                { ToSnakeCase(nameof(invoice.BilleeAddressZipcode)), invoice.BilleeAddressZipcode ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.ContactName)), invoice.ContactName ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.PaymentInstructions)), invoice.PaymentInstructions ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.Particulars)), invoice.Particulars ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.Reference)), invoice.Reference ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.ContactPhoneNumber)), invoice.ContactPhoneNumber ?? string.Empty },
+                { ToSnakeCase(nameof(invoice.ContactEmailAddress)), invoice.ContactEmailAddress ?? string.Empty },
+                { "SUBTOTAL", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d) },
+                { "TAX_AMOUNT", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d) },
+                { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d) },
+                { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
+                { ToSnakeCase(nameof(invoice.BillerLogo)), invoice.BillerLogo != null ? $"<img src=\"{invoice.BillerLogo}\" class=\"biller-logo\" />" : string.Empty },
+                { ToSnakeCase(nameof(invoice.Terms)), invoice.Terms ?? string.Empty },
+            };
 
             string billingPeriod = string.Empty;
             switch ((InvoiceCycle)invoice.InvoiceCycle)
@@ -105,15 +99,42 @@ namespace Niobium.Invoicing.Domains
             {
                 billingPeriod = $"Billing Period: {billingPeriod}";
             }
-            result = result.Replace("{{BillingPeriod}}", billingPeriod);
+
+            parameters.Add("BILLING_PERIOD", billingPeriod);
 
             string due = string.Empty;
             if (invoice.DueBy != null)
             {
                 due = $"Payment is due by: {invoice.DueBy.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture)}";
             }
-            result = result.Replace("{{Due}}", due);
-            return result;
+            parameters.Add("DUE", due);
+
+            return parameters;
+        }
+
+        private static string ToSnakeCase(string text)
+        {
+            if (text.Length < 2)
+            {
+                return text.ToUpperInvariant();
+            }
+
+            StringBuilder sb = new();
+            sb.Append(char.ToUpperInvariant(text[0]));
+            for (int i = 1; i < text.Length; ++i)
+            {
+                char c = text[i];
+                if (char.IsUpper(c))
+                {
+                    sb.Append('_');
+                    sb.Append(char.ToUpperInvariant(c));
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
         }
     }
 }

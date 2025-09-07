@@ -4,9 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Logging;
 using Niobium.Database.StorageTable;
 using Niobium.Invoicing.Options;
+using Niobium.Messaging.ServiceBus;
+using Niobium.Notification;
 using Niobium.Platform;
 using Niobium.Platform.Identity;
-using Niobium.Platform.Notification.Email.Resend;
 using Niobium.Platform.Profile;
 using Niobium.Platform.StorageTable;
 
@@ -32,7 +33,6 @@ namespace Niobium.Invoicing.Functions
 
             builder.AddIdentity();
             builder.AddProfile(useServicePrincipalAuthentication: true);
-            builder.AddNotification();
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
             builder.Services.AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
@@ -42,8 +42,10 @@ namespace Niobium.Invoicing.Functions
                 DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete);
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billee),
                 DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete | DatabasePermissions.Update);
+            builder.Services.AddMessagingBroker<NotifyCommand>(isDevelopment, builder.Configuration.GetSection(nameof(NotificationQueueOptions)).Bind);
 
-            builder.Services.AddInvoicing(builder.Configuration.GetRequiredSection(nameof(BillingOptions)).Bind);
+            builder.Services.AddCore(builder.Configuration.GetRequiredSection(nameof(BillingOptions)).Bind);
+
         }
     }
 }

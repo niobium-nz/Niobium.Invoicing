@@ -1,17 +1,22 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Options;
-using Niobium.Platform.Notification.Email;
+using Niobium.Messaging;
+using Niobium.Notification;
 
 namespace Niobium.Invoicing.Flows
 {
     public class EmailFlow(
         IDomainRepository<InvoiceDomain, Invoice> repo,
         IRepository<InvoiceItem> itemRepo,
-        IEmailNotificationClient sender,
-        IOptions<BillingOptions> config) : IFlow
+        IMessagingBroker<NotifyCommand> broker,
+        IOptions<BillingOptions> config,
+        ILogger<EmailFlow> logger) : IFlow
     {
-        public async Task<bool> RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
+        private const string NotificationInvoiceChannel = "Invoice";
+
+        public async Task RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
         {
             InvoiceDomain domain = await repo.GetAsync(
                 Invoice.BuildPartitionKey(issuer),
@@ -19,26 +24,28 @@ namespace Niobium.Invoicing.Flows
             Invoice entity = await domain.GetEntityAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(entity.RecipientEmail))
             {
-                return false;
+                logger.LogWarning("Invoice {Invoice} has no recipient email, skipping notification.", entity.GetFullID());
+                return;
             }
 
             InvoiceItem[] items = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
             string token = entity.BuildAccessToken(items, config.Value.InvoiceTokenSecretSalt);
-            string email = await domain.BuildEmailAsync(token, cancellationToken);
+            var parameters = await domain.BuildNotificationParametersAsync(token, cancellationToken);
 
-            bool result = await sender.SendAsync(
-                new EmailAddress { DisplayName = entity.ContactName ?? entity.BillerName, Address = config.Value.InvoiceEmailSenderAddress },
-                [entity.RecipientEmail],
-                $"Invoice {entity.GetID()} from {entity.BillerName} for {entity.BilleeName}",
-                email,
-                cancellationToken);
-
-            if (result)
+            await broker.EnqueueAsync(new MessagingEntry<NotifyCommand>
             {
-                await domain.OnDeliveredAsync(token, cancellationToken);
-            }
-
-            return result;
+                ID = entity.GetFullID(),
+                Value = new NotifyCommand 
+                {
+                    ID = entity.GetFullID(),
+                    Tenant = issuer,
+                    Channel = NotificationInvoiceChannel,
+                    Destination = entity.RecipientEmail,
+                    DestinationDisplayName = entity.BilleeName,
+                    Parameters = parameters.ToDictionary(),
+                },
+            }, cancellationToken: cancellationToken);
+            await domain.OnDeliveredAsync(token, cancellationToken);
         }
     }
 }

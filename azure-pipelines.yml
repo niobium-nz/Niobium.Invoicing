@@ -10,6 +10,8 @@ variables:
   tableDB: 'niobiuminvoicingdb'
   serviceBusNamespace: 'niobiuminvoicingsb'
   issueInvoiceCommandQueueName: 'issueinvoicecommand'
+  notificationServiceBusResourceGroup: 'niobium-emailnotification'
+  notificationServiceBusNamespace: 'niobiumemailsb'
   enableStagingSlot: true
 
 pool:
@@ -78,11 +80,29 @@ stages:
         serviceBusQueueNames: [$(issueInvoiceCommandQueueName)]
         dataOwnerPrincipalId: $(functionAppPrincipalId)
 
+  - job: NotificationRBAC
+    dependsOn: 
+      - Infrastructure
+    condition: succeeded()
+    pool:
+      vmImage: $(buildAgentVmImage)
+    variables:
+      functionAppPrincipalId: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalId']]
+    steps:
+    - checkout: devops
+    - template: pipelines/steps/grantPermissionServiceBus.yml@devops
+      parameters:
+        azureServiceConnection: $(serviceConnection)
+        resourceGroupName: $(notificationServiceBusResourceGroup)
+        serviceBusNamespaceName: $(notificationServiceBusNamespace)
+        dataOwnerPrincipalId: $(functionAppPrincipalId)
+
   - job: Configuration
     dependsOn:
       - Infrastructure
       - Table
       - Messaging
+      - NotificationRBAC
     condition: succeeded()
     pool:
       vmImage: $(buildAgentVmImage)
@@ -90,6 +110,7 @@ stages:
       tableFQDN: $[dependencies.Table.outputs['newStorageAccountProperties.tableFQDN']]
       keyVaultUrl: $[dependencies.Infrastructure.outputs['infrastructureOutputs.keyVaultUrl']]
       serviceBusFQDN: $[dependencies.Messaging.outputs['newServiceBusProperties.fullyQualifiedNamespace']]
+      notificationServiceBusFQDN: $[dependencies.NotificationRBAC.outputs['serviceBusPermissionProperties.fullyQualifiedNamespace']]
     steps:
     - checkout: none
     - pwsh: Write-Output "##vso[task.setvariable variable=slotName;]production"
@@ -202,8 +223,8 @@ stages:
               "slotSetting": false
             },
             {
-              "name": "BillingOptions:InvoiceEmailSenderAddress",
-              "value": "invoice@niobium.co.nz",
+              "name": "NotificationQueueOptions:FullyQualifiedNamespace",
+              "value": "$(notificationServiceBusFQDN)",
               "slotSetting": false
             }
           ]

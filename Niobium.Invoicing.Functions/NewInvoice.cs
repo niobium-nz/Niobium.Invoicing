@@ -8,7 +8,7 @@ using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribut
 
 namespace Niobium.Invoicing.Functions;
 
-public class NewInvoice(UpsertFlow flow)
+public class NewInvoice(IssueFlow flow)
 {
     private static readonly TimeSpan InvoiceCreateTimeMaxOffset = TimeSpan.FromMinutes(30);
 
@@ -50,6 +50,7 @@ public class NewInvoice(UpsertFlow flow)
             return new ForbidResult("Invalid issue invoice request.");
         }
 
+        request.NotifyBillee = false;
         await flow.RunAsync(request, null, cancellationToken);
         return new OkResult();
     }

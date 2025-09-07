@@ -7,7 +7,7 @@ namespace Niobium.Invoicing
     {
         private static volatile bool loaded;
 
-        public static IServiceCollection AddInvoicing(this IServiceCollection services, Action<BillingOptions>? options = null)
+        public static IServiceCollection AddCore(this IServiceCollection services, Action<BillingOptions>? options = null)
         {
             if (loaded)
             {

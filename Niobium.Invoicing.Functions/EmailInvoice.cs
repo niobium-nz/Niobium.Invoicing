@@ -15,9 +15,8 @@ namespace Niobium.Invoicing.Functions
             long invoice,
             CancellationToken cancellationToken)
         {
-            bool success = await flow.RunAsync(issuer, invoice, cancellationToken);
-            HttpStatusCode statuscode = success ? HttpStatusCode.Created : HttpStatusCode.InternalServerError;
-            return new StatusCodeResult((int)statuscode);
+            await flow.RunAsync(issuer, invoice, cancellationToken);
+            return new StatusCodeResult((int)HttpStatusCode.Created);
         }
     }
 }
