@@ -34,7 +34,7 @@ namespace Niobium.Invoicing.Domains
                 { nameof(invoice.BillerBusinessID).ToSnakeCaseUpper(), invoice.BillerBusinessID ?? string.Empty },
                 { nameof(invoice.BillerTaxID).ToSnakeCaseUpper(), invoice.BillerTaxID ?? string.Empty },
                 { nameof(invoice.BillerAddressLine1).ToSnakeCaseUpper(), invoice.BillerAddressLine1 ?? string.Empty },
-                { nameof(invoice.BillerAddressLine1).ToSnakeCaseUpper(), invoice.BillerAddressLine1 ?? string.Empty },
+                { nameof(invoice.BillerAddressLine2).ToSnakeCaseUpper(), invoice.BillerAddressLine2 ?? string.Empty },
                 { nameof(invoice.BillerAddressSuburb).ToSnakeCaseUpper(), invoice.BillerAddressSuburb ?? string.Empty },
                 { nameof(invoice.BillerAddressCity).ToSnakeCaseUpper(), invoice.BillerAddressCity ?? string.Empty },
                 { nameof(invoice.BillerAddressState).ToSnakeCaseUpper(), invoice.BillerAddressState ?? string.Empty },
