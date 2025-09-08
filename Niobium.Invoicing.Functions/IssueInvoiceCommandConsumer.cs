@@ -7,7 +7,7 @@ using Niobium.Platform.ServiceBus;
 
 namespace Niobium.Invoicing.Functions;
 
-public class IssueInvoiceCommandConsumer(UpsertFlow flow, ILogger<IssueInvoiceCommandConsumer> logger)
+public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCommandConsumer> logger)
 {
     [Function(nameof(IssueInvoiceCommandConsumer))]
     public async Task Run(
