@@ -11,6 +11,8 @@ namespace Niobium.Invoicing.Domains
                 return text.ToUpperInvariant();
             }
 
+            text = text.Replace("ID", "Id", StringComparison.InvariantCulture);
+
             StringBuilder sb = new();
             sb.Append(char.ToUpperInvariant(text[0]));
             for (int i = 1; i < text.Length; ++i)
@@ -26,7 +28,7 @@ namespace Niobium.Invoicing.Domains
                     sb.Append(c);
                 }
             }
-            return sb.ToString();
+            return sb.ToString().ToUpperInvariant();
         }
     }
 }
