@@ -9,6 +9,7 @@ using Niobium.Notification;
 using Niobium.Platform;
 using Niobium.Platform.Identity;
 using Niobium.Platform.Profile;
+using Niobium.Platform.ServiceBus;
 using Niobium.Platform.StorageTable;
 
 namespace Niobium.Invoicing.Functions
@@ -33,6 +34,7 @@ namespace Niobium.Invoicing.Functions
 
             builder.AddIdentity();
             builder.AddProfile(useServicePrincipalAuthentication: true);
+            builder.AddMessaging();
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
             builder.Services.AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
