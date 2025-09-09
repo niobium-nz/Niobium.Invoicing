@@ -36,7 +36,7 @@ namespace Niobium.Invoicing.Domains
             entity.GrandTotalCents = entity.FigureGrandTotalCents(invoiceItems);
             entity.SettledCents = update.Settled.Cents;
 
-            await SaveAsync(cancellationToken: cancellationToken);
+            await SaveAsync(force: true, cancellationToken: cancellationToken);
         }
 
         public async Task<string> BuildHTMLAsync(string token, CancellationToken cancellationToken)

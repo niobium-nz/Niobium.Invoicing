@@ -33,9 +33,9 @@ namespace Niobium.Invoicing.Flows
                 .ToArrayAsync(cancellationToken: cancellationToken);
             if (existingInvoiceItems.Length > 0)
             {
-                await itemRepo.DeleteAsync(existingInvoiceItems, cancellationToken: cancellationToken);
+                await itemRepo.DeleteAsync(existingInvoiceItems, successIfNotExist: true, cancellationToken: cancellationToken);
             }
-            await itemRepo.CreateAsync(request.InvoiceItems, cancellationToken: cancellationToken);
+            await itemRepo.CreateAsync(request.InvoiceItems, replaceIfExist: true, cancellationToken: cancellationToken);
         }
     }
 }
