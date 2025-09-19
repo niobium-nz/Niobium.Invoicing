@@ -7,12 +7,18 @@ variables:
   serviceConnection: 'niobium-invoicing'
   resourceGroupName: 'niobium-invoicing'
   appName: 'niobiuminvoicingFunc'
+  
+  issueInvoiceCommandQueueName: 'issueinvoicecommand'
+  notificationServiceBusResourceGroup: 'niobium-ntfy'
+  enableStagingSlot: true
+  
   tableDB: 'niobiuminvoicingdb'
   serviceBusNamespace: 'niobiuminvoicingsb'
-  issueInvoiceCommandQueueName: 'issueinvoicecommand'
-  notificationServiceBusResourceGroup: 'niobium-emailnotification'
-  notificationServiceBusNamespace: 'niobiumemailsb'
-  enableStagingSlot: true
+  notificationServiceBusNamespace: 'niobiuminvoicingsb'
+
+  tableDBStaging: 'niobiuminvoicingdbstaging'
+  serviceBusNamespaceStaging: 'niobiuminvoicingsbstaging'
+  notificationServiceBusNamespaceStaging: 'niobiumntfysbstaging'
 
 pool:
   vmImage: $(buildAgentVmImage)
@@ -52,6 +58,7 @@ stages:
       vmImage: $(buildAgentVmImage)
     variables:
       functionAppPrincipalId: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalId']]
+      functionAppPrincipalIdStaging: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalIdStaging']]
     steps:
     - checkout: devops
     - template: pipelines/steps/newStorageAccount.yml@devops
@@ -60,7 +67,17 @@ stages:
         resourceGroupName: $(resourceGroupName)
         storageAccountName: $(tableDB)
         contributorPrincipalId: $(functionAppPrincipalId)
+        allowedOrigins: 'https://invoicing.niobium.co.nz'
+        outputVariableName: 'newStorageAccountProperties'
+    - template: pipelines/steps/newStorageAccount.yml@devops
+      parameters:
+        switch: ${{ variables.enableStagingSlot }}
+        azureServiceConnection: $(serviceConnection)
+        resourceGroupName: $(resourceGroupName)
+        storageAccountName: $(tableDBStaging)
+        contributorPrincipalId: $(functionAppPrincipalIdStaging)
         allowedOrigins: 'https://localhost:7182,https://invoicing.niobium.co.nz'
+        outputVariableName: 'newStorageAccountPropertiesStaging'
 
   - job: Messaging
     dependsOn: 
@@ -70,6 +87,7 @@ stages:
       vmImage: $(buildAgentVmImage)
     variables:
       functionAppPrincipalId: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalId']]
+      functionAppPrincipalIdStaging: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalIdStaging']]
     steps:
     - checkout: devops
     - template: pipelines/steps/newServiceBus.yml@devops
@@ -79,6 +97,16 @@ stages:
         serviceBusNamespaceName: $(serviceBusNamespace)
         serviceBusQueueNames: [$(issueInvoiceCommandQueueName)]
         dataOwnerPrincipalId: $(functionAppPrincipalId)
+        outputVariableName: 'newServiceBusProperties'
+    - template: pipelines/steps/newServiceBus.yml@devops
+      parameters:
+        switch: ${{ variables.enableStagingSlot }}
+        azureServiceConnection: $(serviceConnection)
+        resourceGroupName: $(resourceGroupName)
+        serviceBusNamespaceName: $(serviceBusNamespaceStaging)
+        serviceBusQueueNames: [$(issueInvoiceCommandQueueName)]
+        dataOwnerPrincipalId: $(functionAppPrincipalIdStaging)
+        outputVariableName: 'newServiceBusPropertiesStaging'
 
   - job: NotificationRBAC
     dependsOn: 
@@ -88,6 +116,7 @@ stages:
       vmImage: $(buildAgentVmImage)
     variables:
       functionAppPrincipalId: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalId']]
+      functionAppPrincipalIdStaging: $[dependencies.Infrastructure.outputs['infrastructureOutputs.functionAppPrincipalIdStaging']]
     steps:
     - checkout: devops
     - template: pipelines/steps/grantPermissionServiceBus.yml@devops
@@ -96,6 +125,15 @@ stages:
         resourceGroupName: $(notificationServiceBusResourceGroup)
         serviceBusNamespaceName: $(notificationServiceBusNamespace)
         dataOwnerPrincipalId: $(functionAppPrincipalId)
+        outputVariableName: 'serviceBusPermissionProperties'
+    - template: pipelines/steps/grantPermissionServiceBus.yml@devops
+      parameters:
+        switch: ${{ variables.enableStagingSlot }}
+        azureServiceConnection: $(serviceConnection)
+        resourceGroupName: $(notificationServiceBusResourceGroup)
+        serviceBusNamespaceName: $(notificationServiceBusNamespaceStaging)
+        dataOwnerPrincipalId: $(functionAppPrincipalIdStaging)
+        outputVariableName: 'serviceBusPermissionPropertiesStaging'
 
   - job: Configuration
     dependsOn:
@@ -107,10 +145,13 @@ stages:
     pool:
       vmImage: $(buildAgentVmImage)
     variables:
-      tableFQDN: $[dependencies.Table.outputs['newStorageAccountProperties.tableFQDN']]
       keyVaultUrl: $[dependencies.Infrastructure.outputs['infrastructureOutputs.keyVaultUrl']]
+      tableFQDN: $[dependencies.Table.outputs['newStorageAccountProperties.tableFQDN']]
       serviceBusFQDN: $[dependencies.Messaging.outputs['newServiceBusProperties.fullyQualifiedNamespace']]
       notificationServiceBusFQDN: $[dependencies.NotificationRBAC.outputs['serviceBusPermissionProperties.fullyQualifiedNamespace']]
+      tableFQDNStaging: $[dependencies.Table.outputs['newStorageAccountPropertiesStaging.tableFQDN']]
+      serviceBusFQDNStaging: $[dependencies.Messaging.outputs['newServiceBusPropertiesStaging.fullyQualifiedNamespace']]
+      notificationServiceBusFQDNStaging: $[dependencies.NotificationRBAC.outputs['serviceBusPermissionPropertiesStaging.fullyQualifiedNamespace']]
     steps:
     - checkout: none
     - pwsh: Write-Output "##vso[task.setvariable variable=slotName;]production"
@@ -127,6 +168,61 @@ stages:
         resourceGroupName: $(resourceGroupName)
         appSettings: |
           [
+            {
+              "name": "IdentityServiceOptions:AccessTokenIssuer",
+              "value": "Niobium.Invoicing.Functions",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:AccessTokenAudience",
+              "value": "Niobium.Invoicing.Portal",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:IDTokenAudience",
+              "value": "95b52e52-dc79-4ac0-a53f-1acb10238888",
+              "slotSetting": false
+            },
+            {
+              "name": "IdentityServiceOptions:IDTokenPublicKey",
+              "value": "-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlmuIHhRUT+IvTdTajuOEdPZ75pqJrajOyDdJqf42siofTKHCPCZqtWaftL8Jae5VMHUNCflXzm9aKTLgerAxrGyCL3BkZj/dj4KjbeFoY1Akz5EJd5qjRNtzdoqUkDsuaigJTDDhyHvdVKRHzYAJSKgiw9CLRkzyKDZAp1Fxm2xICzRoF9OfH0jv5Qn11gkMHrkVkB6nv7QD3EGS2rnDwKudjnlsvgjpoNMMNvY7EHqkuxjHdGh4Hy7M3UXl50Bft9ky3gKeCgpvVYRPXHdT6k3e+81J7liEJYdVb5taPeNf3wB8WCP8Xc7FO6vod9ziDIkJv+xqUWYtlyGZBGTBrQIDAQAB-----END PUBLIC KEY-----",
+              "slotSetting": false
+            },
+            {
+              "name": "ProfileOptions:ProfileServiceHost",
+              "value": "https://codidentityfunc.azurewebsites.net",
+              "slotSetting": false
+            },
+            {
+              "name": "ProfileOptions:ProfileAppID",
+              "value": "e514f381-77cd-4ce9-ab6c-1a960fc7d9ed",
+              "slotSetting": false
+            },
+            {
+              "name": "BillingOptions:GetInvoiceEndpoint",
+              "value": "https://invoicing.niobium.co.nz",
+              "slotSetting": false
+            },
+            {
+              "name": "StorageTableOptions:FullyQualifiedDomainName",
+              "value": "$(tableFQDN)",
+              "slotSetting": true
+            },
+            {
+              "name": "ServiceBusOptions:FullyQualifiedNamespace",
+              "value": "$(serviceBusFQDN)",
+              "slotSetting": true
+            },
+            {
+              "name": "ServiceBusTriggerOptions:FullyQualifiedNamespace",
+              "value": "$(serviceBusFQDN)",
+              "slotSetting": true
+            },
+            {
+              "name": "NotificationQueueOptions:FullyQualifiedNamespace",
+              "value": "$(notificationServiceBusFQDN)",
+              "slotSetting": true
+            },
             {
               "name": "BillingOptions:InvoiceTokenSecretSalt",
               "value": "@Microsoft.KeyVault(SecretUri=$(keyVaultUrl)/secrets/INVOICE-TOKEN-SECRET-SALT/)",
@@ -174,18 +270,23 @@ stages:
             },
             {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
-              "value": "$(tableFQDN)",
-              "slotSetting": false
+              "value": "$(tableFQDNStaging)",
+              "slotSetting": true
             },
             {
               "name": "ServiceBusOptions:FullyQualifiedNamespace",
-              "value": "$(serviceBusFQDN)",
-              "slotSetting": false
+              "value": "$(serviceBusFQDNStaging)",
+              "slotSetting": true
             },
             {
               "name": "ServiceBusTriggerOptions:FullyQualifiedNamespace",
-              "value": "$(serviceBusFQDN)",
-              "slotSetting": false
+              "value": "$(serviceBusFQDNStaging)",
+              "slotSetting": true
+            },
+            {
+              "name": "NotificationQueueOptions:FullyQualifiedNamespace",
+              "value": "$(notificationServiceBusFQDNStaging)",
+              "slotSetting": true
             },
             {
               "name": "IdentityServiceOptions:AccessTokenIssuer",
@@ -220,11 +321,6 @@ stages:
             {
               "name": "BillingOptions:GetInvoiceEndpoint",
               "value": "https://invoicing.niobium.co.nz",
-              "slotSetting": false
-            },
-            {
-              "name": "NotificationQueueOptions:FullyQualifiedNamespace",
-              "value": "$(notificationServiceBusFQDN)",
               "slotSetting": false
             }
           ]
