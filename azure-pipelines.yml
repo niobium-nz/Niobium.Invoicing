@@ -14,9 +14,9 @@ variables:
   
   tableDB: 'niobiuminvoicingdb'
   serviceBusNamespace: 'niobiuminvoicingsb'
-  notificationServiceBusNamespace: 'niobiuminvoicingsb'
+  notificationServiceBusNamespace: 'niobiumntfysb'
 
-  tableDBStaging: 'niobiuminvoicingdbstaging'
+  tableDBStaging: 'niobiuminvoicingdbstagin'
   serviceBusNamespaceStaging: 'niobiuminvoicingsbstaging'
   notificationServiceBusNamespaceStaging: 'niobiumntfysbstaging'
 
