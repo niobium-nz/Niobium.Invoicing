@@ -190,7 +190,7 @@ stages:
             },
             {
               "name": "ProfileOptions:ProfileServiceHost",
-              "value": "https://codidentityfunc.azurewebsites.net",
+              "value": "https://api.identity.niobium.co.nz",
               "slotSetting": false
             },
             {
@@ -200,7 +200,7 @@ stages:
             },
             {
               "name": "BillingOptions:GetInvoiceEndpoint",
-              "value": "https://invoicing.niobium.co.nz",
+              "value": "https://api.invoicing.niobium.co.nz",
               "slotSetting": false
             },
             {
@@ -310,7 +310,7 @@ stages:
             },
             {
               "name": "ProfileOptions:ProfileServiceHost",
-              "value": "https://codidentityfunc.azurewebsites.net",
+              "value": "https://api.identity.niobium.co.nz",
               "slotSetting": false
             },
             {
@@ -320,7 +320,7 @@ stages:
             },
             {
               "name": "BillingOptions:GetInvoiceEndpoint",
-              "value": "https://invoicing.niobium.co.nz",
+              "value": "https://staging.api.invoicing.niobium.co.nz",
               "slotSetting": false
             }
           ]
