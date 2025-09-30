@@ -16,7 +16,7 @@ namespace Niobium.Invoicing.Flows
     {
         private const string NotificationInvoiceChannel = "Invoice";
 
-        public async Task RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
+        public virtual async Task RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
         {
             InvoiceDomain domain = await repo.GetAsync(
                 Invoice.BuildPartitionKey(issuer),

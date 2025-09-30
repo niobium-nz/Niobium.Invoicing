@@ -19,6 +19,8 @@ namespace Niobium.Invoicing
         [EntityKey(EntityKeyKind.ETag)]
         public string? ETag { get; set; }
 
+        public required Guid Tenant { get; set; }
+
         public string? BillerLogo { get; set; }
 
         public required string BillerName { get; set; }
@@ -165,6 +167,7 @@ namespace Niobium.Invoicing
                 Created = Invoice.ParseID(id),
 
                 Biller = biller.GetUser(),
+                Tenant = biller.GetTenant(),
                 BillerAddressLine1 = biller.AddressLine1,
                 BillerAddressLine2 = biller.AddressLine2,
                 BillerAddressSuburb = biller.Suburb,

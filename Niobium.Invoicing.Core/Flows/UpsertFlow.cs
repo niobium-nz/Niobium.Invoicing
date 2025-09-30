@@ -9,7 +9,7 @@ namespace Niobium.Invoicing.Flows
         IRepository<Billee> billeeRepo,
         IProfileService<Biller> profileService) : IFlow
     {
-        public async Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
+        public virtual async Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
         {
             Biller? biller = await profileService.RetrieveAsync(request.Tenant, request.BillerID, cancellationToken: cancellationToken)
                 ?? throw new ApplicationException(InternalError.NotFound, "Biller does not exist.");
