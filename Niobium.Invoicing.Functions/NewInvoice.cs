@@ -23,20 +23,20 @@ public class NewInvoice(IssueFlow flow)
             return new UnauthorizedResult();
         }
 
-        //if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.GroupSid, out Guid tenant))
-        //{
-        //    return new UnauthorizedResult();
-        //}
+        if (!req.HttpContext.User.TryGetClaim<Guid>(ClaimTypes.GroupSid, out Guid tenant))
+        {
+            return new UnauthorizedResult();
+        }
 
         if (request.BillerID != user)
         {
             return new ForbidResult("Biller does not match the authenticated user.");
         }
 
-        //if (request.Tenant != tenant)
-        //{
-        //    return new ForbidResult("Tenant does not match the authenticated user.");
-        //}
+        if (request.Tenant != tenant)
+        {
+            return new ForbidResult("Tenant does not match the authenticated user.");
+        }
 
         request.TryValidate(out ValidationState? validationState);
         if (!validationState.IsValid)

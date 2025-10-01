@@ -201,7 +201,7 @@ stages:
             {
               "name": "BillingOptions:GetInvoiceEndpoint",
               "value": "https://api.invoicing.niobium.co.nz",
-              "slotSetting": false
+              "slotSetting": true
             },
             {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
@@ -289,6 +289,11 @@ stages:
               "slotSetting": true
             },
             {
+              "name": "BillingOptions:GetInvoiceEndpoint",
+              "value": "https://staging.api.invoicing.niobium.co.nz",
+              "slotSetting": true
+            },
+            {
               "name": "IdentityServiceOptions:AccessTokenIssuer",
               "value": "Niobium.Invoicing.Functions",
               "slotSetting": false
@@ -316,11 +321,6 @@ stages:
             {
               "name": "ProfileOptions:ProfileAppID",
               "value": "e514f381-77cd-4ce9-ab6c-1a960fc7d9ed",
-              "slotSetting": false
-            },
-            {
-              "name": "BillingOptions:GetInvoiceEndpoint",
-              "value": "https://staging.api.invoicing.niobium.co.nz",
               "slotSetting": false
             }
           ]
