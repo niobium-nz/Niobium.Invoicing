@@ -63,6 +63,7 @@ stages:
     - checkout: devops
     - template: pipelines/steps/newStorageAccount.yml@devops
       parameters:
+        sku: 'Standard_LRS'
         azureServiceConnection: $(serviceConnection)
         resourceGroupName: $(resourceGroupName)
         storageAccountName: $(tableDB)
@@ -72,6 +73,7 @@ stages:
     - template: pipelines/steps/newStorageAccount.yml@devops
       parameters:
         switch: ${{ variables.enableStagingSlot }}
+        sku: 'Standard_LRS'
         azureServiceConnection: $(serviceConnection)
         resourceGroupName: $(resourceGroupName)
         storageAccountName: $(tableDBStaging)
