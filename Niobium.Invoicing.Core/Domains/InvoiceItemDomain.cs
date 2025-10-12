@@ -1,5 +1,4 @@
-﻿using System;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace Niobium.Invoicing.Domains
 {
@@ -11,13 +10,17 @@ namespace Niobium.Invoicing.Domains
         private static string? invoiceTemplate;
         private static readonly Regex InvoiceLineRegex = CreateInvoiceLineRegex();
 
+        public async Task<IReadOnlyDictionary<string, string>> BuildNotificationParametersAsync(CancellationToken cancellationToken = default)
+        {
+            InvoiceItem entity = await GetEntityAsync(cancellationToken);
+            return entity.BuildTemplateParameters();
+        }
+
         public async Task<string> BuildHTMLAsync(CancellationToken cancellationToken = default)
         {
-            string itemTemplate = await GetInvoiceLineTemplateAsync(cancellationToken);
-            InvoiceItem entity = await GetEntityAsync(cancellationToken);
-            var parameters = entity.BuildTemplateParameters();
-            var html = itemTemplate;
-            foreach (var parameter in parameters)
+            string html = await GetInvoiceLineTemplateAsync(cancellationToken);
+            IReadOnlyDictionary<string, string> parameters = await BuildNotificationParametersAsync(cancellationToken);
+            foreach (KeyValuePair<string, string> parameter in parameters)
             {
                 html = html.Replace($"{{{{{parameter.Key}}}}}", parameter.Value);
             }

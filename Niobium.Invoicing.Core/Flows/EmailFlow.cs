@@ -30,7 +30,15 @@ namespace Niobium.Invoicing.Flows
 
             InvoiceItem[] items = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
             string token = entity.BuildAccessToken(items, config.Value.InvoiceTokenSecretSalt);
-            var parameters = await domain.BuildNotificationParametersAsync(token, cancellationToken);
+            var invoiceParameters = await domain.BuildNotificationParametersAsync(token, cancellationToken);
+
+            var parameters = new Dictionary<string, object>();
+            foreach (var key in invoiceParameters.Keys)
+            {
+                parameters.Add(key, invoiceParameters[key]);
+            }
+
+            parameters.Add(nameof(InvoiceItem).ToSnakeCaseUpper(), items.Select(item => item.BuildTemplateParameters().ToDictionary()).ToArray());
 
             await broker.EnqueueAsync(new MessagingEntry<NotifyCommand>
             {
@@ -42,7 +50,7 @@ namespace Niobium.Invoicing.Flows
                     Channel = NotificationInvoiceChannel,
                     Destination = entity.RecipientEmail,
                     DestinationDisplayName = entity.BilleeName,
-                    Parameters = parameters.ToDictionary(),
+                    Parameters = parameters,
                 },
             }, cancellationToken: cancellationToken);
             await domain.OnDeliveredAsync(token, cancellationToken);
