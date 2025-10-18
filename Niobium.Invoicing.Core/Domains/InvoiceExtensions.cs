@@ -59,6 +59,8 @@ namespace Niobium.Invoicing.Domains
                 { "TAX_AMOUNT", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d) },
                 { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d) },
                 { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
+                { "SETTLED", new Amount(invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },
+                { "DUE", new Amount(invoice.GrandTotalCents - invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },
                 { nameof(invoice.BillerLogo).ToSnakeCaseUpper(), invoice.BillerLogo != null ? $"<img src=\"{invoice.BillerLogo}\" class=\"biller-logo\" />" : string.Empty },
                 { nameof(invoice.Terms).ToSnakeCaseUpper(), invoice.Terms ?? string.Empty },
             };
@@ -107,7 +109,7 @@ namespace Niobium.Invoicing.Domains
             {
                 due = $"Payment is due by: {invoice.DueBy.Value.ToLocal(timeZone).ToYearMonthDayInNames(culture)}";
             }
-            parameters.Add("DUE", due);
+            parameters.Add("DUE_BY", due);
 
             return parameters;
         }
