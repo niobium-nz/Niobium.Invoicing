@@ -61,7 +61,7 @@ namespace Niobium.Invoicing.Domains
                 { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
                 { "SETTLED", new Amount(invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },
                 { "DUE", new Amount(invoice.GrandTotalCents - invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },
-                { nameof(invoice.BillerLogo).ToSnakeCaseUpper(), invoice.BillerLogo != null ? $"<img src=\"{invoice.BillerLogo}\" class=\"biller-logo\" />" : string.Empty },
+                { nameof(invoice.BillerLogo).ToSnakeCaseUpper(), invoice.BillerLogo ?? string.Empty },
                 { nameof(invoice.Terms).ToSnakeCaseUpper(), invoice.Terms ?? string.Empty },
             };
 
