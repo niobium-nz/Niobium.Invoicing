@@ -27,7 +27,7 @@ namespace Niobium.Invoicing.Functions
 
             loaded = true;
 
-            bool isDevelopment = builder.Configuration.IsPreProductionEnvironment();
+            bool isDevelopment = builder.Configuration.IsDevelopmentEnvironment();
             IdentityModelEventSource.ShowPII = isDevelopment;
 
             builder.UsePlatformIdentity();

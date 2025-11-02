@@ -333,4 +333,4 @@ stages:
       serviceConnection: $(serviceConnection)
       resourceGroupName: $(resourceGroupName)
       enableStagingSlot: ${{ variables.enableStagingSlot }}
-      autoSwapSlots: true
+      autoSwapSlots: false
