@@ -83,7 +83,7 @@ namespace Niobium.Invoicing
 
         public int TaxRatePercentile { get; set; }
 
-        public string? TaxKind { get; set; }
+        public int? TaxKind { get; set; }
 
         public required string GrandTotalCurrency { get; set; }
 

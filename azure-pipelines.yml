@@ -266,11 +266,6 @@ stages:
               "slotSetting": true
             },
             {
-              "name": "AzureWebJobs.IssueInvoiceCommandConsumer.Disabled",
-              "value": "true",
-              "slotSetting": true
-            },
-            {
               "name": "StorageTableOptions:FullyQualifiedDomainName",
               "value": "$(tableFQDNStaging)",
               "slotSetting": true
