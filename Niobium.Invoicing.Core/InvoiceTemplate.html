@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 
 <head>
@@ -321,6 +321,28 @@
 
 
         @media print {
+
+            body {
+                height: 1200px;
+            }
+
+            .no-print,
+            header .btn,
+            footer {
+                display: none !important;
+            }
+
+            @page {
+                size: A4;
+                margin: 1cm;
+            }
+
+            .clearfix::after {
+                content: "";
+                display: table;
+                clear: both;
+            }
+
             .invoice-price-right {
                 flex: 0 0 260px;
                 padding: 35px 26px;
@@ -382,6 +404,26 @@
                 margin-top: 10px;
             }
         }
+
+        .paid {
+            width: 100%;
+            height: 40px;
+            background-color: #00823c;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .xui-icon {
+            fill: #ffffff;
+            display: inline-block;
+            fill: currentColor;
+            fill-rule: evenodd;
+            flex: none;
+            pointer-events: none;
+            margin-right: 10px;
+        }
     </style>
 </head>
 
@@ -389,6 +431,15 @@
     <div class="container">
         <div class="col-md-12">
             <div class="invoice" data-gst="0.15">
+                <!--<div class="paid">
+                    <svg aria-hidden="false" class="xui-icon xui-icon-color-white" focusable="false" height="20"
+                         role="img" viewBox="0 0 20 20" width="20">
+                        <title>Invoice paid icon</title>
+                        <path d="M10 20C15.5228 20 20 15.5228 20 10C20 4.47715 15.5228 0 10 0C4.47715 0 0 4.47715 0 10C0 15.5228 4.47715 20 10 20ZM5.8313 9.51435L4.54565 10.8L8.4026 14.6569L16.1165 6.94305L14.8308 5.65741L8.4026 12.0856L5.8313 9.51435Z">
+                        </path>
+                    </svg>
+                    <span>PAID</span>
+                </div>-->
                 <div class="invoice-company text-inverse f-w-600">
                     <span class="pull-right">
                         <a href="javascript:;" onclick="window.print()"
