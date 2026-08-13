@@ -193,7 +193,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             long invoiceId = 20250101010101;
             var items = new[]
             {
-                // Provide wrong line totals on purpose ¨C domain should recalculate
+                // Provide wrong line totals on purpose Â¨C domain should recalculate
                 MakeItem(invoiceId, 1, "Consulting", "USD", 1500, 2, lineTotalCents: 0),
                 MakeItem(invoiceId, 2, "Hosting", "USD", 500, 1, lineTotalCents: 999),
             };
@@ -401,9 +401,6 @@ namespace Niobium.Invoicing.Core.Tests.Flows
 
             // When
             await flow.RunAsync(request, billee: null, cts.Token);
-
-            // Then: verifications above ensure token reached all collaborators
-            Assert.IsTrue(true);
         }
 
         [TestMethod]

@@ -1,0 +1,27 @@
+name: niobiuminvoicing
+hooks:
+  preprovision:
+    shell: pwsh
+    run: ./infra/scripts/SetAppSettings.ps1
+  postprovision:
+    shell: pwsh
+    run: ./infra/scripts/ClearAppSettings.ps1
+services:
+  niobium.invoicing.web:
+    project: ./src/Niobium.Invoicing.Web
+    language: csharp
+    host: containerapp
+    docker:
+      context: ../..
+      path: ./Dockerfile
+      registry: docker.io
+      image: niobiumnz/niobiuminvoicing
+      tag: ${APPSETTING_SERVICE_VERSION:-1.0.0-prerelease}
+    hooks:
+      prepackage:
+        run: dotnet test --solution ../../Niobium.Invoicing.slnx --configuration Release
+infra:
+  provider: bicep
+  layers:
+    - name: niobiuminvoicing-infra
+      path: ./infra

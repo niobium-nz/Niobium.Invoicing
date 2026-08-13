@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Niobium.Invoicing.Options;
 
 namespace Niobium.Invoicing
@@ -7,7 +9,10 @@ namespace Niobium.Invoicing
     {
         private static volatile bool loaded;
 
-        public static IServiceCollection AddCore(this IServiceCollection services, Action<BillingOptions>? options = null)
+        public static void AddCore(this IHostApplicationBuilder builder)
+            => builder.Services.AddCore(builder.Configuration.GetSection(nameof(BillingOptions)).Bind);
+
+        private static IServiceCollection AddCore(this IServiceCollection services, Action<BillingOptions>? options = null)
         {
             if (loaded)
             {
