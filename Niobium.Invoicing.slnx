@@ -1,20 +1,17 @@
 <Solution>
   <Folder Name="/Infrastructures/">
+    <File Path="infra/function-app.bicep" />
     <File Path="infra/main.bicep" />
     <File Path="infra/main.parameters.json" />
     <File Path="infra/RBAC.bicep" />
-    <File Path="infra/ServiceBus.bicep" />
-    <File Path="infra/ServiceBusPubSub.bicep" />
+    <File Path="infra/service-bus.bicep" />
   </Folder>
   <Folder Name="/Pipelines/">
     <File Path=".github/workflows/azure-deploy.yml" />
   </Folder>
-  <Project Path="compose-niobium-invoicing.dcproj">
-    <Build />
-  </Project>
   <Project Path="src/Niobium.Invoicing.Contracts/Niobium.Invoicing.Contracts.csproj" />
   <Project Path="src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj" />
   <Project Path="src/Niobium.Invoicing.Core/Niobium.Invoicing.Core.csproj" />
-  <Project Path="src/Niobium.Invoicing.Web/Niobium.Invoicing.Web.csproj" Id="21c17570-e27c-4bcc-a8f6-80c6e73961d0" />
+  <Project Path="src/Niobium.Invoicing.Server/Niobium.Invoicing.Server.csproj" />
   <Project Path="src/Niobium.Notification.Contracts/Niobium.Notification.Contracts.csproj" />
 </Solution>

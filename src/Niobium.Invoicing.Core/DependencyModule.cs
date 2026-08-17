@@ -1,7 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Logging;
 using Niobium.Invoicing.Options;
+using Niobium.Messaging.ServiceBus;
+using Niobium.Notification;
+using Niobium.Platform;
+using Niobium.Platform.Identity;
+using Niobium.Platform.Profile;
+using Niobium.Platform.ServiceBus;
+using Niobium.Platform.StorageTable;
 
 namespace Niobium.Invoicing
 {
@@ -9,23 +17,47 @@ namespace Niobium.Invoicing
     {
         private static volatile bool loaded;
 
-        public static void AddCore(this IHostApplicationBuilder builder)
-            => builder.Services.AddCore(builder.Configuration.GetSection(nameof(BillingOptions)).Bind);
+        public static TBuilder AddCore<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+        {
+            builder.AddPlatform();
+            builder.AddIdentity();
+            builder.AddProfile(useServicePrincipalAuthentication: true);
+            builder.AddMessaging();
+            builder.AddDatabase();
+            builder.AddDatabaseResourceTokenSupport();
 
-        private static IServiceCollection AddCore(this IServiceCollection services, Action<BillingOptions>? options = null)
+            builder.AddCore(builder.Configuration.GetSection(nameof(BillingOptions)).Bind);
+            return builder;
+        }
+
+        private static TBuilder AddCore<TBuilder>(this TBuilder builder, Action<BillingOptions>? options) where TBuilder : IHostApplicationBuilder
         {
             if (loaded)
             {
-                return services;
+                return builder;
             }
 
             loaded = true;
 
-            services.Configure<BillingOptions>(o =>
+            bool isDevelopment = builder.Configuration.IsDevelopmentEnvironment();
+            IdentityModelEventSource.ShowPII = isDevelopment;
+
+            builder.Services.Configure<BillingOptions>(o =>
             {
                 options?.Invoke(o);
             });
-            return services.RegisterDomainComponents(typeof(DependencyModule));
+
+            builder.Services.AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
+            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Invoice));
+            builder.Services.GrantDatabaseEntitlementTo(nameof(InvoiceItem));
+            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billable),
+                DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete);
+            builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billee),
+                DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete | DatabasePermissions.Update);
+            builder.Services.AddMessagingBroker<NotifyCommand>(isDevelopment, builder.Configuration.GetSection(nameof(NotificationQueueOptions)).Bind);
+
+            builder.Services.RegisterDomainComponents(typeof(DependencyModule));
+            return builder;
         }
     }
 }
