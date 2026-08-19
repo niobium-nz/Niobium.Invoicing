@@ -18,6 +18,9 @@ param instanceMemoryMB int = 512
 @description('Maximum number of function instances that can be running simultaneously.')
 param maximumInstanceCount int = 10
 
+@description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed. Can optionally use deployer().objectId if manually deployed')
+param userIdentityPrincipalId string = ''
+
 var location = resourceGroup().location
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -179,6 +182,35 @@ module keyVault 'br/public:avm/res/key-vault/vault:0.14.0' = {
   params: {
     name: keyVaultName
     enablePurgeProtection: false
+  }
+}
+
+module rbac 'rbac.bicep' = {
+  params: {
+    userIdentityPrincipalId: userIdentityPrincipalId
+    managedIdentityPrincipalId: sharedManagedIdentity.outputs.principalId
+    appInsightsName: appInsightsName
+    keyVaultName: keyVaultName
+    storageAccountNames: [storageAccountName]
+  }
+}
+
+// Role assignment for Storage Account (Blob) - Deployer Identity
+var deployerPrincipalId = deployer().objectId
+var storageRoleDefinitionId  = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' //Storage Blob Data Owner role
+resource storageAccountResource 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
+  name: storageAccountName
+  dependsOn: [
+    storageAccount
+  ]
+}
+resource storageRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccountResource.id, deployerPrincipalId, storageRoleDefinitionId)
+  scope: storageAccountResource
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', storageRoleDefinitionId)
+    principalId: deployerPrincipalId // Use deployer identity ID
+    principalType: 'ServicePrincipal' // Deployer Identity is a User Principal
   }
 }
 

@@ -80,6 +80,7 @@ module app 'function-app.bicep' = {
     environmentName: environmentName
     appSettings: concat(appSettings, serviceBusSettings, storageSettings)
     customDomainName: customDomainName
+    userIdentityPrincipalId: userIdentityPrincipalId
   }
 }
 
@@ -87,9 +88,7 @@ module rbac 'rbac.bicep' = {
   params: {
     userIdentityPrincipalId: userIdentityPrincipalId
     managedIdentityPrincipalId: app.outputs.managedIdentityPrincipalId
-    appInsightsName: app.outputs.appInsightsName
-    keyVaultName: app.outputs.keyVaultName
-    storageAccountNames: [app.outputs.storageAccountName, storageAccountName]
+    storageAccountNames: [storageAccountName]
     serviceBusNamespaceNames: [serviceBusNamespaceName]
   }
 }
