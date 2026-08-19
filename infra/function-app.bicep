@@ -152,7 +152,7 @@ module functionApp 'br/public:avm/res/web/site:0.24.0' = {
 // Managed Certificate (Native resource type)
 // Note: This must execute AFTER the Function App is built and hostname is bound.
 resource managedCertificate 'Microsoft.Web/sites/certificates@2025-03-01' = if (!empty(customDomainName)) {
-  name: '${functionAppName}/${customDomainName}'
+  name: '${functionAppName}/${customDomainName}-${functionAppName}'
   location: location
   properties: {
     serverFarmId: appServicePlan.outputs.resourceId
