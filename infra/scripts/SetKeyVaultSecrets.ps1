@@ -15,10 +15,13 @@ foreach ($secretVariable in $secretVariables) {
 		throw "Environment variable '$($secretVariable.Name)' does not contain a Key Vault secret name."
 	}
 
-	Write-Host "Setting Key Vault secret '$secretName' in vault '$keyVaultName'."
-	az keyvault secret set --vault-name $keyVaultName --name $secretName --value $secretVariable.Value --only-show-errors --output none
+	# Replace any underscores in the secret name with dashes for Key Vault
+	$kvSecretName = $secretName -replace '_', '-'
+
+	Write-Host "Setting Key Vault secret '$kvSecretName' (from env var '$($secretVariable.Name)') in vault '$keyVaultName'."
+	az keyvault secret set --vault-name $keyVaultName --name $kvSecretName --value $secretVariable.Value --only-show-errors --output none
 	if ($LASTEXITCODE -ne 0) {
-		throw "Failed to set Key Vault secret '$secretName' in vault '$keyVaultName'."
+		throw "Failed to set Key Vault secret '$kvSecretName' in vault '$keyVaultName'."
 	}
 }
 
