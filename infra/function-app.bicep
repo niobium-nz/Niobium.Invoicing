@@ -199,7 +199,8 @@ module rbac 'rbac.bicep' = {
 
 // Role assignment for Storage Account (Blob) - Deployer Identity
 var deployerPrincipalId = deployer().objectId
-var storageRoleDefinitionId  = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' //Storage Blob Data Owner role
+var storageRoleDefinitionId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' //Storage Blob Data Owner role
+var keyVaultSecretRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secret Reader role ID
 resource storageAccountResource 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
   name: storageAccountName
   dependsOn: [
@@ -211,6 +212,16 @@ resource storageRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments
   scope: storageAccountResource
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', storageRoleDefinitionId)
+    principalId: deployerPrincipalId // Use deployer identity ID
+    principalType: 'ServicePrincipal' // Deployer Identity is a User Principal
+  }
+}
+
+resource keyVaultSecretRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccountResource.id, deployerPrincipalId, keyVaultSecretRoleDefinitionId)
+  scope: storageAccountResource
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretRoleDefinitionId)
     principalId: deployerPrincipalId // Use deployer identity ID
     principalType: 'ServicePrincipal' // Deployer Identity is a User Principal
   }
