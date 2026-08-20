@@ -5,8 +5,10 @@ hooks:
     shell: pwsh
     run: ./infra/scripts/SetAppSettings.ps1
   postprovision:
-    shell: pwsh
-    run: ./infra/scripts/ClearAppSettings.ps1
+    - shell: pwsh
+      run: ./infra/scripts/SetKeyVaultSecrets.ps1
+    - shell: pwsh
+      run: ./infra/scripts/ClearAppSettings.ps1
 
 infra:
   provider: bicep

@@ -92,3 +92,8 @@ module rbac 'rbac.bicep' = {
     serviceBusNamespaceNames: [serviceBusNamespaceName]
   }
 }
+
+output functionAppName string = app.outputs.functionAppName
+output dataStorageAccountName string = storageAccount.outputs.name
+output appInsightsName string = app.outputs.appInsightsName
+output keyVaultName string = app.outputs.keyVaultName

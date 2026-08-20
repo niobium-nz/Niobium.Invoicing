@@ -36,7 +36,9 @@ var deploymentStorageContainerName = 'app-package-${take(functionAppName, 32)}-$
 
 var allAppSettings = union(
     reduce(appSettings, {}, (currentObj, nextItem) => union(currentObj, {
-      '${nextItem.name}': nextItem.value
+      '${nextItem.name}': startsWith(nextItem.name, 'KV_')
+        ? '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}.vault.azure.net/secrets/${replace(substring(nextItem.name, 3), '_', '-')}/)'
+        : nextItem.value
     })),
     {
       AZURE_FUNCTIONS_ENVIRONMENT: environmentName
