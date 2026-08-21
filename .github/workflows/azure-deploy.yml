@@ -35,6 +35,7 @@ jobs:
 
       - name: Publish
         env:
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
           AZURE_ENV_NAME: 'test'
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -81,6 +82,7 @@ jobs:
 
       - name: Publish
         env:
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
           AZURE_ENV_NAME: 'prod'
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
