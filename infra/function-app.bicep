@@ -216,10 +216,15 @@ resource storageRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments
     principalType: 'ServicePrincipal' // Deployer Identity is a User Principal
   }
 }
-
+resource keyVaultResource 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
+  name: keyVaultName
+  dependsOn: [
+    keyVault
+  ]
+}
 resource keyVaultSecretRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccountResource.id, deployerPrincipalId, keyVaultSecretRoleDefinitionId)
-  scope: storageAccountResource
+  name: guid(keyVaultResource.id, deployerPrincipalId, keyVaultSecretRoleDefinitionId)
+  scope: keyVaultResource
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretRoleDefinitionId)
     principalId: deployerPrincipalId // Use deployer identity ID
