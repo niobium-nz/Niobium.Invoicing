@@ -23,6 +23,9 @@ param serviceBusQueueNames string = ''
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed. Can optionally use deployer().objectId if manually deployed')
 param userIdentityPrincipalId string = ''
 
+@description('Indicates whether the deployment is interactive.')
+param isInteractiveDeployer bool = true
+
 var abbrs = loadJsonContent('./abbreviations.json')
 
 var serviceBusNamespaceName = '${appShortName}-${abbrs.serviceBusNamespaces}${environmentName}'
@@ -81,6 +84,7 @@ module app 'function-app.bicep' = {
     appSettings: concat(appSettings, serviceBusSettings, storageSettings)
     customDomainName: customDomainName
     userIdentityPrincipalId: userIdentityPrincipalId
+    isInteractiveDeployer: isInteractiveDeployer
   }
 }
 

@@ -2,7 +2,7 @@
   <Folder Name="/Infrastructures/">
     <File Path="infra/function-app.bicep" />
     <File Path="infra/main.bicep" />
-    <File Path="infra/main.parameters.json" />
+    <File Path="infra/main.bicepparam" />
     <File Path="infra/RBAC.bicep" />
     <File Path="infra/service-bus.bicep" />
   </Folder>
