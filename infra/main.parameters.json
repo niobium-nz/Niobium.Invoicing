@@ -13,6 +13,9 @@
     },
     "serviceBusQueueNames": {
       "value": "${SERVICE_BUS_QUEUE_NAMES}"
+    },
+    "isInteractiveDeployer": {
+      "value": "${IS_INTERACTIVE_DEPLOYER}"
     }
   }
 }

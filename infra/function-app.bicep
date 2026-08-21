@@ -21,6 +21,9 @@ param maximumInstanceCount int = 10
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed. Can optionally use deployer().objectId if manually deployed')
 param userIdentityPrincipalId string = ''
 
+@description('Indicates whether the deployment is interactive.')
+param isInteractiveDeployer bool = true
+
 var location = resourceGroup().location
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -213,7 +216,7 @@ resource storageRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', storageRoleDefinitionId)
     principalId: deployerPrincipalId // Use deployer identity ID
-    principalType: 'ServicePrincipal' // Deployer Identity is a User Principal
+    principalType: isInteractiveDeployer ? 'User' : 'ServicePrincipal'
   }
 }
 resource keyVaultResource 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
@@ -228,7 +231,7 @@ resource keyVaultSecretRoleAssignment_Deployer 'Microsoft.Authorization/roleAssi
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretRoleDefinitionId)
     principalId: deployerPrincipalId // Use deployer identity ID
-    principalType: 'ServicePrincipal' // Deployer Identity is a User Principal
+    principalType: isInteractiveDeployer ? 'User' : 'ServicePrincipal'
   }
 }
 
