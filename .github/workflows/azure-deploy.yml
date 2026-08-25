@@ -15,6 +15,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     environment: 'test'
+    concurrency:
+      group: test-deploy
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -62,6 +65,9 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     environment: 'prod'
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
