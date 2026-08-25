@@ -39,7 +39,7 @@ var deploymentStorageContainerName = 'app-package-${take(functionAppName, 32)}-$
 
 var allAppSettings = union(
     reduce(appSettings, {}, (currentObj, nextItem) => union(currentObj, {
-      '${nextItem.name}': startsWith(nextItem.name, 'KV_')
+      '${startsWith(nextItem.name, 'KV_') ? substring(nextItem.name, 3) : nextItem.name}': startsWith(nextItem.name, 'KV_')
         ? '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}.vault.azure.net/secrets/${replace(substring(nextItem.name, 3), '_', '-')}/)'
         : nextItem.value
     })),
