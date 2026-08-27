@@ -11,7 +11,7 @@ public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCom
 {
     [Function(nameof(IssueInvoiceCommandConsumer))]
     public async Task Run(
-        [ServiceBusTrigger("issueinvoicecommand", AutoCompleteMessages = true, Connection = nameof(ServiceBusTriggerOptions))]
+        [ServiceBusTrigger("issueinvoicecommand")]
         ServiceBusReceivedMessage message,
         CancellationToken cancellationToken)
     {

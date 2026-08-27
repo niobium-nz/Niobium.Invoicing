@@ -40,14 +40,6 @@ var serviceBusSettings = [
         name: 'AzureWebJobsServiceBus__fullyQualifiedNamespace'
         value: serviceBus.outputs.fullyQualifiedNamespace
     }
-    { 
-        name: 'ServiceBusTriggerOptions__FullyQualifiedNamespace'
-        value: serviceBus.outputs.fullyQualifiedNamespace
-    }
-    { 
-        name: 'ServiceBusOptions__FullyQualifiedNamespace'
-        value: serviceBus.outputs.fullyQualifiedNamespace
-    }
 ]
 
 var storageAccountName = replace('${appShortName}-${abbrs.storageStorageAccounts}d${environmentName}', '-', '')
@@ -69,10 +61,6 @@ var storageSettings = [
     }
     { 
         name: 'AzureWebJobsStorage__tableServiceUri'
-        value: storageAccount.outputs.serviceEndpoints.table
-    }
-    { 
-        name: 'StorageTableOptions__FullyQualifiedDomainName'
         value: storageAccount.outputs.serviceEndpoints.table
     }
 ]
