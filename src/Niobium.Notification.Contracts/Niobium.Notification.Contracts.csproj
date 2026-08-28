@@ -23,7 +23,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Niobium.Abstractions" Version="4.0.53" />
-    <PackageReference Include="Niobium.Messaging" Version="4.0.53" />
+    <PackageReference Include="Niobium.Abstractions" Version="4.0.55" />
+    <PackageReference Include="Niobium.Messaging" Version="4.0.55" />
   </ItemGroup>
 </Project>
