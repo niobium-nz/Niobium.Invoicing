@@ -14,5 +14,4 @@
   <Project Path="src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj" />
   <Project Path="src/Niobium.Invoicing.Core/Niobium.Invoicing.Core.csproj" />
   <Project Path="src/Niobium.Invoicing.Server/Niobium.Invoicing.Server.csproj" />
-  <Project Path="src/Niobium.Notification.Contracts/Niobium.Notification.Contracts.csproj" />
 </Solution>

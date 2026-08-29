@@ -3,12 +3,19 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <PublishReadyToRun>true</PublishReadyToRun>
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>fd4069df-c890-4531-b595-b5d61d9f7671</UserSecretsId>
+    <WarningsAsErrors />
   </PropertyGroup>
-  
+
+  <PropertyGroup>
+    <Version Condition=" '$(BUILD_BUILDNUMBER)' == '' ">1.0.0.0</Version>
+    <Version Condition=" '$(BUILD_BUILDNUMBER)' != '' ">$(BUILD_BUILDNUMBER)</Version>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -29,6 +36,10 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.1" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
     <PackageReference Include="Niobium.Platform.Functions" Version="4.0.53" />
+    <PackageReference Include="Niobium.Platform.Identity" Version="4.0.56" />
+    <PackageReference Include="Niobium.Platform.StorageTable" Version="4.0.56" />
+    <PackageReference Include="Niobium.Platform.ServiceBus" Version="4.0.56" />
+    <PackageReference Include="Niobium.Platform.Profile" Version="4.0.57" />
   </ItemGroup>
 
   <ItemGroup>
