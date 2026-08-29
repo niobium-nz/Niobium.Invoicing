@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/Pipelines/">
     <File Path=".github/workflows/azure-deploy.yml" />
+    <File Path=".github/workflows/package-publish.yml" />
   </Folder>
   <Project Path="src/Niobium.Invoicing.Contracts/Niobium.Invoicing.Contracts.csproj" />
   <Project Path="src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj" />
