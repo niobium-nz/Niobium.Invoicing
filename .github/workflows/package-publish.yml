@@ -44,8 +44,8 @@ jobs:
     
     - name: NuGet Publish
       run: |
-        dotnet nuget push "Niobium.Invoicing.Contracts/bin/Release/*.nupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
-        dotnet nuget push "Niobium.Invoicing.Contracts/bin/Release/*.snupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
+        dotnet nuget push "src/Niobium.Invoicing.Contracts/bin/Release/*.nupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
+        dotnet nuget push "src/Niobium.Invoicing.Contracts/bin/Release/*.snupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
       env:
         NUGET_FEED_URL: ${{ env.nugetFeedUrl }}
         NUGET_API_KEY: ${{steps.login.outputs.NUGET_API_KEY}}
@@ -81,8 +81,8 @@ jobs:
     
     - name: NuGet Publish
       run: |
-        dotnet nuget push "Niobium.Invoicing.Contracts/bin/Release/*.nupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
-        dotnet nuget push "Niobium.Invoicing.Contracts/bin/Release/*.snupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
+        dotnet nuget push "src/Niobium.Invoicing.Contracts/bin/Release/*.nupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
+        dotnet nuget push "src/Niobium.Invoicing.Contracts/bin/Release/*.snupkg" --source $NUGET_FEED_URL --api-key $NUGET_API_KEY
       env:
         NUGET_FEED_URL: ${{ env.nugetFeedUrl }}
         NUGET_API_KEY: ${{steps.login.outputs.NUGET_API_KEY}}
