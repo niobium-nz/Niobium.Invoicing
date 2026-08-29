@@ -16,6 +16,9 @@ jobs:
   pre-release:
     if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: pre-release-publish
+      cancel-in-progress: true
     env:
       buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}-prerelease'
     steps:
@@ -50,6 +53,9 @@ jobs:
   prod-release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: prod-release-publish
+      cancel-in-progress: true
     env:
       buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
     steps:
