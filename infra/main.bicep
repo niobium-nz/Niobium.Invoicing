@@ -98,14 +98,6 @@ module app 'function-app.bicep' = {
   }
 }
 
-module appSettingsUpdate 'function-app-settings.bicep' = {
-  params: {
-    functionAppName: app.outputs.functionAppName
-    newSettings: app.outputs.functionAppSettings
-  }
-}
-
-
 module rbac 'rbac.bicep' = {
   params: {
     userIdentityPrincipalId: userIdentityPrincipalId

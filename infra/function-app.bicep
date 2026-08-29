@@ -148,8 +148,6 @@ module functionApp 'br/public:avm/res/web/site:0.24.0' = {
         name: 'appsettings'
         properties: allAppSettings
         applicationInsightResourceId: appInsights.outputs.resourceId
-        storageAccountResourceId: storageAccount.outputs.resourceId
-        storageAccountUseIdentityAuthentication: true
     }]
     hostNameBindings: !empty(customDomainName) ? [{
         name: customDomainName
@@ -236,7 +234,6 @@ resource keyVaultSecretRoleAssignment_Deployer 'Microsoft.Authorization/roleAssi
 }
 
 output functionAppName string = functionApp.outputs.name
-output functionAppSettings object = allAppSettings
 output storageAccountName string = storageAccount.outputs.name
 output appInsightsName string = appInsights.outputs.name
 output managedIdentityPrincipalId string = sharedManagedIdentity.outputs.principalId
