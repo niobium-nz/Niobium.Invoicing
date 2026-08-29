@@ -42,26 +42,48 @@ var serviceBusSettings = [
     }
 ]
 
-var storageAccountName = replace('${appShortName}-${abbrs.storageStorageAccounts}d${environmentName}', '-', '')
-module storageAccount 'br/public:avm/res/storage/storage-account:0.32.0' = {
+var dataStorageAccountName = replace('${appShortName}-${abbrs.storageStorageAccounts}d${environmentName}', '-', '')
+module dataStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' = {
   params: {
-    name: storageAccountName
+    name: dataStorageAccountName
     skuName: 'Standard_LRS'
     kind: 'StorageV2'
     publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Allow'
     }
+    blobServices: {
+      corsRules: [
+        {
+          allowedOrigins: ['*']
+          allowedMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'MERGE', 'OPTIONS']
+          maxAgeInSeconds: 0
+          exposedHeaders: ['*']
+          allowedHeaders: ['*']
+        }
+      ]
+    }
+    tableServices: {
+      corsRules: [
+        {
+          allowedOrigins: ['*']
+          allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'MERGE', 'OPTIONS']
+          maxAgeInSeconds: 0
+          exposedHeaders: ['*']
+          allowedHeaders: ['*']
+        }
+      ]
+    }
   }
 }
 var storageSettings = [ 
     { 
         name: 'AzureWebJobsStorage__blobServiceUri'
-        value: storageAccount.outputs.serviceEndpoints.blob
+        value: dataStorageAccount.outputs.serviceEndpoints.blob
     }
     { 
         name: 'AzureWebJobsStorage__tableServiceUri'
-        value: storageAccount.outputs.serviceEndpoints.table
+        value: dataStorageAccount.outputs.serviceEndpoints.table
     }
 ]
 
@@ -80,12 +102,12 @@ module rbac 'rbac.bicep' = {
   params: {
     userIdentityPrincipalId: userIdentityPrincipalId
     managedIdentityPrincipalId: app.outputs.managedIdentityPrincipalId
-    storageAccountNames: [storageAccountName]
+    storageAccountNames: [dataStorageAccountName]
     serviceBusNamespaceNames: [serviceBusNamespaceName]
   }
 }
 
 output functionAppName string = app.outputs.functionAppName
-output dataStorageAccountName string = storageAccount.outputs.name
+output dataStorageAccountName string = dataStorageAccount.outputs.name
 output appInsightsName string = app.outputs.appInsightsName
 output keyVaultName string = app.outputs.keyVaultName
