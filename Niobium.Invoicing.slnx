@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Infrastructures/">
+    <File Path="infra/function-app-settings.bicep" />
     <File Path="infra/function-app.bicep" />
     <File Path="infra/main.bicep" />
     <File Path="infra/main.bicepparam" />

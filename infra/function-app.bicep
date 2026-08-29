@@ -236,6 +236,7 @@ resource keyVaultSecretRoleAssignment_Deployer 'Microsoft.Authorization/roleAssi
 }
 
 output functionAppName string = functionApp.outputs.name
+output functionAppSettings object = allAppSettings
 output storageAccountName string = storageAccount.outputs.name
 output appInsightsName string = appInsights.outputs.name
 output managedIdentityPrincipalId string = sharedManagedIdentity.outputs.principalId
