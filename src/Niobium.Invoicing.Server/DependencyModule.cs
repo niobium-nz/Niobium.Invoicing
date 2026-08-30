@@ -18,7 +18,7 @@ namespace Niobium.Invoicing.Server
 
         public static TBuilder AddInvoicing<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
         {
-            builder.AddPlatform();
+            Platform.Functions.DependencyModule.AddPlatform(builder);
             builder.AddIdentity();
             builder.AddProfile(useServicePrincipalAuthentication: true);
             builder.AddMessaging();

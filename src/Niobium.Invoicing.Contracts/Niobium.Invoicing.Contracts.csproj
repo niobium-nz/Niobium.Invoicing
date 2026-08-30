@@ -29,9 +29,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Niobium.Abstractions" Version="4.0.57" />
-    <PackageReference Include="Niobium.Helper" Version="4.0.57" />
-    <PackageReference Include="Niobium.Profile" Version="4.0.57" />
-    <PackageReference Include="Niobium.Finance" Version="4.0.53" />
+    <PackageReference Include="Niobium.Abstractions" Version="4.0.60" />
+    <PackageReference Include="Niobium.Helper" Version="4.0.60" />
+    <PackageReference Include="Niobium.Profile" Version="4.0.60" />
+    <PackageReference Include="Niobium.Finance" Version="4.0.60" />
   </ItemGroup>
 </Project>
