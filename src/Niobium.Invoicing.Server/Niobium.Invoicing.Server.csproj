@@ -36,7 +36,7 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.1" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
     <PackageReference Include="Niobium.Platform.Functions" Version="4.0.60" />
-    <PackageReference Include="Niobium.Platform.Identity" Version="4.0.60" />
+    <PackageReference Include="Niobium.Platform.Identity" Version="4.0.61" />
     <PackageReference Include="Niobium.Platform.StorageTable" Version="4.0.60" />
     <PackageReference Include="Niobium.Platform.ServiceBus" Version="4.0.60" />
     <PackageReference Include="Niobium.Platform.Profile" Version="4.0.60" />
