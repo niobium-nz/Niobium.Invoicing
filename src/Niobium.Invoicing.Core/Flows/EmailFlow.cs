@@ -7,6 +7,14 @@ using Niobium.Notification;
 
 namespace Niobium.Invoicing.Flows
 {
+    /// <summary>
+    /// Queues an invoice notification, then records its link token and enqueue-related timestamp.
+    /// </summary>
+    /// <param name="repo">Repository for loading invoice domains by biller and invoice keys.</param>
+    /// <param name="itemRepo">Repository for reading persisted invoice lines.</param>
+    /// <param name="broker">Downstream NotifyCommand broker.</param>
+    /// <param name="config">Bound billing configuration for invoice links.</param>
+    /// <param name="logger">Logger for missing-recipient skips.</param>
     public class EmailFlow(
         IDomainRepository<InvoiceDomain, Invoice> repo,
         IRepository<InvoiceItem> itemRepo,
@@ -14,8 +22,23 @@ namespace Niobium.Invoicing.Flows
         IOptions<BillingOptions> config,
         ILogger<EmailFlow> logger) : IFlow
     {
+        /// <summary>
+        /// Channel used to select the downstream sender-specific invoice template.
+        /// </summary>
         private const string NotificationInvoiceChannel = "Invoice";
 
+        /// <summary>
+        /// Loads an invoice and queues its notification unless recipient email is blank.
+        /// </summary>
+        /// <param name="issuer">Issuing biller identifier.</param>
+        /// <param name="invoice">Invoice identifier in reverse Unix milliseconds.</param>
+        /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
+        /// <returns>A task completing after enqueue and the subsequent invoice save, or after the missing-recipient skip.</returns>
+        /// <remarks>
+        /// Builds notification parameters from persisted data and uses invoiceID@biller for message identity.
+        /// It does not suppress replays, confirm recipient delivery or make enqueue/status persistence atomic.
+        /// Cancellation or failure can leave earlier side effects completed.
+        /// </remarks>
         public virtual async Task RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
         {
             InvoiceDomain domain = await repo.GetAsync(

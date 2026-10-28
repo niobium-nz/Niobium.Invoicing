@@ -1,75 +1,43 @@
----
-description: This .NET sample demonstrates how to build and deploy a durable AI agent using Azure Functions and the Microsoft Agent Framework with persistent conversation threads.
-page_type: sample
-products:
-- azure-functions
-- azure-openai
-- azure
-urlFragment: durable-agents-quickstart-dotnet
-languages:
-- csharp
-- bicep
-- azdeveloper
----
+# Niobium.Invoicing
 
-# Durable task extension for Microsoft Agent Framework using Azure Developer CLI
+Niobium.Invoicing calculates and issues invoices, renders them as HTML, and queues email notifications through the separate Niobium.Notification service. It is a .NET 10 Azure Functions application with shared C# contracts.
 
-This template repository contains a durable AI agent reference sample built with .NET and deployed to Azure using the Azure Developer CLI (`azd`). The sample demonstrates how to create an AI agent with persistent conversation threads using Azure Functions, Azure OpenAI, and the Microsoft Agent Framework. This sample demonstrates these key features:
+The product direction is invoicing for small businesses using AI agents as first-class consumers. An MCP server layer and retirement of the historical UI are planned; this repository currently exposes HTTP and Service Bus entry points. Payment collection, direct debit, reconciliation, and delivery confirmation are planned. Accounting is outside the service boundary. See the [product and capability map](docs/product.md).
 
-* **Durable conversation threads**. The agent maintains conversation context across multiple interactions using durable orchestration, allowing for natural multi-turn conversations.
-* **Microsoft Agent Framework integration**. Built on the standard Microsoft Agent Framework pattern for creating AI agents with Azure OpenAI.
-* **Managed identity authentication**. Uses Azure managed identity for secure, secret-free connections to Azure OpenAI.
+An invoicing **tenant** is a management group containing biller businesses. Each biller belongs to exactly one group and invoices its own customers, called **billees**. In Notification, the sender tenant corresponds to the invoicing biller, not the management group.
 
-This project is designed to run on your local computer. You can also use GitHub Codespaces if available.
+## Repository map
 
-> [!IMPORTANT]
-> This sample creates several resources. Make sure to delete the resource group after testing to minimize charges!
+| Project or directory | Responsibility |
+| --- | --- |
+| [Contracts](src/Niobium.Invoicing.Contracts) | Models, requests/commands, identifiers and arithmetic; published NuGet package. |
+| [Core](src/Niobium.Invoicing.Core) | Issue/upsert/email/HTML flows, domains, embedded template and configuration. |
+| [Server](src/Niobium.Invoicing.Server) | Functions triggers, middleware and service registration. |
+| [Core.Tests](src/Niobium.Invoicing.Core.Tests) | Unit tests using mocked infrastructure and synthetic data. |
+| [infra](infra), [workflows](.github/workflows), [azure.yaml](azure.yaml) | Declared resources, provisioning hooks, deployment and publication. |
+| [docs](docs/README.md) | Product, architecture, contracts, operations, decisions and validation evidence. |
 
-## Prerequisites
+## Start safely
 
-+ [.NET 9.0 SDK or later](https://dotnet.microsoft.com/download)
-+ [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local?tabs=v4%2Clinux%2Ccsharp%2Cportal%2Cbash#install-the-azure-functions-core-tools)
-+ To use Visual Studio Code to run and debug locally:
-  + [Visual Studio Code](https://code.visualstudio.com/)
-  + [Azure Functions extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azurefunctions)
-  + [C# Dev Kit extension](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit)
-+ [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (for deployment)
-+ [Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd?tabs=winget-windows%2Cbrew-mac%2Cscript-linux&pivots=os-windows)
-+ An Azure subscription with Microsoft.Web and Microsoft.CognitiveServices [registered resource providers](https://learn.microsoft.com/azure/azure-resource-manager/management/resource-providers-and-types#register-resource-provider)
+Read [AGENTS.md](AGENTS.md) for working rules and [configuration and development](docs/configuration-and-development.md) for prerequisites and command status. `global.json` requests .NET SDK 10.0.100 with `latestFeature` roll-forward and Microsoft.Testing.Platform. Discovery verified SDK 10.0.403 on Linux, a Release build, and 26 unit tests against existing restored dependencies:
 
-## Initialize the local project
-
-You can initialize a project from this `azd` template in one of these ways:
-
-+ Use this `azd init` command from an empty local (root) folder:
-
-    ```shell
-    azd init --template durable-agents-quickstart-dotnet
-    ```
-
-    Supply an environment name, such as `durableagent` when prompted. In `azd`, the environment is used to maintain a unique deployment context for your app.
-
-+ Clone the GitHub template repository locally using the `git clone` command:
-
-    ```shell
-    git clone https://github.com/anthonychu/durable-agents-quickstart-dotnet.git
-    cd durable-agents-quickstart-dotnet
-    ```
-
-    You can also clone the repository from your own fork in GitHub.
-
-## Follow the tutorial
-
-You can follow the step-by-step tutorial for this sample at [](https://learn.microsoft.com/agent-framework/tutorials/agents/create-and-run-durable-agent?pivots=programming-language-csharp). The tutorial walks you through the code and deployment process in detail.
-
-## Deployment parameters
-
-Container App application settings and secrets are defined once in `infra/appsettings.manifest.json`. Each entry specifies the final app setting name, the source environment variable name, and whether the value should be stored as a secret.
-
-For local provisioning, place the source values in `.azure/<environment-name>/.env` and run `azd provision`. The `preprovision` hook in `azure.yaml` generates `infra/main.parameters.json` automatically before provisioning:
-
-```powershell
-azd provision --environment test
+```sh
+dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo
+dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore
 ```
 
-For GitHub Actions, the workflow exposes the same source environment variables and `azd up` triggers the same hook-driven parameter generation automatically.
+These commands require restored packages. A clean-cache restore and a complete isolated application setup have not been demonstrated. Running the Functions host needs identity, profile, storage and messaging configuration; a development environment name alone does not isolate those dependencies. Do not start against existing resources or use credentials copied from tracked examples.
+
+**Review [delivery behavior](docs/delivery-and-operations.md) before submitting changes.** The deployment workflow has no documentation path exclusion. Changes under Contracts, including comments or its README, can also qualify for package publication. Deployment and publication are separate actions requiring authorization.
+
+## Read next
+
+- [Documentation index and analyzed baseline](docs/README.md)
+- [Architecture and invoice flows](docs/architecture.md)
+- [Domain, money and persistence](docs/domain-and-data.md)
+- [API and messaging contracts](docs/api-and-messaging.md)
+- [Niobium package provenance](docs/niobium-integration.md)
+- [Confirmed decisions and planned improvements](docs/decisions-and-risks.md)
+- [Validation results and limitations](docs/discovery/validation.md)
+
+Source inspection describes implementation, not production correctness or readiness. Documents distinguish Observed, Verified, Owner-confirmed, Inferred, Proposed and Unknown claims. This repository uses [MIT license text](LICENSE.md).

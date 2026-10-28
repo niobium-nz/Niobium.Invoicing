@@ -1,49 +1,30 @@
-# Niobium.Invoicing.Abstractions
+# Niobium.Invoicing.Contracts
 
-Niobium.Invoicing.Abstractions defines the core contracts, types, and shared logic for the Niobium Invoicing platform. It provides interfaces and base types for invoice management, billing, and integration with Cod.* packages.
+Shared .NET 10 invoice models, requests, commands, key helpers and arithmetic in the `Niobium.Invoicing` namespace. Core and Server consume this project; it is the package selected by the repository's NuGet publication workflow. It does not implement a client UI, MCP server or payment processor.
 
-## What is this project about?
-- Defines interfaces and base types for invoice, billing, and platform services.
-- Used as a foundational dependency by Niobium.Invoicing.Core, Niobium.Invoicing.Portal, and related projects.
-- Ensures a consistent contract for invoicing and billing logic across the solution.
+## Contents and use
 
-## Getting Started
+- `Biller`, `Billee`, `Billable`: issuer profile, customer and catalog contracts.
+- `Invoice`, `InvoiceItem`, `InvoiceCycle`: snapshots, line items and billing-period presentation.
+- `IssueInvoiceRequest`, `IssueInvoiceCommand`: HTTP flow input and private queue input with embedded customer data.
+- `InvoiceExtensions`: subtotal, tax and tax-inclusive final-total calculations.
 
-### 1. Install the NuGet Package
-Add the package to your .NET project:
-
-```
-dotnet add package Niobium.Invoicing.Abstractions
-```
-
-### 2. Use the Abstractions in Your Code
-Implement the interfaces and use the base types in your domain and infrastructure code:
+Consumers should select a compatible published version of `Niobium.Invoicing.Contracts` explicitly. Its declared framework dependencies are Niobium.Abstractions/Helper 4.0.61 and Niobium.Profile/Finance 4.0.60 at the [analyzed baseline](../../docs/README.md). Package availability and consumer compatibility were not tested by this documentation task.
 
 ```csharp
 using Niobium.Invoicing;
 
-public class MyInvoicingService : IInvoicingPlatformService
-{
-    public Task IssueInvoiceAsync(Invoice invoice, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken = default)
-    {
-        // Implementation here
-    }
-}
+long invoiceId = Invoice.ParseID(DateTimeOffset.UtcNow);
+InvoiceItem item = InvoiceItem.BuildNew(invoiceId, "NZD");
+item.Subject = "Example service";
+item.UnitPriceCents = 10000;
+item.Quantity = 1;
 ```
 
-### 3. Integrate with Other Niobium and Cod Packages
-Niobium.Invoicing.Abstractions is referenced by Niobium.Invoicing.Core, Niobium.Invoicing.Portal, and other projects. Just add the relevant projects or packages to your solution and use the shared contracts.
+This constructs synthetic data; it does not save or send it. Invoice IDs use the matched framework's **reverse** Unix millisecond encoding. Cents are integer minor units, and a tax rate of 1500 means 15%. The final grand total includes tax. Required C# members do not establish business validation. Read [domain/data](../../docs/domain-and-data.md) before changing identifiers, amounts or fields, and [API/messaging](../../docs/api-and-messaging.md) for wire behavior and an issuance example.
 
-## Contributing
+## Compatibility and contribution
 
-Contributions are welcome! To contribute:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with clear commit messages
-4. Submit a pull request
+The public types and their storage/JSON representations are consumed across service boundaries. Preserve existing names, including legacy spelling, unless a separately reviewed compatibility change is intended. Follow [AGENTS.md](../../AGENTS.md) and [testing/conventions](../../docs/testing-and-conventions.md). Review [workflow side effects](../../docs/delivery-and-operations.md) before submitting: changes anywhere under this project can qualify for package publication. XML comments were added without enabling persistent XML-output/package settings.
 
-Please ensure your code follows the existing style and includes appropriate tests and documentation.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+The repository's existing license text is in [LICENSE.md](../../LICENSE.md).

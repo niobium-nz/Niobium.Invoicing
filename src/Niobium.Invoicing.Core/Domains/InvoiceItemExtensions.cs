@@ -2,8 +2,19 @@
 
 namespace Niobium.Invoicing.Domains
 {
+    /// <summary>
+    /// Formats stored line values for HTML and notification templates.
+    /// </summary>
     internal static class InvoiceItemExtensions
     {
+        /// <summary>
+        /// Formats stored subject, description, unit price, quantity and line total.
+        /// </summary>
+        /// <param name="invoiceItem">Line whose stored values are formatted.</param>
+        /// <returns>The line template-key dictionary.</returns>
+        /// <remarks>
+        /// Uses stored LineTotalCents rather than recalculating it; unsupported display currencies can fail.
+        /// </remarks>
         public static IReadOnlyDictionary<string, string> BuildTemplateParameters(this InvoiceItem invoiceItem)
         {
             return new Dictionary<string, string>
