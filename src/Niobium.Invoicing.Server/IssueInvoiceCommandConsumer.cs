@@ -7,8 +7,24 @@ using Niobium.Platform.ServiceBus;
 
 namespace Niobium.Invoicing.Server;
 
+/// <summary>
+/// Consumes trusted private invoice commands from the issueinvoicecommand queue.
+/// </summary>
+/// <param name="flow">Application flow invoked by this trigger.</param>
+/// <param name="logger">Logger for command parse/validation failures.</param>
 public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCommandConsumer> logger)
 {
+    /// <summary>
+    /// Parses and normalizes a trusted invoice command, then runs issuance with its embedded customer.
+    /// </summary>
+    /// <param name="message">Received Service Bus message containing direct command JSON.</param>
+    /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
+    /// <returns>A task completing after issuance.</returns>
+    /// <remarks>
+    /// Requires exact application/json content type. Does not validate an end-user principal or maintain an
+    /// inbox. Exceptions are left to Functions message handling.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The message cannot be parsed by the helper or fails validation.</exception>
     [Function(nameof(IssueInvoiceCommandConsumer))]
     public async Task Run(
         [ServiceBusTrigger("issueinvoicecommand")]

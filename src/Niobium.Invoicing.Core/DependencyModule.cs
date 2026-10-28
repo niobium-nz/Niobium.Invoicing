@@ -7,10 +7,22 @@ using Niobium.Messaging;
 
 namespace Niobium.Invoicing
 {
+    /// <summary>
+    /// Registers invoice domains, flows, repositories, profile access and billing options.
+    /// </summary>
     public static class DependencyModule
     {
+        /// <summary>
+        /// Process-wide guard preventing repeated registration by this module.
+        /// </summary>
         private static volatile bool loaded;
 
+        /// <summary>
+        /// Registers table/profile infrastructure and binds the BillingOptions section.
+        /// </summary>
+        /// <typeparam name="TBuilder">Host builder type supporting the required registrations.</typeparam>
+        /// <param name="builder">Host builder receiving the service registrations.</param>
+        /// <returns>The supplied builder for further configuration.</returns>
         public static TBuilder AddCore<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
         {
             Database.StorageTable.DependencyModule.AddDatabase(builder);
@@ -19,6 +31,16 @@ namespace Niobium.Invoicing
             return builder;
         }
 
+        /// <summary>
+        /// Registers Core components once per process and selects development messaging behavior.
+        /// </summary>
+        /// <typeparam name="TBuilder">Host builder type supporting the required registrations.</typeparam>
+        /// <param name="builder">Host builder receiving the service registrations.</param>
+        /// <param name="options">Optional callback binding billing configuration.</param>
+        /// <returns>The supplied builder, unchanged on subsequent registration calls.</returns>
+        /// <remarks>
+        /// The static guard is shared by host builders; development also enables IdentityModel PII logging.
+        /// </remarks>
         private static TBuilder AddCore<TBuilder>(this TBuilder builder, Action<BillingOptions>? options) where TBuilder : IHostApplicationBuilder
         {
             if (loaded)

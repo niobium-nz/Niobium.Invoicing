@@ -12,10 +12,22 @@ using Niobium.Platform.StorageTable;
 
 namespace Niobium.Invoicing.Server
 {
+    /// <summary>
+    /// Composes Functions infrastructure, identity, table entitlements and notification transport.
+    /// </summary>
     public static class DependencyModule
     {
+        /// <summary>
+        /// Process-wide guard preventing repeated registration by this module.
+        /// </summary>
         private static volatile bool loaded;
 
+        /// <summary>
+        /// Registers Functions, identity, profile, messaging, table support and Core services.
+        /// </summary>
+        /// <typeparam name="TBuilder">Host builder type supporting the required registrations.</typeparam>
+        /// <param name="builder">Host builder receiving the service registrations.</param>
+        /// <returns>The supplied host builder.</returns>
         public static TBuilder AddInvoicing<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
         {
             Platform.Functions.DependencyModule.AddPlatform(builder);
@@ -29,6 +41,18 @@ namespace Niobium.Invoicing.Server
             return builder;
         }
 
+        /// <summary>
+        /// Registers resource ownership controls, default table grants and the notification broker once per
+        /// process.
+        /// </summary>
+        /// <typeparam name="TBuilder">Host builder type supporting the required registrations.</typeparam>
+        /// <param name="builder">Host builder receiving the service registrations.</param>
+        /// <param name="options">Accepted binding callback; not invoked by this overload.</param>
+        /// <returns>The supplied builder.</returns>
+        /// <remarks>
+        /// The static guard is shared across builders. Billing options are configured by Core; this overload
+        /// does not invoke its options callback.
+        /// </remarks>
         private static TBuilder AddInvoicing<TBuilder>(this TBuilder builder, Action<BillingOptions>? options) where TBuilder : IHostApplicationBuilder
         {
             if (loaded)

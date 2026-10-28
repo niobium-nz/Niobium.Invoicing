@@ -4,8 +4,22 @@ using System.Text;
 
 namespace Niobium.Invoicing.Domains
 {
+    /// <summary>
+    /// Builds invoice-link tokens and invoice template parameters from a snapshot.
+    /// </summary>
     internal static class InvoiceExtensions
     {
+        /// <summary>
+        /// Derives the invoice-link token from the supplied invoice, ordered line state and secret input.
+        /// </summary>
+        /// <param name="invoice">Stored invoice snapshot supplying identity, monetary and presentation data.</param>
+        /// <param name="items">Ordered line sequence used in token derivation.</param>
+        /// <param name="salt">Secret input satisfying the helper's prefix-length requirement.</param>
+        /// <returns>The derived link token.</returns>
+        /// <remarks>
+        /// Reconstruction depends on the same inputs and item order. This helper does not attach an expiry or
+        /// validate ownership.
+        /// </remarks>
         public static string BuildAccessToken(this Invoice invoice, IEnumerable<InvoiceItem> items, string salt)
         {
             StringBuilder data = new();
@@ -24,6 +38,19 @@ namespace Niobium.Invoicing.Domains
             return SHA.SHA256Hash(data.ToString(), secret, 16);
         }
 
+        /// <summary>
+        /// Builds display strings from the stored invoice snapshot, including tax-inclusive total and
+        /// outstanding balance.
+        /// </summary>
+        /// <param name="invoice">Stored invoice snapshot supplying identity, monetary and presentation data.</param>
+        /// <param name="timeZone">Timezone used for date display.</param>
+        /// <param name="culture">Culture used for date presentation.</param>
+        /// <returns>Uppercase template keys mapped to display strings.</returns>
+        /// <remarks>
+        /// Uses stored totals and clamps displayed due to zero after overpayment. Missing optional values
+        /// become empty strings. Billing cycle changes presentation only; unsupported culture/country/currency
+        /// values can fail.
+        /// </remarks>
         public static IReadOnlyDictionary<string, string> BuildTemplateParameters(this Invoice invoice, TimeZoneInfo timeZone, CultureInfo culture)
         {
             var parameters = new Dictionary<string, string>
