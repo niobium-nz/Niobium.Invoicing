@@ -2,34 +2,28 @@
 
 ## Workflow eligibility and side effects
 
-These are **Observed source declarations**, not verified GitHub/Azure settings or deployed state. Owner-confirmed: test/prod have separate resource groups/prefixes (Q06), current checks are unit tests, and integration tests are planned before promotion (Q14). External reviewers, approvals, branch rules and actual credential grants remain Unknown.
+These are source declarations, not verified GitHub/Azure settings or deployed state. Test/prod resource separation is owner-confirmed (Q06). Environment reviewers, protections and actual credential grants remain unknown.
 
-| Workflow | Trigger / condition | Actions and artifacts |
-| --- | --- | --- |
-| [Azure Deployment](../.github/workflows/azure-deploy.yml) | Push `branches: ["*"]`; pull_request targeting main; workflow_dispatch | Test job always eligible. Prod if main ref **or pull_request**; no `needs: test`. Both package/provision/deploy. |
-| [Package Publish](../.github/workflows/package-publish.yml) | Push `branches: ["*"]`; workflow_dispatch | Non-main prerelease job, main production release job; restore/build, NuGet OIDC login, conditional package push. No PR trigger. |
+Azure Deployment now runs restore/build, unit tests and local Azurite/HTTP component integration checks in `verify`, then permits the test deployment through `needs: verify`. Production depends on test deployment and is eligible only on main push or main manual dispatch. PRs cannot select production. A meaningful post-deployment integration gate is still missing (B07); B04 is partial, not a completed production-promotion design.
 
-The literal single-asterisk branch pattern is preserved here: do not rewrite it as `**` or assume it matches every slash-containing branch. There are no workflow-level path filters. Eligibility matrix for events that match those declarations:
-
-| Event | Deployment test | Deployment prod | Package job |
+| Matching event | Test deployment | Production deployment | Package workflow |
 | --- | --- | --- | --- |
-| Push main | Yes | Yes, independent of test | Production release |
-| Push matching non-main branch | Yes | No | Prerelease |
-| PR targeting main | Yes | Yes under current condition | None |
-| Manual dispatch on main | Yes | Yes | Production release when that workflow dispatched |
-| Manual dispatch on another ref | Yes | No | Prerelease when that workflow dispatched |
+| Push main | After verification | After successful test deployment | Production release |
+| Push matching non-main branch | After verification | No | Prerelease |
+| PR targeting main | After verification | No | No PR trigger |
+| Manual dispatch on main | After verification | After successful test deployment | Production release if that workflow is dispatched |
+| Manual dispatch on another ref | After verification | No | Prerelease if that workflow is dispatched |
+| Markdown/docs-only push or PR | Filtered out | Filtered out | Push filtered out |
 
-Deployment jobs use separate concurrency groups (`test-deploy`, `production-deploy`) with cancel-in-progress false. Package groups are `pre-release-publish` and `prod-release-publish`, with cancellation true. Concurrency groups do not create a test->prod dependency.
+Both workflows exclude `**/*.md` and `docs/**` on automatic triggers. C# comments still count as code-path changes. The literal push branch pattern `["*"]` is unchanged; do not assume it matches slash-containing branches. Manual dispatch bypasses path filtering. Package publication still has its original version/changed-project rules and does not inherit the deployment verification job.
 
-**Documentation changes have side effects if submitted:** root Markdown can trigger deployment. Contract comments or `src/Niobium.Invoicing.Contracts/README.md` also change the package path and can qualify for NuGet publication. The publish script skips a project on push only if its directory has no diff from the event's before SHA; a new branch uses an empty-tree comparison. Manual publication bypasses that changed-path check. Restore/build/login still precede the script's skip. Do not push/open a PR/dispatch based on an assumption that documentation is ignored.
-
-Q06/Q14 intend PRs to deploy only test, and successful test-environment checks before production. Correcting the prod condition/dependency and implementing integration checks are **planned work**, not changes made here.
+Deployment concurrency groups serialize each environment, with cancellation disabled; they do not themselves provide verification. This task submitted commits with `[skip ci]`, ran local checks, and did not dispatch, deploy, provision, publish or change external environment protections. See the [acceptance ledger](implementation-progress.md) for baseline style failures that still block the normal verification build.
 
 ## Build, tests, packages and identity
 
 Deployment: checkout v4, Azure/setup-azd v2, azure/login v3 and azd federation login, followed by `azd package --no-prompt`, `azd provision --no-state --no-prompt`, `azd deploy --no-prompt`. The workflow grants id-token write and contents read. Login uses GitHub secret names AZURE_CLIENT_ID/TENANT_ID/SUBSCRIPTION_ID; no values are documented. Actual federated credentials/permissions are external.
 
-[azure.yaml](../azure.yaml) prepackage runs `dotnet test --solution ../../Niobium.Invoicing.slnx --configuration Release` in the service context, before deployment. Job name `test` denotes a deployment environment, not a separate integration suite. There are no post-deployment tests in source. The Azure workflow does not explicitly install a .NET SDK; runner availability is an external prerequisite.
+[azure.yaml](../azure.yaml) prepackage runs `dotnet test --solution ../../Niobium.Invoicing.slnx --configuration Release` in the service context, before deployment. Job name `test` denotes a deployment environment, not a separate integration suite. There are no post-deployment tests in source. The verification job explicitly installs .NET 10. Deployment jobs still depend on their runner/azd tooling. The debug EmailInvoice function has been removed, with local compiled-route evidence; no deployed route check was run.
 
 Package publication: checkout v7, setup-dotnet v6 (`10.x.x`), NuGet/login v1. Version is `MAJOR_VERSION.MINOR_VERSION.github.run_number`, plus `-prerelease` off main, passed to build as BUILD_BUILDNUMBER. Contracts has GeneratePackageOnBuild/IsPackable true, repository metadata, embedded untracked sources and snupkg symbols. Only Contracts is selected for push to the public NuGet feed; no explicit symbol-push command is present. Without BUILD_BUILDNUMBER, application project version properties default to 1.0.0.0. Deployment injects SERVICE_VERSION from its workflow buildVersion; that is not proof that assembly/package versions received the same property during azd packaging.
 
