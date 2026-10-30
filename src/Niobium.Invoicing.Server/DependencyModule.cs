@@ -65,7 +65,6 @@ namespace Niobium.Invoicing.Server
             bool isDevelopment = builder.Configuration.IsDevelopmentEnvironment();
             builder.Services.AddResourceControl<OwnershipControl<InvoiceItem, Invoice>>();
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Invoice));
-            builder.Services.GrantDatabaseEntitlementTo(nameof(InvoiceItem));
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billable),
                 DatabasePermissions.Query | DatabasePermissions.Add | DatabasePermissions.Delete);
             builder.Services.GrantDatabasePersonalizedEntitlementTo(nameof(Billee),

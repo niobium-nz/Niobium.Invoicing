@@ -61,5 +61,6 @@ These are **Owner-confirmed requirements**, not claims that every row is enforce
 | R11 | Billees can view via a correct-token link without an account. | Q05/Q13; intended expiry/revocation policy deferred. |
 | R12 | PRs to main deploy only to test; successful test-environment checks precede production. | Q06/Q14; unit checks exist, integration tests and promotion correction planned. |
 | R13 | Retain data for five years and preserve historical versions across updates/soft deletion. | Q08; retention clock, purge and recovery details deferred; not implemented. |
+| R14 | Previously emailed links continue to work where the invoice has a saved token; resends preserve that token. | Q17; saved-token validation/reuse is implemented. No new expiry or legacy recovery for tokenless records is introduced. |
 
 No SLA was committed (Q08). Success metrics, capacity targets, availability/latency targets, support response times and roadmap dates are Unknown. Detailed rounding policy, fractional quantity support, credits/negative amounts and future MCP/payment protocols are accepted deferrals in [decisions](decisions-and-risks.md#accepted-unknowns).

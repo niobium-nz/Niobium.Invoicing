@@ -70,3 +70,25 @@ Performed as a separate reading pass through the published navigation, then chec
 No clean-cache restore, complete offline/isolated host setup, live Azure state, external GitHub protections, production Notification revision, real ETag round-trip, recipient delivery or recovery procedure was verified. Tests do not prove security, production correctness, availability or compliance. Detailed private security findings were not published as exploit descriptions.
 
 The owner accepted [U01-U08](../decisions-and-risks.md#accepted-unknowns) as explicit deferrals. Planned lifecycle, conditional persistence/downstream idempotency, promotion/integration checks, retention/audit, MCP and payment work remain outside this change. Review [product](../product.md), [decisions](../decisions-and-risks.md), then data/API/framework pages before selecting the next implementation task. Review private security findings with the owner before broader access or disclosure. Reinspect workflow triggers before any authorized submission; this handoff does not authorize publication or deployment.
+
+## Security follow-up 2026-10-30
+
+Separate authorization under Q15-Q18 permitted implementation and regression tests for resource grants, stored-token compatibility and HTML encoding. Starting checkout: `/workspace/Niobium.Invoicing`, branch `work`, commit `910fea08ffd2d608e9d9534c4607a2aeaa9c9822`, clean. This follow-up intentionally changes behavior; the comment-only preservation checks above apply to the original documentation bootstrap. Framework/package versions, infrastructure, workflows and build settings remain unchanged. S02 key changes remain deferred.
+
+Environment remains .NET SDK 10.0.403 on Debian 13 linux-x64, using existing restored dependencies. Before changes, Release build passed with zero warnings/errors and all 26 baseline tests passed. After changes:
+
+| Check | Result / limits |
+| --- | --- |
+| Release solution build, same command as above | Passed, zero warnings/errors |
+| Core.Tests MTP run, same command with security-specific output directory | 60 cases passed, zero failed/skipped: Issue 4, Upsert 8, Email 19, HTML 29 |
+| Temporary compiler XML validation, same GenerateDocumentationFile command | Passed, zero warnings/errors |
+| Saved-link compatibility | Legacy stored tokens accepted case-insensitively without regeneration or new expiry; resends preserve tokens even after secret/content changes; tokenless or mismatched access rejected |
+| New token and enqueue ordering | Full-secret/full-identity derivation, stable culture-independent output, token saved before publishing, persistence failure prevents enqueueing, enqueue failure preserves token for retry |
+| Rendering regressions | Encoded text/attributes, safe logo schemes, escaped contact URI values, literal placeholders, unchanged raw notification values |
+| Additional local S01 verification | Eight assertions using actual Server registrations and matched controls/SAS issuer; synthetic principal/key, mocked invoice lookup and empty external entitlement provider. No HTTP host or Azure calls. Verified owned grant/SAS bounds, denied missing/empty/unowned/biller-key partitions and preserved Invoice grant. |
+| Persistence sequencing | Status save uses the new entity/ETag returned from the token save; verified with the real domain and mocked repository, not live Azure storage |
+| Scope, XML and documentation | Complete changed-file review; git diff --check passed. Compiler XML parsed without unresolved cref markers; 437 local Markdown links/anchors and 29 pinned framework file links checked. Changes comprise 14 Markdown files, 10 C# files and the embedded HTML template. |
+
+Sanitized session logs are `invoicing-security-baseline-build.log`, `invoicing-security-baseline-tests.log`, `invoicing-security-build.log`, `invoicing-security-tests.log`, `invoicing-security-xml.log` and `invoicing-security-registration.log` under `/workspace/scratch/`. The extra grant verification project is also outside the repository and is not a permanent CI dependency. Build-generated package files remain local; no publication was performed.
+
+No live credentials, queues, cloud data, browser execution or deployed security posture were tested. Existing access tokens/SAS are not revoked by the code change, and external grants remain outside verified scope. Legacy saved tokens retain their original properties for compatibility. Historical token recovery, expiry/revocation policy, ETag integration behavior and concurrency across issuance remain separate concerns. No application source or framework changes beyond the approved follow-up were made.

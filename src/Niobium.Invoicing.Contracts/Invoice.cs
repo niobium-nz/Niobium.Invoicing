@@ -280,7 +280,8 @@ namespace Niobium.Invoicing
         public DateTimeOffset? Delivered { get; set; }
 
         /// <summary>
-        /// Stored invoice-link token assigned after enqueueing; no explicit expiry field is present.
+        /// Stored invoice-link token required for public viewing and reused on resends. New tokens are saved
+        /// before notification enqueueing; no explicit expiry field is present.
         /// </summary>
         public string? Token { get; set; }
 

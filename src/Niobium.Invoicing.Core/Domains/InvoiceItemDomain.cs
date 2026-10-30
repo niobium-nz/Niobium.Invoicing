@@ -33,7 +33,7 @@ namespace Niobium.Invoicing.Domains
         }
 
         /// <summary>
-        /// Substitutes formatted line values into the embedded invoice-item block.
+        /// Substitutes HTML-encoded line values into the embedded invoice-item block.
         /// </summary>
         /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
         /// <returns>The rendered line fragment.</returns>
@@ -44,11 +44,7 @@ namespace Niobium.Invoicing.Domains
         {
             string html = await GetInvoiceLineTemplateAsync(cancellationToken);
             IReadOnlyDictionary<string, string> parameters = await BuildNotificationParametersAsync(cancellationToken);
-            foreach (KeyValuePair<string, string> parameter in parameters)
-            {
-                html = html.Replace($"{{{{{parameter.Key}}}}}", parameter.Value);
-            }
-            return html;
+            return HtmlTemplate.Render(html, parameters);
         }
 
         /// <summary>

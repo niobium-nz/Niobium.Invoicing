@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.1/css/bootstrap.min.css"
           integrity="sha512-iqRdf+0KMFmNZgdsA+8bz1MWIIXQBUCavPYVSVI83fcVfH2Y2PnNooLN04bgTNoUiQvIzidiIHJAcIP/uAEV9w=="
@@ -546,7 +547,7 @@
                     {{TERMS}}
                     * {{PAYMENT_INSTRUCTIONS}}<br>
                     * {{DUE_BY}}<br>
-                    * If you have any questions concerning this invoice, contact {{CONTACT_NAME}} <a href="tel:{{CONTACT_PHONE_NUMBER}}">{{CONTACT_PHONE_NUMBER}}</a> <a href="mailto:{{CONTACT_EMAIL_ADDRESS}}">{{CONTACT_EMAIL_ADDRESS}}</a>
+                    * If you have any questions concerning this invoice, contact {{CONTACT_NAME}} <a href="{{CONTACT_PHONE_HREF}}">{{CONTACT_PHONE_NUMBER}}</a> <a href="{{CONTACT_EMAIL_HREF}}">{{CONTACT_EMAIL_ADDRESS}}</a>
                 </div>
                 <div class="invoice-footer">
                     <p class="text-center m-b-5 f-w-600">

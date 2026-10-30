@@ -8,7 +8,7 @@ Observed source contract, not an HTTP integration-test result. [host.json](../sr
 | --- | --- | --- | --- |
 | `POST /invoices` | [NewInvoice.Run](../src/Niobium.Invoicing.Server/NewInvoice.cs); JSON `IssueInvoiceRequest` | Access-token principal needs GUID Sid/GroupSid matching BillerID/Tenant; validation helper; decoded invoice age check | `OkResult` (200), no response invoice body. Persists invoice/items; forces NotifyBillee=false. |
 | `GET /email/{issuer}/invoices/{invoice}` | [EmailInvoice.Run](../src/Niobium.Invoicing.Server/EmailInvoice.cs); GUID issuer, long invoice ID | Functions authorization level Function; no additional biller-principal check in handler | Status 201, no body, even when recipient email is blank and flow skips. Can enqueue and update token/Delivered. Owner intends debug-only, not production. |
-| `GET /{issuer}/invoices/{invoice}?token=...` | [GetHTMLInvoice.Run](../src/Niobium.Invoicing.Server/GetHtmlInvoice.cs) | Anonymous; rejects blank token, nonpositive ID or empty issuer with 404; domain checks link token | 200 `text/html`; reads invoice/items, no write. No billee account required. |
+| `GET /{issuer}/invoices/{invoice}?token=...` | [GetHTMLInvoice.Run](../src/Niobium.Invoicing.Server/GetHtmlInvoice.cs) | Anonymous; rejects blank token, nonpositive ID or empty issuer with 404; domain requires a matching saved link token | 200 `text/html`; reads invoice/items, no write. No billee account required. |
 | `GET /token` | [Placeholder.Auth](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by AccessTokenMiddleware | ID-token verification and Sid/GroupSid; roles/entitlements lookup | 200 with access token in Authorization response header; fallback placeholder returns empty 200. |
 | `GET /rsas` | [Placeholder.RSAS](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by ResourceTokenMiddleware | Access principal, requested resource entitlement/control | 200 JSON StorageSignature; fallback placeholder returns empty 200. |
 
@@ -26,7 +26,7 @@ Error paths differ:
 
 - `NewInvoice` validation failure returns 400 `application/json`, a dictionary mapping member names to arrays of messages.
 - Framework HTTP error middleware catches Niobium `ApplicationException`, returns numeric `code`, `message`, and `reference` (or a validation payload for a validation reference), using HTTP status equal to its code when valid, otherwise 500.
-- Missing biller/billee causes the domain's NotFound error; delivered-domain update causes Conflict; token mismatch against stored token causes Forbidden; missing embedded template causes InternalServerError.
+- Missing biller/billee causes the domain's NotFound error; delivered-domain update causes Conflict; missing or mismatched saved link token causes Forbidden; missing embedded template causes InternalServerError.
 - Framework/Azure/JSON/timezone/culture exceptions outside that exception type propagate to the host. Do not promise one universal error schema.
 - Queue handlers throw on invalid parse/validation; HTTP middleware does not turn queue failures into HTTP responses.
 
@@ -69,11 +69,13 @@ Default Server registrations ([DependencyModule](../src/Niobium.Invoicing.Server
 | Resource | Default entitlement | Additional scope/control |
 | --- | --- | --- |
 | Invoice | Query | Personalized to user/biller partition |
-| InvoiceItem | Non-personalized Query descriptor | Custom OwnershipControl can grant a requested item partition after checking Invoice existence under Sid; it is not the sole grant path |
+| InvoiceItem | No table entitlement descriptor | Custom OwnershipControl grants Query for a specified item partition after checking Invoice existence under Sid |
 | Billee | Query, Add, Delete, Update | Personalized user/biller partition |
 | Billable | Query, Add, Delete | Personalized user/biller partition |
 
 SignatureService evaluates suitable controls in registration order and accepts the first non-null grant. Default table control and custom ownership control are alternative grant providers, not automatically cumulative checks. Role/Entitlement data can add externally managed grants; this table is the source registration, not an inventory of deployed permissions. Resource SAS defaults to one day in matched SignatureService, while access tokens default to eight hours. Intended link-token lifetime is a separate deferred policy. The direct-table client's query/paging implementation is outside this repository.
+
+Q15 removes the application's general InvoiceItem entitlement. For newly described application permissions, item access uses the ownership check; an omitted partition produces no ownership grant. Existing access tokens/SAS and external entitlements are separate rollout considerations. Q16 defers the item-key uniqueness risk.
 
 ## Incoming command
 
@@ -93,7 +95,7 @@ Declared incoming queue settings: lock 5 minutes, TTL 14 days, max delivery coun
 
 ## Outgoing notification and retries
 
-`EmailFlow.RunAsync` sends to the lower-case type-name queue `notifycommand` using `NotificationQueueOptions`. Body is `NotifyCommand`: `id = invoiceID@biller`, `tenant = issuer/biller`, `channel = "Invoice"`, destination email/name and `parameters`. Parameters contain invoice display strings plus `INVOICE_URL` and an `INVOICE_ITEM` array of subject/description/unit-price/quantity/line-total dictionaries. Its optional contract `Token` is not assigned by this app; the invoice-link token is inside the URL and later saved on the invoice.
+`EmailFlow.RunAsync` sends to the lower-case type-name queue `notifycommand` using `NotificationQueueOptions`. Body is `NotifyCommand`: `id = invoiceID@biller`, `tenant = issuer/biller`, `channel = "Invoice"`, destination email/name and `parameters`. Parameters contain unencoded invoice display strings plus `INVOICE_URL` and an `INVOICE_ITEM` array of subject/description/unit-price/quantity/line-total dictionaries. Its optional contract `Token` is not assigned by this app; the saved invoice-link token is URI-escaped inside the URL.
 
 The consumed Notification.Contracts 2.0.7 contract has these additional constraints (source-linked in [integration](niobium-integration.md#notification-boundary)):
 
@@ -111,8 +113,8 @@ Inherited NotifyCommand domain-event metadata (Occurried, Source, Target) is ign
 
 Both `MessagingEntry.ID` and `NotifyCommand.ID` use the full invoice identity. The matched broker maps the envelope ID to ServiceBus `MessageId`, sends JSON and may include a type marker and available bearer token in application properties. This app sets no explicit correlation ID, session ID, schedule or retry counter. SDK send retries default to five attempts beyond the original request with configured maximum delay; they do not create business idempotency.
 
-The flow skips blank recipient email, otherwise enqueues before recording token/Delivered. It does not wait for provider acceptance or recipient receipt. Development messaging may only log the payload. See [Notification source boundary](niobium-integration.md#notification-boundary).
+The flow skips blank recipient email. Otherwise it reuses the saved link token or persists a new token before enqueueing, and records Delivered after enqueueing. Token-save failure prevents publishing; enqueue failure leaves the saved token available for retry; status-save failure can still follow an accepted message. It does not wait for provider acceptance or recipient receipt. Development messaging may only log the payload. See [Notification source boundary](niobium-integration.md#notification-boundary) and [link compatibility](security.md#invoice-link-compatibility).
 
-**Q11 intended behavior:** recognise retries against the existing invoice, conditionally preserve its state, and publish the same message again. Reconstruction from preserved data is the planned approach. Keep all reconstruction inputs stable when implementing this, including line data/order, endpoint, token configuration and formatting; no immutable message snapshot exists today. Downstream message-ID storage is planned, and broker detection may be enabled later. Claim/send/crash recovery still needs design; repeated publishing is not itself a defect under this requirement.
+**Q11 intended behavior:** recognise retries against the existing invoice, conditionally preserve its state, and publish the same message again. Reconstruction from preserved data is the planned approach. Keep all reconstruction inputs stable when implementing this, including line data/order, endpoint and formatting; no immutable message snapshot exists today. Q17 now preserves saved link tokens across resends and secret changes, but does not implement conditional invoice upsert. Downstream message-ID storage is planned, and broker detection may be enabled later. Claim/send/crash recovery still needs design; repeated publishing is not itself a defect under this requirement.
 
 No OpenAPI/AsyncAPI generation, route version prefix or message-version field is configured. Contract/package changes need consumer compatibility review and targeted serialization tests. Machine-readable specifications and new tooling were outside the approved documentation scope.

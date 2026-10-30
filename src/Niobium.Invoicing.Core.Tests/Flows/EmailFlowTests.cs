@@ -7,6 +7,8 @@ using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.Options;
 using Niobium.Messaging;
 using Niobium.Notification;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Niobium.Invoicing.Core.Tests.Flows
 {
@@ -186,10 +188,9 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             // When
             await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
 
-            // Then token exists and looks like a SHA256-derived hex of length 16
+            // New links have an explicit version and a full SHA-256 HMAC.
             entity.Token.Should().NotBeNullOrWhiteSpace();
-            entity.Token!.Length.Should().Be(16);
-            entity.Token!.All(c => char.IsDigit(c) || (c >= 'a' && c <= 'f')).Should().BeTrue();
+            entity.Token.Should().MatchRegex(@"^v2\.[0-9a-f]{64}$");
         }
 
         [TestMethod]
@@ -271,7 +272,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
         }
 
         [TestMethod]
-        public async Task Resent_after_items_change_generates_new_token()
+        public async Task Resent_after_items_change_preserves_existing_link_token()
         {
             // Given an invoice sent once, then items change
             Guid issuer = Guid.NewGuid();
@@ -293,10 +294,229 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             // When sending again
             await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
 
-            // Then token changes and persistence reflects new token
+            // Existing emailed links remain usable even if line data has changed.
             string secondToken = entity.Token!;
-            secondToken.Should().NotBe(firstToken);
+            secondToken.Should().Be(firstToken);
             arranged.invoiceRepo.Verify(r => r.CreateAsync(It.Is<IEnumerable<Invoice>>(e => e.Any(x => x.Token == secondToken)), false, null, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+        }
+
+        [TestMethod]
+        public async Task Legacy_token_is_reused_and_resends_publish_the_same_message()
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
+            entity.Token = "0123456789ABCDEF";
+            entity.Delivered = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            var arranged = ArrangeEmailFlow(entity, [], new BillingOptions
+            {
+                InvoiceTokenSecretSalt = string.Empty,
+                GetInvoiceEndpoint = "https://invoice.example.invalid"
+            });
+            List<MessagingEntry<NotifyCommand>> published = [];
+            arranged.broker
+                .Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, _) => published.AddRange(messages))
+                .Returns(Task.CompletedTask);
+
+            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+
+            entity.Token.Should().Be("0123456789ABCDEF");
+            published.Should().HaveCount(2);
+            published[0].ID.Should().Be(entity.GetFullID());
+            published[1].ID.Should().Be(published[0].ID);
+            JsonSerializer.Serialize(published[1].Value).Should().Be(JsonSerializer.Serialize(published[0].Value));
+            published[0].Value!.Parameters["INVOICE_URL"].ToString().Should().Be($"https://invoice.example.invalid/{issuer}/invoices/{entity.GetID()}?token=0123456789ABCDEF");
+            (await arranged.domain.BuildHTMLAsync("0123456789abcdef", CancellationToken.None)).Should().Contain(entity.BillerName);
+        }
+
+        [TestMethod]
+        public async Task New_token_is_saved_before_enqueue_and_delivery_status_afterwards()
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
+            var arranged = ArrangeEmailFlow(entity, []);
+            List<string> steps = [];
+            string? savedToken = null;
+            arranged.invoiceRepo
+                .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<Invoice>, bool, DateTimeOffset?, CancellationToken>((models, _, _, _) =>
+                {
+                    Invoice saved = models.Single();
+                    savedToken = saved.Token;
+                    steps.Add(saved.Delivered == null ? "token saved" : "status saved");
+                })
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, DateTimeOffset? _, CancellationToken _) => models);
+            arranged.broker
+                .Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, _) =>
+                {
+                    savedToken.Should().NotBeNullOrWhiteSpace();
+                    messages.Single().Value!.Parameters["INVOICE_URL"].ToString().Should().EndWith($"?token={savedToken}");
+                    entity.Delivered.Should().BeNull();
+                    steps.Add("enqueued");
+                })
+                .Returns(Task.CompletedTask);
+
+            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+
+            steps.Should().Equal("token saved", "enqueued", "status saved");
+        }
+
+        [TestMethod]
+        public async Task Token_save_failure_prevents_enqueue_and_same_domain_can_retry()
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
+            var arranged = ArrangeEmailFlow(entity, []);
+            arranged.invoiceRepo
+                .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("Synthetic persistence failure."));
+
+            Func<Task> act = () => arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+            await act.Should().ThrowAsync<InvalidOperationException>();
+
+            entity.Token.Should().BeNull();
+            entity.Delivered.Should().BeNull();
+            arranged.broker.Verify(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()), Times.Never);
+            arranged.invoiceRepo
+                .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, DateTimeOffset? _, CancellationToken _) => models);
+
+            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+
+            arranged.broker.Verify(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestMethod]
+        public async Task Status_save_uses_the_entity_returned_after_token_persistence()
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
+            entity.ETag = "initial-version";
+            var arranged = ArrangeEmailFlow(entity, []);
+            List<string?> versions = [];
+            arranged.invoiceRepo
+                .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) =>
+                {
+                    Invoice pending = models.Single();
+                    versions.Add(pending.ETag);
+                    Invoice saved = JsonSerializer.Deserialize<Invoice>(JsonSerializer.Serialize(pending))!;
+                    saved.ETag = $"saved-version-{versions.Count}";
+                    return new[] { saved };
+                });
+
+            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+
+            versions.Should().Equal("initial-version", "saved-version-1");
+            Invoice latest = await arranged.domain.GetEntityAsync();
+            latest.ETag.Should().Be("saved-version-2");
+            latest.Token.Should().StartWith("v2.");
+            latest.Delivered.Should().NotBeNull();
+            arranged.invoiceRepo.Verify(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), It.IsAny<bool>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [TestMethod]
+        public async Task Enqueue_failure_keeps_saved_token_for_retry_after_secret_change()
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
+            BillingOptions options = new()
+            {
+                InvoiceTokenSecretSalt = "synthetic-secret-before-retry",
+                GetInvoiceEndpoint = "https://invoice.example.invalid"
+            };
+            var arranged = ArrangeEmailFlow(entity, [], options);
+            arranged.broker
+                .Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("Synthetic enqueue failure."));
+
+            Func<Task> act = () => arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+            await act.Should().ThrowAsync<InvalidOperationException>();
+            string token = entity.Token!;
+            token.Should().StartWith("v2.");
+            entity.Delivered.Should().BeNull();
+            options.InvoiceTokenSecretSalt = string.Empty;
+            arranged.broker
+                .Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+
+            entity.Token.Should().Be(token);
+            entity.Delivered.Should().NotBeNull();
+        }
+
+        [TestMethod]
+        [DataRow("secret")]
+        [DataRow("biller")]
+        [DataRow("tenant")]
+        [DataRow("invoice")]
+        public async Task New_tokens_depend_on_the_full_secret_and_invoice_identity(string changedField)
+        {
+            Guid issuer = Guid.Parse("11111111-2222-3333-4444-555555555555");
+            Invoice first = MakeInvoice(issuer, Guid.NewGuid());
+            Invoice second = MakeInvoice(issuer, first.Billee);
+            string firstSecret = "same-prefix-synthetic-secret-A";
+            string secondSecret = firstSecret;
+            switch (changedField)
+            {
+                case "secret": secondSecret = "same-prefix-synthetic-secret-B"; break;
+                case "biller": second.Biller = Guid.Parse("aaaaaaaa-2222-3333-4444-555555555555"); break;
+                case "tenant": second.Tenant = Guid.NewGuid(); break;
+                case "invoice": second.Created = first.Created.AddMilliseconds(1); break;
+            }
+            var a = ArrangeEmailFlow(first, []);
+            var b = ArrangeEmailFlow(second, []);
+
+            string tokenA = await a.domain.EnsureAccessTokenAsync(firstSecret, CancellationToken.None);
+            string tokenB = await b.domain.EnsureAccessTokenAsync(secondSecret, CancellationToken.None);
+
+            tokenA.Should().NotBe(tokenB);
+        }
+
+        [TestMethod]
+        public async Task Same_identity_and_secret_generate_stable_tokens_across_cultures()
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice first = MakeInvoice(issuer, Guid.NewGuid());
+            Invoice second = MakeInvoice(issuer, first.Billee);
+            var a = ArrangeEmailFlow(first, []);
+            var b = ArrangeEmailFlow(second, []);
+            CultureInfo original = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-NZ");
+                string tokenA = await a.domain.EnsureAccessTokenAsync("synthetic-repeatable-secret", CancellationToken.None);
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
+                string tokenB = await b.domain.EnsureAccessTokenAsync("synthetic-repeatable-secret", CancellationToken.None);
+                tokenA.Should().Be(tokenB);
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = original;
+            }
+        }
+
+        [TestMethod]
+        [DataRow("")]
+        [DataRow("   ")]
+        public async Task New_notification_requires_a_nonblank_secret(string secret)
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
+            var arranged = ArrangeEmailFlow(entity, [], new BillingOptions
+            {
+                InvoiceTokenSecretSalt = secret,
+                GetInvoiceEndpoint = "https://invoice.example.invalid"
+            });
+
+            Func<Task> act = () => arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+
+            await act.Should().ThrowAsync<ArgumentException>();
+            arranged.broker.Verify(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()), Times.Never);
+            entity.Token.Should().BeNull();
         }
     }
 }

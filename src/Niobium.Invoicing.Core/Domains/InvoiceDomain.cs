@@ -71,13 +71,15 @@ namespace Niobium.Invoicing.Domains
         /// <returns>HTML containing the invoice-item template block for later replacement.</returns>
         /// <remarks>
         /// Loads and caches the embedded template; the stored Template selector is not used. This method does
-        /// not establish a recipient principal or an expiry policy. Formatting failures propagate.
+        /// not establish a recipient principal or an expiry policy. A saved token is required, including for
+        /// undelivered invoices. Text is HTML-encoded and URL attributes are prepared separately. Formatting
+        /// failures propagate.
         /// </remarks>
-        /// <exception cref="Niobium.ApplicationException">The stored-token comparison rejects the supplied token, or the embedded template is missing.</exception>
+        /// <exception cref="Niobium.ApplicationException">A token is missing or does not match, or the embedded template is missing.</exception>
         public async Task<string> BuildHTMLAsync(string token, CancellationToken cancellationToken)
         {
             Invoice entity = await GetEntityAsync(cancellationToken);
-            if (!string.IsNullOrWhiteSpace(entity.Token) && !entity.Token.Equals(token, StringComparison.OrdinalIgnoreCase))
+            if (!entity.MatchesAccessToken(token))
             {
                 throw new ApplicationException(InternalError.Forbidden, "Invalid token.") { Reference = entity.GetFullID() };
             }
@@ -86,14 +88,45 @@ namespace Niobium.Invoicing.Domains
             CultureInfo culture = CultureInfo.GetCultureInfo(entity.Culture, true);
             htmlTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.InvoiceTemplateResourceName, cancellationToken)
                 ?? throw new ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
-            var parameters = entity.BuildTemplateParameters(timezone, culture);
-            var html = htmlTemplate;
-            foreach (var parameter in parameters)
+            Dictionary<string, string> parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
+            parameters["BILLER_LOGO"] = HtmlTemplate.ImageUrl(entity.BillerLogo);
+            parameters["CONTACT_EMAIL_HREF"] = HtmlTemplate.ContactUrl("mailto", entity.ContactEmailAddress);
+            parameters["CONTACT_PHONE_HREF"] = HtmlTemplate.ContactUrl("tel", entity.ContactPhoneNumber);
+            return HtmlTemplate.Render(htmlTemplate, parameters);
+        }
+
+        /// <summary>
+        /// Reuses the saved link token, or creates and saves one before a notification can be queued.
+        /// </summary>
+        /// <param name="salt">Full secret used only when a token has not previously been saved.</param>
+        /// <param name="cancellationToken">Token forwarded to loading and persistence.</param>
+        /// <returns>The existing token unchanged, or the newly persisted v2 token.</returns>
+        /// <remarks>
+        /// Existing emailed links remain usable across resends and secret changes. No delivery timestamp is
+        /// set here. Persistence failures propagate before enqueueing; this does not make the wider invoice
+        /// workflow atomic or provide a new concurrency policy.
+        /// </remarks>
+        public async Task<string> EnsureAccessTokenAsync(string salt, CancellationToken cancellationToken)
+        {
+            Invoice entity = await GetEntityAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(entity.Token))
             {
-                html = html.Replace($"{{{{{parameter.Key}}}}}", parameter.Value);
+                return entity.Token;
             }
 
-            return html;
+            string? previousToken = entity.Token;
+            string token = entity.BuildAccessToken(salt);
+            entity.Token = token;
+            try
+            {
+                await SaveAsync(cancellationToken: cancellationToken);
+            }
+            catch
+            {
+                entity.Token = previousToken;
+                throw;
+            }
+            return token;
         }
 
         /// <summary>
@@ -111,7 +144,7 @@ namespace Niobium.Invoicing.Domains
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(entity.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(entity.Culture, true);
             var parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
-            parameters.Add("INVOICE_URL", $"{config.Value.GetInvoiceEndpoint}/{entity.Biller}/invoices/{entity.GetID()}?token={token}");
+            parameters.Add("INVOICE_URL", $"{config.Value.GetInvoiceEndpoint}/{entity.Biller}/invoices/{entity.GetID()}?token={Uri.EscapeDataString(token)}");
             return parameters;
         }
 

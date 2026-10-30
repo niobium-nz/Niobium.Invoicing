@@ -2,13 +2,17 @@
 
 ## Scope and method
 
-The [central baseline](../README.md#baseline-and-evidence-language) identifies the analyzed commit. All **68 tracked files** were inventoried; every handwritten first-party implementation and test file was read. Configuration values were deliberately redacted where appropriate. No first-party source file remains unread or blocked. This is source-review coverage, not a claim of production validation.
+The [central baseline](../README.md#baseline-and-evidence-language) identifies the original analyzed commit. At that discovery baseline, all **68 tracked files** were inventoried; every handwritten first-party implementation and test file was read. Configuration values were deliberately redacted where appropriate. No first-party source file remained unread or blocked. This is source-review coverage, not a claim of production validation. The ledger and 242-site XML inventory below describe that documentation bootstrap, not a frozen count for subsequent code changes.
 
 Bounded passes covered build/entry points, contracts/domain/flows, tests/templates, framework provenance/transitive behavior, infrastructure/workflows/configuration, and targeted history. No tracked generated, vendored or binary implementation was found. Initial ignored artifacts comprised 604 files (493 bin, 111 obj): generated code/binaries were excluded from narrative reading, while relevant assets, imported build targets, runtime configs and Functions metadata were inspected. No unrelated local files or credentials were absorbed into public evidence.
 
 Local history was non-shallow. Flow implementation appeared in migration commit `f0cf846bd65d3631e24c75f6701628952f44b43e`; it did not establish earlier business rationale. Targeted issue/PR searches for ambiguities in the application/framework returned no matching discussions. This is not an exhaustive audit of every historical discussion. Live resources, external GitHub protections, Store/UI implementation and production Notification revision were outside verified scope.
 
 Framework work followed consumed behavior only. NuGet metadata/PDB SourceLink matched two Niobium commits and a separate Notification.Contracts commit; see [provenance](../niobium-integration.md). Unrelated framework modules were not reviewed or documented.
+
+## Security follow-up coverage
+
+The 2026-10-30 follow-up reviewed every changed implementation/test file and the matched framework grant, SAS issuance, domain save and table-update paths. It adds [HtmlTemplate](../../src/Niobium.Invoicing.Core/Domains/HtmlTemplate.cs) for single-pass encoding and URL preparation; changes InvoiceDomain/InvoiceExtensions/EmailFlow for saved-token enforcement and reuse; updates item rendering and the embedded template; removes the InvoiceItem general grant from Server registration; and corrects the Token property's XML contract. New handwritten application types/methods have XML comments; test code remains excluded. No framework or generated source was edited. Q15-Q18 and the [follow-up validation](validation.md#security-follow-up-2026-10-30) record scope and limitations.
 
 ## File ledger
 

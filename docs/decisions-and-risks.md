@@ -20,6 +20,12 @@ These entries preserve owner answers during discovery and approval. They are ret
 | Q12 | Each biller belongs to exactly one management group. | Required ownership invariant; not proof of enforcement in upstream profile storage. |
 | Q13 | Defer intended link expiry/revocation policy. | Describe no explicit expiry today without guaranteeing indefinite access. |
 | Q14 | Current checks are unit tests only. Integration tests must run in the test environment before future promotion. | No present integration gate claimed; external protections remain Unknown. |
+| Q15 | Security follow-up: remove the InvoiceItem general entitlement and retain OwnershipControl; no personalized replacement. | Application registration uses the invoice ownership grant for item access. Existing credentials and externally managed grants require separate operational review. |
+| Q16 | Defer the invoice-item identifier/key collision risk under current usage assumptions. | Storage keys are unchanged. This is accepted risk, not verified safety; no customer-count threshold or remediation date was established. |
+| Q17 | Existing emailed links must remain usable where the invoice has a token saved in Table Storage. Assume no legacy emailed-link recovery is needed for tokenless records. | Reuse saved tokens, preserve case-insensitive comparison and add no expiry to old links. New tokens are saved before enqueueing; tokenless public viewing is rejected. |
+| Q18 | Enhance HTML rendering to handle untrusted invoice and line values safely. | Encode text, restrict logo URL schemes, encode contact destinations separately, and leave downstream notification data unencoded. |
+
+Q15-Q18 were confirmed on 2026-10-30 (Pacific/Auckland), separately authorizing these implementation changes after the documentation bootstrap. S02 remains deferred; notification confirmation, conditional invoice upsert, downstream idempotency, deployment and other planned work are unchanged.
 
 Q11 was further clarified at approval: broker duplicate detection is disabled for cost reasons. Enabling it as usage grows is an option. The short-term planned downstream solution records message IDs in a table and uses partition/row-key uniqueness and concurrency checks. This is a planned mechanism, not an implemented exactly-once guarantee. The claim/send/failure-recovery protocol still needs design, especially a crash between recording an ID and provider acceptance.
 
@@ -33,7 +39,7 @@ Priority below is **Proposed review order**, not a committed delivery schedule. 
 | P1 / B02 | Downstream email idempotency | [Notification evidence](niobium-integration.md#notification-boundary); planned message-ID table, recovery protocol and tests; broker option later. |
 | P1 / B03 | Due-date and billing validation | `Invoice.BuildNew`, `InvoiceDomain.UpdateAsync`; prevent null due date, validate currency/ownership/item linkage and appropriate ranges with decided policy. |
 | P1 / B04 | Correct production promotion and debug-route exposure | [workflow](../.github/workflows/azure-deploy.yml), `EmailInvoice.Run`; PRs test-only, production dependent on checks, debug route not production. |
-| P1 / B05 | Review identifier/key assumptions and access boundaries | [data model](domain-and-data.md), [security](security.md); per-biller ID uniqueness is not global uniqueness. Detailed findings require owner review before wider rollout. |
+| Deferred / B05 | Review invoice-item identifier/key assumptions | [data model](domain-and-data.md); per-biller ID uniqueness is not global uniqueness. Owner accepted deferral under Q16. Resource registration correction is implemented under Q15; key isolation is still unresolved. |
 | P2 / B06 | Delivering/Delivered confirmation and cancellation | Q04/Q10; downstream callback/event and state transitions absent; deferred. |
 | P2 / B07 | Integration tests before promotion | Q14; isolate resources/data and cover API/storage/messaging failures before adding execution gates. |
 | P2 / B08 | Retention, audit and recoverability | Q08; five-year requirement, version history/soft-delete, backup inventory and tested restore procedure need implementation/confirmation. |
@@ -47,7 +53,7 @@ There is **no tax-pricing defect recorded solely because current helpers add tax
 | ID | Deferred knowledge / decision | Documentation consequence |
 | --- | --- | --- |
 | U01 | Intended rounding boundaries, fractional quantities, negative/credit amounts | Describe current integer quantities and midpoint-to-even rounding; do not turn them into approved policy. |
-| U02 | Link expiry and revocation | No lifetime promise; Q13 accepted deferral. |
+| U02 | Future link expiry and revocation policy | Q13 remains deferred, subject to Q17's requirement to preserve existing emailed links with saved tokens. No expiry is introduced by the follow-up. |
 | U03 | Actual deployed revisions, GitHub/Azure approvals and branch restrictions | Source declares eligibility; no claim about external protections or production state. |
 | U04 | Backup inventory, restores, RPO/RTO, retention start/purge/privacy details | Azure reliance is owner-stated; no verified recovery/compliance guarantee. |
 | U05 | MCP tool/auth contracts, payment/reconciliation and confirmation protocols | Planned capabilities, no fabricated API/tool designs. |

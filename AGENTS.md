@@ -4,6 +4,7 @@
 
 - Read this file and task-specific documents below; linked Markdown is not automatically loaded.
 - Record working directory, branch, commit and `git status --short`. Preserve unrelated changes.
+- The default branch and normal integration target is `main` (owner-confirmed 2026-10-30). Use `main` for authorized pushes and PR bases; `master` is a legacy branch.
 - Use the analyzed baseline in [docs/README.md](docs/README.md) as a reference, not an assumption about the current checkout.
 - Distinguish observed behavior from owner-confirmed requirements and planned improvements.
 - Do not silently fix a discrepancy while documenting it. Keep changes within the requested scope.
@@ -41,6 +42,9 @@
 - Amounts use integer cents; tax rate uses hundredths of one percent (`1500` means 15%). The HTML grand total includes tax. Do not reinterpret this as requiring tax-inclusive unit prices (Q09).
 - Current `Delivered` means the notification was enqueued and the subsequent save completed. Confirmation-based delivery states are planned (Q04/Q10).
 - Intended retries preserve the invoice and may republish the same message. Downstream email idempotency is separate planned work (Q11).
+- Preserve stored invoice-link tokens on resend; old emailed links must keep working when their token exists in storage (Q17). Public viewing requires a saved matching token.
+- Encode invoice text at HTML rendering, validate URL contexts separately, and keep notification parameters unencoded for the downstream renderer (Q18).
+- InvoiceItem uses ownership-based resource grants; do not add a blanket table entitlement. Its identifier/key risk remains explicitly deferred (Q15/Q16).
 - `SaveAsync(force: true)` follows framework upsert behavior, not an ETag-checked update. Do not infer atomicity across invoice/items/notification.
 - `AuthorizationLevel.Anonymous` does not remove middleware or handler checks. Inspect effective routes and application checks.
 - `required` members and `TryValidate` do not establish complete business validation.
@@ -56,7 +60,7 @@ git diff --check
 ```
 
 - Use Microsoft.Testing.Platform syntax from `global.json`; do not assume VSTest arguments work.
-- Baseline has 26 unit tests. They do not establish HTTP authorization, live storage concurrency, queue idempotency or delivery guarantees.
+- The discovery baseline had 26 unit tests; see the testing page for the current suite. Tests do not establish live HTTP authorization, storage concurrency, downstream idempotency or delivery guarantees.
 - Functions SDK can check/restore generated WorkerExtensions even during a `--no-restore` build.
 - Inspect complete diffs. For comment-only C# changes, compare non-comment tokens/directives and validate XML/parameter/cref references with temporary build properties.
 - Do not add warning suppressions or run formatters to make unrelated changes appear clean.

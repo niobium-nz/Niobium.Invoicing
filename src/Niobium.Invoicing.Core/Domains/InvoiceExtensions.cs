@@ -1,5 +1,6 @@
 ﻿using Niobium.Finance;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Niobium.Invoicing.Domains
@@ -10,32 +11,38 @@ namespace Niobium.Invoicing.Domains
     internal static class InvoiceExtensions
     {
         /// <summary>
-        /// Derives the invoice-link token from the supplied invoice, ordered line state and secret input.
+        /// Derives a versioned link token from the complete invoice identity and configured secret.
         /// </summary>
-        /// <param name="invoice">Stored invoice snapshot supplying identity, monetary and presentation data.</param>
-        /// <param name="items">Ordered line sequence used in token derivation.</param>
-        /// <param name="salt">Secret input satisfying the helper's prefix-length requirement.</param>
-        /// <returns>The derived link token.</returns>
+        /// <param name="invoice">Invoice supplying its management group, biller and invoice identifier.</param>
+        /// <param name="salt">Nonblank secret used in full as the HMAC key.</param>
+        /// <returns>A v2-prefixed token containing the full SHA-256 HMAC in hexadecimal.</returns>
         /// <remarks>
-        /// Reconstruction depends on the same inputs and item order. This helper does not attach an expiry or
-        /// validate ownership.
+        /// Stable for the same identity and secret, independently of line ordering or culture. Existing stored
+        /// tokens must be reused instead of regenerated. This helper does not attach an expiry or persist.
         /// </remarks>
-        public static string BuildAccessToken(this Invoice invoice, IEnumerable<InvoiceItem> items, string salt)
+        public static string BuildAccessToken(this Invoice invoice, string salt)
         {
-            StringBuilder data = new();
-            data.Append(invoice.GrandTotalCents);
-            data.Append(invoice.GrandTotalCurrency);
-            foreach (InvoiceItem item in items)
-            {
-                data.Append(item.LineTotalCents);
-                data.Append(item.LineTotalCurrency);
-            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(salt);
+            string data = FormattableString.Invariant($"Niobium.Invoicing:invoice-link:v2|{invoice.Tenant:D}|{invoice.Biller:D}|{invoice.GetID()}");
+            byte[] digest = HMACSHA256.HashData(Encoding.UTF8.GetBytes(salt), Encoding.UTF8.GetBytes(data));
+            return $"v2.{Convert.ToHexStringLower(digest)}";
+        }
 
-            string issuer = invoice.Biller.ToString("N");
-            string invoiceID = invoice.GetID().ToString().PadLeft(12, '0');
-            string secret = $"{salt[..4]}{issuer.Substring(8, 16)}{invoiceID[..12]}";
-
-            return SHA.SHA256Hash(data.ToString(), secret, 16);
+        /// <summary>
+        /// Checks a supplied link token against the saved token, preserving legacy case-insensitive links.
+        /// </summary>
+        /// <param name="invoice">Invoice whose saved token is authoritative.</param>
+        /// <param name="token">Token from the public invoice link.</param>
+        /// <returns>True only when both tokens are nonblank and their normalized bytes match.</returns>
+        /// <remarks>Uses a fixed-time byte comparison; it does not regenerate legacy tokens or impose expiry.</remarks>
+        public static bool MatchesAccessToken(this Invoice invoice, string? token)
+        {
+            return !string.IsNullOrWhiteSpace(invoice.Token)
+                && !string.IsNullOrWhiteSpace(token)
+                && invoice.Token.Length == token.Length
+                && CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(invoice.Token.ToUpperInvariant()),
+                    Encoding.UTF8.GetBytes(token.ToUpperInvariant()));
         }
 
         /// <summary>

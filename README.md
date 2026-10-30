@@ -19,7 +19,7 @@ An invoicing **tenant** is a management group containing biller businesses. Each
 
 ## Start safely
 
-Read [AGENTS.md](AGENTS.md) for working rules and [configuration and development](docs/configuration-and-development.md) for prerequisites and command status. `global.json` requests .NET SDK 10.0.100 with `latestFeature` roll-forward and Microsoft.Testing.Platform. Discovery verified SDK 10.0.403 on Linux, a Release build, and 26 unit tests against existing restored dependencies:
+Read [AGENTS.md](AGENTS.md) for working rules and [configuration and development](docs/configuration-and-development.md) for prerequisites and command status. `global.json` requests .NET SDK 10.0.100 with `latestFeature` roll-forward and Microsoft.Testing.Platform. Validation used SDK 10.0.403 on Linux and existing restored dependencies. The security follow-up passes a Release build and 60 unit-test cases; the original discovery baseline had 26:
 
 ```sh
 dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo

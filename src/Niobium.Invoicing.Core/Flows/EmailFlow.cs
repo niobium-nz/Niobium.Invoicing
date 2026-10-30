@@ -33,9 +33,10 @@ namespace Niobium.Invoicing.Flows
         /// <param name="issuer">Issuing biller identifier.</param>
         /// <param name="invoice">Invoice identifier in reverse Unix milliseconds.</param>
         /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
-        /// <returns>A task completing after enqueue and the subsequent invoice save, or after the missing-recipient skip.</returns>
+        /// <returns>A task completing after token persistence if needed, enqueue and status save, or the missing-recipient skip.</returns>
         /// <remarks>
-        /// Builds notification parameters from persisted data and uses invoiceID@biller for message identity.
+        /// Preserves an existing link token or saves a new one before enqueueing. Builds notification
+        /// parameters from persisted data and uses invoiceID@biller for message identity.
         /// It does not suppress replays, confirm recipient delivery or make enqueue/status persistence atomic.
         /// Cancellation or failure can leave earlier side effects completed.
         /// </remarks>
@@ -52,7 +53,7 @@ namespace Niobium.Invoicing.Flows
             }
 
             InvoiceItem[] items = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
-            string token = entity.BuildAccessToken(items, config.Value.InvoiceTokenSecretSalt);
+            string token = await domain.EnsureAccessTokenAsync(config.Value.InvoiceTokenSecretSalt, cancellationToken);
             var invoiceParameters = await domain.BuildNotificationParametersAsync(token, cancellationToken);
 
             var parameters = new Dictionary<string, object>();

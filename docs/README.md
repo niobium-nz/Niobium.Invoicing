@@ -8,6 +8,8 @@ Analyzed baseline: `niobium-nz/Niobium.Invoicing`, commit **`f403f50aa6358e9c56d
 
 Framework sources are pinned by consumed package version in [Niobium integration](niobium-integration.md). No live Azure deployment, GitHub environment protection or external service revision was verified.
 
+The authorized security follow-up on **2026-10-30, Pacific/Auckland** starts from `910fea08ffd2d608e9d9534c4607a2aeaa9c9822` and updates resource grants, stored-link compatibility and HTML rendering. Current behavior pages include those changes; the original discovery ledger/validation remain historical records. See [Q15-Q18](decisions-and-risks.md#owner-decisions) and the [follow-up validation](discovery/validation.md#security-follow-up-2026-10-30).
+
 | Status | Meaning |
 | --- | --- |
 | Observed | Supported by inspected source/configuration. Default for implementation descriptions. |

@@ -33,7 +33,7 @@ Evidence: [Invoice](../src/Niobium.Invoicing.Contracts/Invoice.cs), [InvoiceItem
 
 Default keys use hyphenated GUID strings. Framework legacy GUID formatting can differ, but this app does not enable it. Reverse invoice IDs use `anchorUnixMilliseconds - createdUnixMilliseconds`, with anchor **2100-01-01 UTC** in the matched default; a framework legacy option uses 2050. The app does not enable that option. `Invoice.ParseID` encodes/decodes; `GetFullID` is `invoiceID@biller`. Owner shorthand “timestamp ID” must not be substituted for this wire encoding. `InvoiceItem.BuildNew` uses ordinary Unix milliseconds for the line ID; its public `BuildRowKey` takes `int` even though ID is `long`.
 
-Q02 guarantees no global invoice-ID uniqueness. Exactly one group per biller (Q12) does not add biller identity to item keys. Ownership and uniqueness assumptions need review before schema changes; do not invent relational foreign keys or transactions. Item inputs are not rewritten to the request invoice key by `UpsertFlow`.
+Q02 establishes that global invoice-ID uniqueness is not guaranteed. Exactly one group per biller (Q12) does not add biller identity to item keys. Q16 explicitly defers this risk under current usage assumptions; it is not a safety guarantee. Ownership and uniqueness assumptions need review before schema changes; do not invent relational foreign keys or transactions. Item inputs are not rewritten to the request invoice key by `UpsertFlow`.
 
 Mapping uses public properties, with `EntityKey` renaming the partition/row/timestamp/ETag properties. Keys are strings in storage; non-key scalar properties retain Azure-supported scalar types (such as GUID, integer, string and DateTimeOffset). Null properties are not stored as ordinary null-valued table columns. Timestamp is service metadata and is skipped on writes. ETag is separate SDK metadata. Ordinary JSON ignores table-key attributes: it uses model property names rather than renaming `Biller` to `partitionKey`.
 
@@ -45,7 +45,7 @@ No table creation or schema migration is declared here. The repository obtains c
 
 Framework force-save invokes create with replacement enabled: a one-entity Azure upsert defaults to Merge, while multi-entity batches use UpsertReplace. This distinction matters for null fields and prior values. Regular updates/deletes use ETag preconditions by default, but the force path does not. ETag round-trip through the framework's dictionary mapping remains an unverified integration edge; do not claim end-to-end optimistic concurrency from property presence alone.
 
-The table adapter groups multi-entity transactions by partition and at most 100 operations. Separate groups and the invoice/item/enqueue/status stages can partially complete. Azure SDK retries are not an invoice idempotency protocol. Current application behavior is not an outbox or inbox design.
+The table adapter groups multi-entity transactions by partition and at most 100 operations. Separate groups and the invoice/item/token/enqueue/status stages can partially complete. `EnsureAccessTokenAsync` saves a new token before enqueueing and reuses existing tokens; it uses ordinary domain save behavior, not force-save. Azure SDK retries are not an invoice idempotency protocol. Current application behavior is not an outbox or inbox design.
 
 ## Lifecycle, dates and presentation
 
@@ -58,6 +58,8 @@ The table adapter groups multi-entity transactions by partition and at most 100 
 `TimeZoneInfoHelper` converts IANA IDs to Windows IDs then resolves system timezone data. Missing/invalid zones fail; culture/country/currency parsing can also fail during rendering. The template has English labels and external CSS/font dependencies, so localized dates/currencies do not imply a fully translated invoice. InvariantGlobalization is declared in class libraries but was not enabled in the inspected Server/test runtime configs.
 
 [InvoiceTemplate.html](../src/Niobium.Invoicing.Core/InvoiceTemplate.html) is the embedded resource actually selected; saved `Template` is not used. `BuildTemplateParameters` creates upper snake-case strings, blank strings for optional text and special keys including INVOICE_ID, BILL_DATE, BILLING_PERIOD, SUBTOTAL, TAX_AMOUNT, TAX_RATE, TAX_KIND, GRAND_TOTAL, SETTLED, DUE and DUE_BY. Notification adds INVOICE_URL and INVOICE_ITEM arrays. The renderer extracts the marked invoice-item block, renders each line and replaces that block. No general-purpose localization or template-selection engine is present.
+
+`HtmlTemplate.Render` encodes values once at HTML output and does not expand placeholders contained in supplied text. The HTML path prepares logo/contact URLs separately; shared notification parameter values remain unencoded. Text fields containing stored markup are displayed as literal text. Public rendering requires a matching saved token; saved legacy tokens remain authoritative and are not regenerated from totals or line data. See [security](security.md#invoice-link-compatibility).
 
 ## Field catalog
 
@@ -194,7 +196,7 @@ Source: [Invoice.cs](../src/Niobium.Invoicing.Contracts/Invoice.cs).
 | `RecipientEmail` | `string?` | Captured customer email address; a blank value skips notification enqueueing. |
 | `SettledCents` | `long` | Reported amount already settled in cents; only request Settled.Cents is copied, without checking its currency. |
 | `Delivered` | `DateTimeOffset?` | UTC time recorded after notification enqueueing succeeds and this invoice is saved; not recipient-delivery confirmation. |
-| `Token` | `string?` | Stored invoice-link token assigned after enqueueing; no explicit expiry field is present. |
+| `Token` | `string?` | Saved bearer link token required for public viewing and reused on resend. New v2 tokens are saved before enqueueing; legacy saved values remain valid. No explicit expiry field is present. |
 | `Template` | `string?` | Copied profile template reference; current HTML rendering ignores it in favor of the embedded template. |
 
 ### InvoiceItem

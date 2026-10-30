@@ -13,7 +13,7 @@ No repository `NuGet.Config`, central package/build files or lockfile is tracked
 | `dotnet --info` | Verified SDK/runtime above. Ensure matching SDK is on PATH. |
 | `dotnet restore Niobium.Invoicing.slnx` | Inspected, not verified from an empty cache. Requires approved feed/network access; do not treat as a proved offline setup. |
 | `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo` | Verified with existing restored assets. Builds Contracts package locally because GeneratePackageOnBuild is true. Functions SDK still checks generated WorkerExtensions restore. |
-| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore` | Verified MTP invocation; 26 isolated unit tests. Optional `--results-directory <outside-repo-path> --report-trx` was used for recorded evidence. |
+| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore` | Verified MTP invocation; 60 isolated cases in the security follow-up, 26 at discovery. Optional `--results-directory <outside-repo-path> --report-trx` was used for recorded evidence. |
 | `git diff --check` | Verified documentation hygiene check. |
 | Functions host startup / live API requests | Not run. Requires explicitly isolated identity/profile/storage/messaging resources and synthetic records. |
 | `azd package`, `azd provision`, `azd deploy` / provisioning scripts | Inspected, not run. Packaging invokes tests; provision/deploy have cloud/file/secret side effects. Require authorization. |
@@ -39,7 +39,7 @@ Names below use `:`; environment equivalents use `__`. “Required” means need
 
 | Key / section members | Consumer and purpose | Required / default | Secret? |
 | --- | --- | --- | --- |
-| `BillingOptions:InvoiceTokenSecretSalt` | EmailFlow link-token derivation | Required to notify; no default or startup options validation | Yes |
+| `BillingOptions:InvoiceTokenSecretSalt` | InvoiceDomain new v2 link-token derivation, called by EmailFlow | Nonblank when creating a new token; use a high-entropy secret. No default or startup validation. Saved-token validation/reuse does not depend on this value. | Yes |
 | `BillingOptions:GetInvoiceEndpoint` | InvoiceDomain notification URL base | Required for useful links; no default | No |
 | `IdentityServiceOptions:IDTokenPublicKey` | PrincipalParser RSA ID-token verification | Required in this verifier configuration | Public key; redact examples |
 | `IdentityServiceOptions:AccessTokenSecret` | Access token signing/verification | Required for this server path; no default | Yes |

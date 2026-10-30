@@ -6,7 +6,8 @@
     public class BillingOptions
     {
         /// <summary>
-        /// Secret input used when deriving invoice-link tokens; required by the email flow.
+        /// High-entropy secret used in full for new invoice-link tokens. Existing saved tokens are reused
+        /// without this value being involved in validation.
         /// </summary>
         public required string InvoiceTokenSecretSalt { get; set; }
         /// <summary>

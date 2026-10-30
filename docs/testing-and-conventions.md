@@ -4,16 +4,16 @@
 
 [Core.Tests.csproj](../src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj) uses MSTest.Sdk 4.4.0, Moq 4.20.72, FluentAssertions 8.10.0, AutoFixture/AutoFixture.AutoMoq 4.18.1. [MSTestSettings.cs](../src/Niobium.Invoicing.Core.Tests/MSTestSettings.cs) enables method-level parallelization. `global.json` selects Microsoft.Testing.Platform. Use the verified [commands](configuration-and-development.md#toolchain-and-safe-commands), not guessed VSTest switches.
 
-**Verified baseline:** 26 passed, zero failed/skipped. Infrastructure is mocked; some tests exercise actual invoice/item domains and embedded rendering. Fixtures construct synthetic parties/items. No tests consume a real queue, profile service or Azure table. Counts describe discovered test methods, not code coverage percentages.
+**Verified current suite:** 60 cases passed, zero failed/skipped; the original discovery baseline had 26. Infrastructure is mocked; some tests exercise actual invoice/item domains and embedded rendering. Fixtures construct synthetic parties/items. No tests consume a real queue, profile service or Azure table. Counts include data-driven cases, not code coverage percentages. See [follow-up validation](discovery/validation.md#security-follow-up-2026-10-30).
 
 | Suite | Count | Assertions represented | Limits |
 | --- | --- | --- | --- |
 | [IssueFlowTests](../src/Niobium.Invoicing.Core.Tests/Flows/IssueFlowTests.cs) | 4 | Notify false calls only upsert; notify true calls children; upsert failure prevents email call; token forwarded to children | Mocked child flows, no delivery/persistence guarantee |
 | [UpsertFlowTests](../src/Niobium.Invoicing.Core.Tests/Flows/UpsertFlowTests.cs) | 8 | New invoice/items persisted; prior items replaced; missing supplied billee fetched; missing biller/customer fails without persistence; cancellation forwarded; business fields applied; new items recalculate totals | Mocked storage/profile; no ETags, real transactions or race tests |
-| [EmailFlowTests](../src/Niobium.Invoicing.Core.Tests/Flows/EmailFlowTests.cs) | 7 | Missing email skips; link/enqueue/status save; token shape; business parameters; culture/timezone; simple invoice; changed items alter token | Broker capture only, no provider receipt or downstream idempotency |
-| [HTMLFlowTests](../src/Niobium.Invoicing.Core.Tests/Flows/HTMLFlowTests.cs) | 7 | Full rendering; stored-token mismatch; pre-delivery domain preview; culture/timezone/currency; empty items; line formatting; period/due text | Invokes flows/domains, not HTTP/Functions middleware; not an encoding/security audit |
+| [EmailFlowTests](../src/Niobium.Invoicing.Core.Tests/Flows/EmailFlowTests.cs) | 19 | Missing email skips; saved legacy/v2 token reuse; unchanged resend serialization; token-before-enqueue order; save/enqueue failures; full-secret/identity derivation; culture stability; business parameters | Broker capture only, no provider receipt, live persistence or downstream idempotency |
+| [HTMLFlowTests](../src/Niobium.Invoicing.Core.Tests/Flows/HTMLFlowTests.cs) | 29 | Full rendering; missing/mismatched token rejection; legacy case-insensitive links; no new expiry/recalculation; v2 viewing; text/attribute encoding; logo schemes; literal placeholders; unencoded notification data; localization/items/dates | Invokes flows/domains, not HTTP/Functions middleware or a browser; focused regressions, not a complete security audit |
 
-For example, `Customer_receives_secure_invoice_link_and_invoice_marked_delivered` verifies queued parameters and persistence calls. Its name is not evidence that a customer received email or that the link has been security-validated. Domain preview tests likewise do not establish the HTTP endpoint's query validation behavior.
+For example, `Customer_receives_secure_invoice_link_and_invoice_marked_delivered` verifies queued parameters and persistence calls. Its name is not evidence that a customer received email. Rendering tests do not establish the HTTP endpoint's query binding or middleware behavior. The former tokenless-preview test now verifies rejection, as required by Q17.
 
 ## Requirements and coverage gaps
 
@@ -21,16 +21,18 @@ For example, `Customer_receives_secure_invoice_link_and_invoice_marked_delivered
 | --- | --- | --- |
 | Calculate totals and replace items | Upsert `New_invoice_is_issued_and_items_are_persisted`, `Reissue_with_different_items_updates_totals` | Currency mismatch, rounding boundaries, overflow, zero/negative values, empty/null collections |
 | Required due date | Business-field and HTML due-date assertions | Default preservation/null rejection and invalid date ordering |
-| Billers restricted to their group/customers | None at HTTP/resource boundary | Claims, entitlements, SAS scope, embedded-customer/item-key checks |
+| Billers restricted to their group/customers | Offline Server grant/SAS assertions described below; no HTTP authorization tests | Live claims/entitlements/SAS enforcement, embedded-customer/item-key checks |
 | Cancellation forwarding | Issue/Upsert token assertions | Cancellation during real I/O, partial completion/recovery and framework omissions |
 | Conditional replay and edit freeze | Existing-items replacement assertions only | Same/different payload retry, persisted Delivered state, ETags, simultaneous requests |
-| Same downstream message and no extra email | Token/parameter capture | Full message identity/content across retry, Notification inbox/provider crash windows |
+| Same downstream message and no extra email | Token/parameter capture and identical serialized NotifyCommand on unchanged resends | Full issuance replay/concurrency, changing reconstruction inputs, Notification inbox/provider crash windows |
 | Delivered means confirmation | No such implementation/test | Future confirmation protocol and duplicate/out-of-order events |
-| Public token view | HTML domain tests | HTTP middleware, authorization execution, encoding and link lifecycle policies |
-| Reliable persistence | Mock calls | Integration/contract tests for mapping, batch boundaries, ETags, failed item creation and enqueue/save splits |
+| Public token view | Saved legacy/v2 matching, missing-token rejection, HTML/URL encoding regressions | HTTP middleware, browser-level execution and future link lifecycle policies |
+| Reliable persistence | Token-save/enqueue ordering/failure tests; status save uses the refreshed entity/ETag returned by the mocked repository | Integration/contract tests for mapping, batch boundaries, real ETags, failed item creation and enqueue/status-save splits |
 | Promotion safety | Local unit run only | Planned integration suite in isolated test environment before production |
 
 There are no integration, end-to-end, load, recovery or deployment smoke tests in this repository. Q14 plans integration checks before promotion. No test coverage threshold, recorded percentage, mutation test or CI enforcement beyond the inspected commands is claimed.
+
+An additional outside-repository S01 verification used the built Server registrations, matched resource controls/signature issuer, synthetic claims/credentials and mocked invoice lookup. Eight assertions checked the absence of an application InvoiceItem descriptor, owned-partition bounds in the grant and locally generated SAS, rejection of omitted/empty/unowned/biller-key partitions, and preservation of the Invoice personalized grant. The external entitlement store was replaced with an empty synthetic provider. This is recorded evidence, not a tracked CI test or an audit of deployed identities/entitlements.
 
 ## Observed conventions and quality settings
 

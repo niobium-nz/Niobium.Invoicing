@@ -11,13 +11,15 @@ Evidence: [Program](../src/Niobium.Invoicing.Server/Program.cs), [NewInvoice.Run
 - `/token` performs role/entitlement lookup; `/rsas` obtains a scoped resource grant. Membership/role administration and additional deployed entitlements are external, not established by this source.
 - Incoming Service Bus commands trust authorized infrastructure producers, intentionally without HTTP user-principal checks (Q05). Queue access control is therefore essential; no public producer access is intended. Deployed RBAC and all producer identities were not audited.
 - The email trigger uses a Functions key and has no biller-principal ownership check. Its intended use is debugging; removing/restricting it in production is planned (Q05).
-- Public HTML viewing does not require a recipient account. It uses an invoice-link token; it is separate from JWT and table SAS authentication. Exact expiry/revocation policy is deferred (Q13), and there is no explicit expiry field today. Do not promise perpetual access.
+- Public HTML viewing does not require a recipient account. It requires a nonblank saved invoice-link token matching the supplied value; missing or mismatched tokens are rejected. This token is separate from JWT and table SAS authentication. Future expiry/revocation policy remains deferred (Q13), with compatibility constrained by Q17.
 
 MCP/API-key authentication is a future design, not an alternate credential already accepted by these handlers.
 
 ## Direct resource access
 
-The owner intended short-lived biller-partition SAS for the historical UI. The matched framework's actual resource-signature default is one day. Invoice and Billee personalized grants use biller/user identity; InvoiceItem has a custom ownership control and a different partition construction. The framework accepts the first suitable non-null grant, including default controls; the custom control is not proof that every grant passes through that ownership check. Inspect [key mappings](domain-and-data.md) and [permission table](api-and-messaging.md#resource-token-and-direct-table-contract) together. Do not equate every table partition with a biller partition or assume tenant is included in storage keys.
+The owner intended short-lived biller-partition SAS for the historical UI. The matched framework's actual resource-signature default is one day. Invoice and Billee personalized grants use biller/user identity; InvoiceItem uses a custom ownership control and a different partition construction. Application registration has no general or personalized InvoiceItem entitlement (Q15). The ownership control requires an invoice partition and checks the corresponding Invoice under authenticated Sid before granting that partition. The framework still accepts the first suitable non-null grant; externally managed entitlements or previously issued tokens can add other grants. Inspect [key mappings](domain-and-data.md) and [permission table](api-and-messaging.md#resource-token-and-direct-table-contract) together. The item-key collision risk is explicitly deferred under Q16.
+
+Changing registration does not revoke existing access tokens or already-issued SAS credentials. Before an authorized rollout, review outstanding credential lifetimes and external entitlements. No revocation, credential rotation or deployed permission audit was performed here.
 
 Server table access uses `DefaultAzureCredential` when an endpoint is configured. Table SAS signing separately needs `StorageTableOptions.Key`. Read/write cloud permissions, direct SAS access and service-principal profile retrieval are distinct trust paths. Infrastructure declarations alone do not prove deployed isolation.
 
@@ -25,7 +27,17 @@ Server table access uses `DefaultAzureCredential` when an endpoint is configured
 
 `required` members, type conversion and the framework DataAnnotations helper do not provide comprehensive business validation. Currency, item relationships, due-date validity and quantity/amount rules need the planned enforcement work described in [decisions](decisions-and-risks.md). Stored profile/customer data is still external input, even when submitted through a trusted path.
 
-HTML uses an embedded template and string substitution. No general HTML/template sanitizer or context-aware encoding service is registered by this application; callers must not assume arbitrary input is safe markup. The downstream Notification template renderer has its own encoding behavior, which does not establish protection for Invoicing's HTML response. Review rendering and URL/attribute boundaries before accepting new sources of text. Template CSS/font references also create external browser dependencies. Detailed findings and remediation belong in a private security review.
+HTML uses an embedded template with single-pass, HTML-encoded substitution through `HtmlTemplate.Render`. Names, addresses, terms, payment instructions and line text are treated as text, including previously stored markup. Inserted values are not processed as further placeholders. Logo URLs must be absolute HTTP/HTTPS URLs without control characters; unsupported URLs render empty. Contact destinations are URI-escaped beneath fixed mailto/tel schemes and HTML-encoded separately from their displayed text. The template sets a no-referrer policy for browser requests. External logo/CSS/font resources still create browser dependencies; no server-side fetching or general rich-HTML sanitizer is introduced.
+
+Notification parameters remain unencoded display data; the downstream renderer owns encoding for its own output. Do not pre-encode shared parameter dictionaries or assume this HTML change modifies Notification.
+
+## Invoice-link compatibility
+
+Q17 requires existing emailed links to remain usable when their token is present in Table Storage. `InvoiceDomain.BuildHTMLAsync` compares against that saved value using case normalization and fixed-time byte comparison. Viewing does not recalculate a token, consult the current token-generation secret, or impose a new expiry. There is no fallback for records without a saved token, by owner confirmation.
+
+`EnsureAccessTokenAsync` reuses a saved token unchanged. Otherwise it derives a `v2.` token with a full SHA-256 HMAC using the entire configured secret and the management-group/biller/invoice identity, then saves it before notification enqueueing. The same identity/secret gives the same token; changing lines or culture does not rotate a saved link. Use a high-entropy secret: a full-length HMAC does not make a weak configuration secret strong. Secret changes affect new tokens, not validation of saved links.
+
+Token persistence failure prevents enqueueing; enqueue failure leaves the saved token available for retry. Delivered is still recorded only after enqueueing and is not recipient confirmation. This is not an outbox, an invoice concurrency fix, or a mechanism to recover deleted/overwritten historical token data. Such lifecycle/recovery work remains separately planned.
 
 ## Sensitive data and logging
 
