@@ -46,4 +46,8 @@
     <ProjectReference Include="..\Niobium.Invoicing.Core\Niobium.Invoicing.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyMetadata Include="Commit" Value="$(SourceRevisionId)" />
+  </ItemGroup>
+
 </Project>
