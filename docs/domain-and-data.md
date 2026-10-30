@@ -2,7 +2,7 @@
 
 ## Money, tax and settlement
 
-Observed arithmetic is in [Contracts.InvoiceExtensions](../src/Niobium.Invoicing.Contracts/InvoiceExtensions.cs) and [InvoiceDomain.UpdateAsync](../src/Niobium.Invoicing.Core/Domains/InvoiceDomain.cs):
+Observed arithmetic is in [Contracts.InvoiceExtensions](../src/Niobium.Invoicing.Contracts/InvoiceExtensions.cs) and [InvoiceDomain.UpdateAsync](../src/Niobium.Invoicing.Core/Domains/InvoicePreparation.cs):
 
 ```text
 line cents = UnitPriceCents * Quantity
@@ -41,17 +41,17 @@ No table creation or schema migration is declared here. The repository obtains c
 
 ## Persistence and concurrency
 
-`UpsertFlow.RunAsync` obtains current profile/customer data, builds a fresh invoice, force-saves it, reads/deletes old items and creates supplied items. No atomic transaction spans these stages. `InvoiceDomain.UpdateAsync` checks Delivered on its in-memory entity; it does not first load the prior invoice. Intended freeze/replay behavior is tracked as planned work, not guaranteed by that check.
+`UpsertFlow.RunAsync` loads the existing aggregate and preserves its snapshots. A conditional preparation claim precedes item replacement; read-back verification precedes readiness; content and token are frozen before enqueue. Exact replays avoid business writes and may republish the same notification. See [preparation and recovery](invoice-recovery.md) for states, failure handling, compatibility and limitations.
 
-Framework force-save invokes create with replacement enabled: a one-entity Azure upsert defaults to Merge, while multi-entity batches use UpsertReplace. This distinction matters for null fields and prior values. Regular updates/deletes use ETag preconditions by default, but the force path does not. ETag round-trip through the framework's dictionary mapping remains an unverified integration edge; do not claim end-to-end optimistic concurrency from property presence alone.
+The installed adapter retains ETags on reads but loses them on write results. The domain reloads and verifies persisted content before continuing. Local Azurite tests establish stale-ETag rejection and real adapter behavior. These checks do not establish live Azure deployment behavior or atomicity across tables and messaging.
 
-The table adapter groups multi-entity transactions by partition and at most 100 operations. Separate groups and the invoice/item/token/enqueue/status stages can partially complete. `EnsureAccessTokenAsync` saves a new token before enqueueing and reuses existing tokens; it uses ordinary domain save behavior, not force-save. Azure SDK retries are not an invoice idempotency protocol. Current application behavior is not an outbox or inbox design.
+The table adapter groups transactions by partition and at most 100 operations, executing batches sequentially. Separate groups can partially complete. No outbox/inbox, key migration, automatic abandoned-writer takeover or downstream delivery guarantee is introduced.
 
 ## Lifecycle, dates and presentation
 
-`Invoice.BuildNew` snapshots biller contact/address/tax data and billee identity/address/email/currency/culture/timezone. It creates particulars/reference and sets `DueBy = UtcNow + 7 days`. Update preserves the default due date when no override is supplied and rejects dates before issue. Terms, billing period, totals and settlement are applied. Particulars, Reference and PaymentInstructions accept trimmed overrides; null inherits defaults and an empty string clears the value. Replays currently rebuild profile snapshots; the conditional-upsert improvement is intended to preserve an existing invoice (Q11).
+`Invoice.BuildNew` snapshots biller contact/address/tax data and billee identity/address/email/currency/culture/timezone. It creates particulars/reference and sets `DueBy = UtcNow + 7 days`. Update preserves the default due date when no override is supplied and rejects dates before issue. Terms, billing period, totals and settlement are applied. Particulars, Reference and PaymentInstructions accept trimmed overrides; null inherits defaults and an empty string clears the value. Replays preserve the stored snapshots and original defaults (Q11/Q20).
 
-`Delivered` stores enqueue-related completion time. There is no persistent Delivering/Cancelled state, payment ledger or audit-version collection. Intended editing/freeze/cancellation rules are in [product requirements](product.md). Five-year retention, soft deletion and all-version audit history are planned (Q08); no expiry/migration/backup mechanism is inferred from table storage.
+`Delivered` stores enqueue-related completion time. Internal preparation/freeze columns are distinct from a delivery lifecycle. There is no public Delivering/Cancelled state, payment ledger or audit-version collection. Intended editing/freeze/cancellation rules are in [product requirements](product.md). Five-year retention, soft deletion and all-version audit history are planned (Q08); no expiry/migration/backup mechanism is inferred from table storage.
 
 `InvoiceCycle` values are `Once=0`, `Daily=1`, `Monthly=2`, **`Anually=3`** (existing spelling), `Range=4`. They only choose date presentation: none, start day, start month, start year or start/end range. They do not schedule recurring invoices. Range needs both endpoints; missing inputs omit the billing-period label. DueBy null omits its label.
 
@@ -123,7 +123,7 @@ Source: [Billee.cs](../src/Niobium.Invoicing.Contracts/Billee.cs).
 | `Phone` | `string?` | Optional customer telephone contact; not copied into invoice biller contact fields. |
 | `Zipcode` | `string?` | Optional postal code. |
 | `Culture` | `string` required | Culture name used for invoice date formatting, for example en-NZ. |
-| `Currency` | `string` required | Currency code copied to all invoice total-currency fields; no biller/item compatibility check is performed. |
+| `Currency` | `string` required | Currency code copied to all invoice total-currency fields; Core requires matching supported biller/item currencies. |
 | `TimeZone` | `string` required | IANA timezone used for invoice dates, for example Pacific/Auckland. |
 
 ### Billable

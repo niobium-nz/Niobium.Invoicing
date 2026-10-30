@@ -2,19 +2,18 @@
 
 ## Effective HTTP surface
 
-Observed source contract, not an HTTP integration-test result. [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
+Observed source contract with local result-execution tests, not a deployed Functions HTTP verification. [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
 
 | Method / path | Handler and input | Controls | Success / side effects |
 | --- | --- | --- | --- |
 | `POST /invoices` | [NewInvoice.Run](../src/Niobium.Invoicing.Server/NewInvoice.cs); JSON `IssueInvoiceRequest` | Access-token principal needs GUID Sid/GroupSid matching BillerID/Tenant; validation helper; decoded invoice age check | `OkResult` (200), no response invoice body. Persists invoice/items; forces NotifyBillee=false. |
-| `GET /email/{issuer}/invoices/{invoice}` | [EmailInvoice.Run](../src/Niobium.Invoicing.Server/EmailInvoice.cs); GUID issuer, long invoice ID | Functions authorization level Function; no additional biller-principal check in handler | Status 201, no body, even when recipient email is blank and flow skips. Can enqueue and update token/Delivered. Owner intends debug-only, not production. |
 | `GET /{issuer}/invoices/{invoice}?token=...` | [GetHTMLInvoice.Run](../src/Niobium.Invoicing.Server/GetHtmlInvoice.cs) | Anonymous; rejects blank token, nonpositive ID or empty issuer with 404; domain requires a matching saved link token | 200 `text/html`; reads invoice/items, no write. No billee account required. |
 | `GET /token` | [Placeholder.Auth](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by AccessTokenMiddleware | ID-token verification and Sid/GroupSid; roles/entitlements lookup | 200 with access token in Authorization response header; fallback placeholder returns empty 200. |
 | `GET /rsas` | [Placeholder.RSAS](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by ResourceTokenMiddleware | Access principal, requested resource entitlement/control | 200 JSON StorageSignature; fallback placeholder returns empty 200. |
 
 Middleware endpoint names are configurable, but placeholder trigger routes are compiled from default constants. Changing options alone does not create a new Functions route. No `/auth`, health, payment, settlement, cancellation, invoice-list HTTP endpoint or MCP route is declared. Listing historically used direct table access.
 
-`NewInvoice.Run` rejects an issue time more than 30 minutes old; it does not implement a symmetric clock-skew window. It returns `UnauthorizedResult` for missing claims and `ForbidResult` for identity/age mismatches. The strings passed to `ForbidResult` are authentication-scheme arguments, so **the final wire behavior for these branches is not verified as a normal 403 response**. Host binding errors and unexpected exceptions likewise need integration evidence.
+`NewInvoice.Run` rejects an issue time more than 30 minutes old; it does not implement a symmetric clock-skew window. It returns 401 for missing claims and explicit 403 for identity/age mismatches. Invalid date encoding returns 400. Local tests parse signed synthetic access tokens through the installed PrincipalParser and execute ASP.NET results. Full Functions middleware/binding and deployed behavior still need integration evidence.
 
 ## Requests, serialization and errors
 
@@ -58,7 +57,7 @@ IssueInvoiceRequest request = new()
 };
 ```
 
-HTTP credentials would be `Authorization: Bearer <ACCESS_TOKEN>`; never embed real tokens in examples. The debug endpoint uses a Functions key through host-supported key mechanisms, not the biller token as its handler authorization. Example link shape: `https://invoice.example.invalid/<BILLER_GUID>/invoices/<INVOICE_ID>?token=<LINK_TOKEN>`.
+HTTP credentials would be `Authorization: Bearer <ACCESS_TOKEN>`; never embed real tokens in examples. The debug email endpoint has been removed. Example link shape: `https://invoice.example.invalid/<BILLER_GUID>/invoices/<INVOICE_ID>?token=<LINK_TOKEN>`.
 
 ## Resource-token and direct-table contract
 
@@ -115,6 +114,6 @@ Both `MessagingEntry.ID` and `NotifyCommand.ID` use the full invoice identity. T
 
 The flow skips blank recipient email. Otherwise it reuses the saved link token or persists a new token before enqueueing, and records Delivered after enqueueing. Token-save failure prevents publishing; enqueue failure leaves the saved token available for retry; status-save failure can still follow an accepted message. It does not wait for provider acceptance or recipient receipt. Development messaging may only log the payload. See [Notification source boundary](niobium-integration.md#notification-boundary) and [link compatibility](security.md#invoice-link-compatibility).
 
-**Q11 intended behavior:** recognise retries against the existing invoice, conditionally preserve its state, and publish the same message again. Reconstruction from preserved data is the planned approach. Keep all reconstruction inputs stable when implementing this, including line data/order, endpoint and formatting; no immutable message snapshot exists today. Q17 now preserves saved link tokens across resends and secret changes, but does not implement conditional invoice upsert. Downstream message-ID storage is planned, and broker detection may be enabled later. Claim/send/crash recovery still needs design; repeated publishing is not itself a defect under this requirement.
+**Q11 implementation:** persisted snapshots, item order, formatting culture, saved token and endpoint support stable exact replays. Changed frozen content receives 409. Exact retries republish the same message, including after an uncertain enqueue result. See [preparation/recovery](invoice-recovery.md) for checkpoint and compatibility limits. Downstream inbox/provider recovery remains B02 in Notification; repeated publication is intentional.
 
 No OpenAPI/AsyncAPI generation, route version prefix or message-version field is configured. Contract/package changes need consumer compatibility review and targeted serialization tests. Machine-readable specifications and new tooling were outside the approved documentation scope.

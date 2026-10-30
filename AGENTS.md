@@ -15,6 +15,7 @@
 - `src/Niobium.Invoicing.Core`: flows, domains, embedded HTML template.
 - `src/Niobium.Invoicing.Server`: Functions, middleware composition, entitlement registration.
 - `src/Niobium.Invoicing.Core.Tests`: MSTest/Moq unit tests with mocked infrastructure.
+- `src/Niobium.Invoicing.Integration.Tests`: isolated local Table/HTTP component tests; opt-in setup and limitations in [integration tests](docs/integration-tests.md).
 - `infra/`, `azure.yaml`, `.github/workflows/`: provisioning and publishing side effects.
 - Niobium is a read-only reference unless a task explicitly authorizes framework changes.
 - Match NuGet versions to pinned source in [niobium-integration.md](docs/niobium-integration.md). Do not substitute current framework main or replace PackageReferences with ProjectReferences.
