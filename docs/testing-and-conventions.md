@@ -4,7 +4,7 @@
 
 [Core.Tests.csproj](../src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj) uses MSTest.Sdk 4.4.0, Moq 4.20.72, FluentAssertions 8.10.0, AutoFixture/AutoFixture.AutoMoq 4.18.1. [MSTestSettings.cs](../src/Niobium.Invoicing.Core.Tests/MSTestSettings.cs) enables method-level parallelization. `global.json` selects Microsoft.Testing.Platform. Use the verified [commands](configuration-and-development.md#toolchain-and-safe-commands), not guessed VSTest switches.
 
-**Verified current suite:** 114 unit cases and 16 local integration cases passed, zero skipped in the opted-in run. The main baseline had 60 unit cases; original discovery had 26. Counts include data rows, not coverage percentages. Exact commands, diagnostic-build qualification and remaining blockers are in the [implementation ledger](implementation-progress.md).
+**Verified current suite:** 114 unit cases and 16 local integration cases passed, zero skipped in the opted-in run. The main baseline had 60 unit cases; original discovery had 26. Counts include data rows, not coverage percentages. The conflict-resolution follow-up verified the same suites against a normal Release build with style enforcement enabled. Exact commands, historical baseline results and remaining blockers are in the [implementation ledger](implementation-progress.md).
 
 | Suite | Count | Evidence | Limits |
 | --- | --- | --- | --- |
@@ -25,12 +25,12 @@ An additional outside-repository S01 verification used the built Server registra
 
 ## Observed conventions and quality settings
 
-- Contracts/Core use `Niobium.Invoicing` root namespace; domains/flows/options add subnamespaces; Server uses `Niobium.Invoicing.Server`. Block namespaces predominate, with some file-scoped namespaces. Primary constructors inject dependencies; private/internal helpers are common.
+- Contracts/Core use `Niobium.Invoicing` root namespace; domains/flows/options add subnamespaces; Server uses `Niobium.Invoicing.Server`. Contracts/Core now use file-scoped namespaces following the main formatting update. Primary constructors inject dependencies; private/internal helpers are common.
 - Methods conventionally use Async suffix and CancellationToken. Pass tokens where supported, but review inherited behavior rather than claiming automatic cancellation/rollback.
 - Flows coordinate, domains transform/render/save, repositories abstract persistence. `IFlow` and framework assembly scanning determine DI discovery. Preserve attributes and inheritance when adding a component.
 - Public DTOs are mutable properties, with selected C# required members. Nullable annotations are enabled. There is no automatic validation merely from this style.
 - Contracts/Core enable recommended .NET analyzers, code style in build and TreatWarningsAsErrors. Existing exclusions are CA1848, CA2254, CA1305, CA1310, CA1711, CA1852; Core also excludes CS8618. Server does not adopt the same warning policy. Do not generalize one project's settings to all projects or add suppressions to hide regressions.
-- [.editorconfig](../.editorconfig) prefers four spaces, CRLF, no final newline for C#, explicit types, and specific qualification/style rules. Existing files vary in BOM/newline/style. Preserve local conventions rather than running a repository-wide formatter.
+- [.editorconfig](../.editorconfig) prefers four spaces, CRLF, a final newline, explicit types, and specific qualification/style rules. Existing files vary in BOM/newline/style. Preserve local conventions rather than running a repository-wide formatter.
 - Test names describe scenarios with underscores; Moq verifies boundaries. Do not confuse a test's descriptive name with evidence beyond its assertions.
 - No persistent XML output setting was enabled by this documentation change. Temporary compiler validation is recorded in [validation](discovery/validation.md).
 

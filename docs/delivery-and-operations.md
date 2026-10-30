@@ -17,7 +17,7 @@ Azure Deployment now runs restore/build, unit tests and local Azurite/HTTP compo
 
 Both workflows exclude `**/*.md` and `docs/**` on automatic triggers. C# comments still count as code-path changes. The literal push branch pattern `["*"]` is unchanged; do not assume it matches slash-containing branches. Manual dispatch bypasses path filtering. Package publication still has its original version/changed-project rules and does not inherit the deployment verification job.
 
-Deployment concurrency groups serialize each environment, with cancellation disabled; they do not themselves provide verification. This task submitted commits with `[skip ci]`, ran local checks, and did not dispatch, deploy, provision, publish or change external environment protections. See the [acceptance ledger](implementation-progress.md) for baseline style failures that still block the normal verification build.
+Deployment concurrency groups serialize each environment, with cancellation disabled; they do not themselves provide verification. This task submitted commits with `[skip ci]`, ran local checks, and did not dispatch, deploy, provision, publish or change external environment protections. The main formatting update resolves the earlier style failures; the normal Release build now passes. See the [acceptance ledger](implementation-progress.md) for verification and remaining deployment gaps.
 
 ## Build, tests, packages and identity
 

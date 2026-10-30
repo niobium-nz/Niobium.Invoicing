@@ -95,7 +95,7 @@ describes conservative legacy freezing, failure states, direct-client/mixed-serv
 risks and the absence of automatic takeover for an unknown writer. No schema keys,
 framework code or existing NuGet dependency versions were changed.
 
-## Final verification
+## Original verification before the main formatting update
 
 All commands ran from `/workspace/Niobium.Invoicing` after sourcing the reviewed
 `/workspace/.niobium-tools/env.sh`. Logs remain in the task workspace at
@@ -130,10 +130,38 @@ in-memory Azurite process is stopped after verification.
 | B09 | Template selection stays deferred as agreed; decide resource lookup, compatibility and fallback semantics before implementation. Decided display-field precedence is complete. |
 | B10 / U05 | Approve MCP tool/auth contracts and payment-provider/mandate/webhook/scheduling/credential ownership. These remain separate product work. |
 | U01 | Negative/credit/fractional quantity and rounding policy remains unchanged; no new business rule was inferred. |
-| Build baseline | Resolve repository-wide style migration separately. The normal build and therefore the new verification job remain blocked until that baseline issue is corrected. |
 | Rollout | Review/quiesce legacy servers and direct table writers that bypass checkpoints. Unknown abandoned storage writers require authorized operator recovery; no unsafe automatic takeover is supplied. |
 
 The branch is ready for code review with these limits; the complete research
-roadmap is not finished. Submission is a draft PR to main with skip-CI commits,
+roadmap is not finished. The implementation was submitted as PR #4 to main with skip-CI commits,
 not a deployment approval. No production data, production migration, package
 publication, real queue consumption or notification sending was performed.
+
+
+## PR #4 conflict-resolution follow-up
+
+Integrated main `9ea7280b2ef1271313555f6bee6425ccd4352421` (the enforced C#
+formatting commit) into `codex/invoicing-reliability-main`, preserving the original
+implementation baseline and PR history. Eight files conflicted. Resolutions retain
+the PR's validation, preparation/freeze, replay, token and notification changes
+while adopting main's file-scoped namespaces, formatting and CRLF convention.
+
+A temporary Roslyn syntax check compared all 24 C# files changed by the upstream
+commit and all 24 resolved files against their previous versions. Compiler tokens
+match after normalizing namespace syntax and using order; no implementation logic
+was changed by the conflict resolution. No unresolved merge markers remain.
+
+Verification in the same cloud workspace, after sourcing the reviewed SDK setup:
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo` | Passed with zero warnings/errors and style enforcement enabled. The earlier 408-error baseline issue is resolved by the main formatting commit. |
+| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore` | 114 passed, zero failures/skips, against the normal Release build. |
+| `NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18483/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore` | 16 passed, zero failures/skips, using a disposable local Azurite instance. |
+| `git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check origin/main` | Passed, retaining whitespace checks while recognizing main's CRLF line endings. |
+
+Logs and the temporary syntax checker are in
+`/workspace/scratch/invoicing-merge-review/`. Test tables are cleaned by the suite
+and the local emulator is stopped after verification. The merge commit uses
+`[skip ci]` to avoid deployment/publication side effects on submission. Remaining
+roadmap decisions and deployed integration gaps above are unchanged.
