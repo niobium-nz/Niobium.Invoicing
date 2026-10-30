@@ -22,7 +22,7 @@ namespace Niobium.Invoicing.Domains
         private static string? htmlTemplate;
 
         /// <summary>
-        /// Applies mutable request fields, recalculates totals and force-saves the loaded entity.
+        /// Validates and applies mutable request fields, recalculates totals and saves the loaded entity.
         /// </summary>
         /// <param name="update">Requested mutable fields and reported settlement.</param>
         /// <param name="invoiceItems">Supplied lines whose totals are recalculated in memory.</param>
@@ -32,8 +32,8 @@ namespace Niobium.Invoicing.Domains
         /// The Delivered guard applies to the loaded entity; UpsertFlow initializes that entity from a fresh
         /// snapshot. Supplied line totals are mutated in memory; line persistence is the caller's
         /// responsibility. Force-save uses repository create/upsert semantics, without an ETag update
-        /// precondition. Particulars and Reference are not applied; DueBy and PaymentInstructions may be
-        /// overwritten with null.
+        /// precondition. Null display overrides inherit snapshot defaults, empty strings clear them, and
+        /// a null DueBy retains the seven-day default. Core billing validation runs before mutation.
         /// </remarks>
         /// <exception cref="Niobium.ApplicationException">The loaded entity has a Delivered timestamp.</exception>
         public async Task UpdateAsync(IssueInvoiceRequest update, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
@@ -44,20 +44,24 @@ namespace Niobium.Invoicing.Domains
                 throw new ApplicationException(InternalError.Conflict, "Invoice has been delivered.") { Reference = entity.GetFullID() };
             }
 
-            foreach (InvoiceItem item in invoiceItems)
+            InvoiceItem[] items = invoiceItems.ToArray();
+            InvoiceValidation.Totals totals = InvoiceValidation.ValidateAndCalculate(update, entity, items);
+            foreach (InvoiceItem item in items)
             {
                 item.LineTotalCents = item.FigureLineTotalCents();
             }
 
             entity.Terms = update.Terms?.Trim();
-            entity.PaymentInstructions = update.PaymentInstructions?.Trim();
+            entity.PaymentInstructions = update.PaymentInstructions?.Trim() ?? entity.PaymentInstructions;
+            entity.Particulars = update.Particulars?.Trim() ?? entity.Particulars;
+            entity.Reference = update.Reference?.Trim() ?? entity.Reference;
             entity.InvoiceCycle = update.InvoiceCycle;
             entity.BillingPeriodStartDay = update.BillingPeriodStartDay;
             entity.BillingPeriodEndDay = update.BillingPeriodEndDay;
-            entity.DueBy = update.DueBy;
-            entity.SubtotalCents = invoiceItems.FigureSubTotalCents();
-            entity.TaxCents = entity.FigureTaxTotalCents(invoiceItems);
-            entity.GrandTotalCents = entity.FigureGrandTotalCents(invoiceItems);
+            entity.DueBy = totals.DueBy;
+            entity.SubtotalCents = totals.Subtotal;
+            entity.TaxCents = totals.Tax;
+            entity.GrandTotalCents = totals.GrandTotal;
             entity.SettledCents = update.Settled.Cents;
 
             await SaveAsync(force: true, cancellationToken: cancellationToken);

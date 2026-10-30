@@ -53,7 +53,10 @@ namespace Niobium.Invoicing
         /// </remarks>
         public void Sanitize()
         {
-            BilleeID = Billee.ID;
+            if (BilleeID == Guid.Empty && Billee != null)
+            {
+                BilleeID = Billee.ID;
+            }
         }
     }
 }

@@ -22,7 +22,7 @@ namespace Niobium.Invoicing
         {
             long subtotal = items.FigureSubTotalCents();
             long tax = invoice.FigureTaxTotalCents(items);
-            return subtotal + tax;
+            return checked(subtotal + tax);
         }
 
         /// <summary>
@@ -164,7 +164,7 @@ namespace Niobium.Invoicing
         /// </remarks>
         public static long FigureLineTotalCents(this InvoiceItem item)
         {
-            return item.UnitPriceCents * item.Quantity;
+            return checked(item.UnitPriceCents * item.Quantity);
         }
 
         /// <summary>

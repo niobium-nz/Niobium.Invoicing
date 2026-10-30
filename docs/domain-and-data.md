@@ -12,11 +12,11 @@ grand total cents = subtotal cents + tax cents
 displayed due cents = max(grand total cents - SettledCents, 0)
 ```
 
-`long` amounts represent cents; `int` quantities are whole units. Tax rate `1500` means 15%, not 1500% or 0.15%. `Math.Round` uses midpoint-to-even unless specified otherwise. Decimal display helpers round to two decimals; stored totals are recalculated on update. The helpers may enumerate input more than once, so callers need repeatable item sequences. There are no explicit currency compatibility, positive-quantity, range or credit validators here. A stored line total is overwritten during update; rendering uses stored values.
+`long` amounts represent cents; `int` quantities are whole units. Tax rate `1500` means 15%, not 1500% or 0.15%. `Math.Round` uses midpoint-to-even unless specified otherwise. Decimal display helpers round to two decimals; stored totals are recalculated on update. The helpers may enumerate input more than once, so callers need repeatable item sequences. Core now validates ownership, currency consistency, date ordering and checked arithmetic before persistence; see [billing validation](billing-validation.md). Quantity signs and credit policy remain unchanged. A stored line total is overwritten during update; rendering uses stored values.
 
 **Q09 clarification:** tax-inclusive means the final HTML grand total includes tax. It does not mean tax must be backed out of `UnitPriceCents`. For a synthetic line of 10,000 cents, quantity 1 and rate 1500, current subtotal is 10,000, tax 1,500 and final total 11,500 cents. This is consistent with that clarification. Biller-level 0% represents exemption in this product, not a universal statement about legal tax classifications.
 
-`Settled` is not a payment transaction: only its cents are copied, without currency checking or reconciliation. Manual bank-transfer overpayment is allowed by intended policy (Q03); due display clamps at zero. Automated collection for the exact outstanding balance is planned. Detailed rounding, fractional quantities and negative/credit policy remain [U01](decisions-and-risks.md#accepted-unknowns).
+`Settled` is not a payment transaction: nonzero amounts must match the invoice currency, and zero is currency-neutral. Its cents are copied without payment reconciliation. Manual bank-transfer overpayment is allowed by intended policy (Q03); due display clamps at zero. Automated collection for the exact outstanding balance is planned. Detailed rounding, fractional quantities and negative/credit policy remain [U01](decisions-and-risks.md#accepted-unknowns).
 
 ## Identifiers, tables and mapping
 
@@ -49,7 +49,7 @@ The table adapter groups multi-entity transactions by partition and at most 100 
 
 ## Lifecycle, dates and presentation
 
-`Invoice.BuildNew` snapshots biller contact/address/tax data and billee identity/address/email/currency/culture/timezone. It creates particulars/reference and sets `DueBy = UtcNow + 7 days`. Update then overwrites due date (including null), terms, payment instructions, billing period, totals and settlement. Request Particulars/Reference are not applied. Replays currently rebuild profile snapshots; the conditional-upsert improvement is intended to preserve an existing invoice (Q11).
+`Invoice.BuildNew` snapshots biller contact/address/tax data and billee identity/address/email/currency/culture/timezone. It creates particulars/reference and sets `DueBy = UtcNow + 7 days`. Update preserves the default due date when no override is supplied and rejects dates before issue. Terms, billing period, totals and settlement are applied. Particulars, Reference and PaymentInstructions accept trimmed overrides; null inherits defaults and an empty string clears the value. Replays currently rebuild profile snapshots; the conditional-upsert improvement is intended to preserve an existing invoice (Q11).
 
 `Delivered` stores enqueue-related completion time. There is no persistent Delivering/Cancelled state, payment ledger or audit-version collection. Intended editing/freeze/cancellation rules are in [product requirements](product.md). Five-year retention, soft deletion and all-version audit history are planned (Q08); no expiry/migration/backup mechanism is inferred from table storage.
 
@@ -63,7 +63,7 @@ The table adapter groups multi-entity transactions by partition and at most 100 
 
 ## Field catalog
 
-The tables below cover every declared application contract property. `required` records the C# modifier, not runtime business validation. `?` means nullable. Unless an initializer/factory is described, numbers default to zero, booleans to false, GUIDs to empty, nullable/reference fields to null and non-nullable DateTimeOffset to its default in an uninitialized object. Required members must be supplied by callers/compatible JSON deserialization; they are not automatically nonempty or valid. Factories and update behavior are described separately above.
+The tables below cover every declared application contract property. `required` records the C# modifier, not runtime business validation. `?` means nullable. Unless an initializer/factory is described, numbers default to zero, booleans to false, GUIDs to empty, nullable/reference fields to null and non-nullable DateTimeOffset to its default in an uninitialized object. Required members must be supplied by callers/compatible JSON deserialization; Core validation separately checks the billing invariants described above. Factories and update behavior are described separately above.
 
 JSON uses the queue camelCase conventions described in [API/messaging](api-and-messaging.md); no per-field JSON renaming is declared. Only IssueInvoiceCommand event metadata has explicit JsonIgnore. Configuration types follow the catalog in [development](configuration-and-development.md).
 
@@ -172,8 +172,8 @@ Source: [Invoice.cs](../src/Niobium.Invoicing.Contracts/Invoice.cs).
 | `BilleeAddressCountry` | `string?` | Billee country code snapshot copied when the invoice is built. |
 | `BilleeAddressZipcode` | `string?` | Billee postal code snapshot copied when the invoice is built. |
 | `BilleeBusinessID` | `string?` | Optional customer business identifier snapshot. |
-| `Particulars` | `string?` | Payment particulars generated from the customer name, uppercased with LIMITED/spaces removed and truncated to 12 characters; request override is not applied. |
-| `Reference` | `string?` | Payment reference derived from the invoice ID, retaining its last 12 characters; request override is not applied. |
+| `Particulars` | `string?` | Payment particulars generated from the customer name, uppercased with LIMITED/spaces removed and truncated to 12 characters; a nonnull request overrides this default. |
+| `Reference` | `string?` | Payment reference derived from the invoice ID, retaining its last 12 characters; a nonnull request overrides this default. |
 | `InvoiceCycle` | `int` | Numeric InvoiceCycle used only for billing-period presentation; it does not schedule recurring invoices. |
 | `BillingPeriodStartDay` | `DateTimeOffset?` | Optional start instant used for daily, monthly, annual or range presentation. |
 | `BillingPeriodEndDay` | `DateTimeOffset?` | Optional end instant used only for custom-range presentation. |
@@ -185,16 +185,16 @@ Source: [Invoice.cs](../src/Niobium.Invoicing.Contracts/Invoice.cs).
 | `TaxKind` | `int?` | Optional numeric Niobium.Finance.TaxKind used as a display label. |
 | `GrandTotalCurrency` | `string` required | Currency code for the grand total, settlement and due display, initially copied from the billee. |
 | `GrandTotalCents` | `long` | Stored subtotal plus tax in cents; the displayed final total includes tax. |
-| `DueBy` | `DateTimeOffset?` | Optional due instant in the current contract. BuildNew defaults to UTC now plus seven days; UpdateAsync can overwrite it with null. |
+| `DueBy` | `DateTimeOffset?` | Optional due instant in the current contract. BuildNew defaults to UTC now plus seven days; Core preserves it for a null override and rejects dates before issue. |
 | `ContactName` | `string?` | Biller contact person snapshot. |
 | `ContactPhoneNumber` | `string?` | Biller contact telephone snapshot. |
 | `ContactEmailAddress` | `string?` | Biller contact email snapshot, not the notification destination. |
 | `Terms` | `string?` | Optional request terms, trimmed during update. |
-| `PaymentInstructions` | `string?` | Optional payment text; UpdateAsync replaces the profile default with the trimmed request value, including null. |
+| `PaymentInstructions` | `string?` | Optional payment text; a nonnull trimmed request overrides the profile default; empty clears it and null inherits it. |
 | `TimeZone` | `string` required | Billee IANA timezone captured for invoice date presentation. |
 | `Culture` | `string` required | Billee culture name captured for invoice date presentation. |
 | `RecipientEmail` | `string?` | Captured customer email address; a blank value skips notification enqueueing. |
-| `SettledCents` | `long` | Reported amount already settled in cents; only request Settled.Cents is copied, without checking its currency. |
+| `SettledCents` | `long` | Reported amount already settled in cents; nonzero settlement must use the invoice currency; zero is currency-neutral and overpayment remains allowed. |
 | `Delivered` | `DateTimeOffset?` | UTC time recorded after notification enqueueing succeeds and this invoice is saved; not recipient-delivery confirmation. |
 | `Token` | `string?` | Saved bearer link token required for public viewing and reused on resend. New v2 tokens are saved before enqueueing; legacy saved values remain valid. No explicit expiry field is present. |
 | `Template` | `string?` | Copied profile template reference; current HTML rendering ignores it in favor of the embedded template. |
@@ -211,10 +211,10 @@ Source: [InvoiceItem.cs](../src/Niobium.Invoicing.Contracts/InvoiceItem.cs).
 | `ETag` | `string?` | Optional storage ETag for precondition-aware operations. |
 | `Subject` | `string` required | Line subject shown in invoice and notification templates. |
 | `Description` | `string?` | Optional line description. |
-| `UnitPriceCurrency` | `string` required | Currency code for unit-price display; compatibility with the invoice is not validated. |
+| `UnitPriceCurrency` | `string` required | Currency code for unit-price display; Core requires a supported currency matching the invoice. |
 | `UnitPriceCents` | `long` | Unit price in cents used by line arithmetic before invoice-level tax. |
 | `Quantity` | `int` | Integer number of units; BuildNew sets one, with no range validator here. |
-| `LineTotalCurrency` | `string` required | Currency code for stored line-total display; BuildNew copies the supplied currency. |
+| `LineTotalCurrency` | `string` required | Currency code for stored line-total display; BuildNew copies the supplied currency; Core requires it to match the invoice. |
 | `LineTotalCents` | `long` | Stored unit-price cents times quantity, recalculated by InvoiceDomain.UpdateAsync. |
 
 ### IssueInvoiceRequest
@@ -227,16 +227,16 @@ Source: [IssueInvoiceRequest.cs](../src/Niobium.Invoicing.Contracts/IssueInvoice
 | `Tenant` | `Guid` required | Invoicing management group; HTTP issuance requires equality with the GroupSid claim. |
 | `BillerID` | `Guid` required | Issuing business; HTTP issuance requires equality with the Sid claim. |
 | `BilleeID` | `Guid` required | Customer row identifier used when no embedded billee is supplied. |
-| `Particulars` | `string?` | Optional requested payment particulars; current update flow does not apply this field. |
-| `Reference` | `string?` | Optional requested payment reference; current update flow does not apply this field. |
+| `Particulars` | `string?` | Optional requested payment particulars; nonnull trimmed values override the generated default; empty clears it. |
+| `Reference` | `string?` | Optional requested payment reference; nonnull trimmed values override the generated default; empty clears it. |
 | `InvoiceCycle` | `int` | Numeric InvoiceCycle used for billing-period display, not scheduling. |
 | `BillingPeriodStartDay` | `DateTimeOffset?` | Optional billing-period start instant copied to the invoice. |
 | `BillingPeriodEndDay` | `DateTimeOffset?` | Optional custom-range end instant copied to the invoice. |
-| `DueBy` | `DateTimeOffset?` | Requested due instant; current update copies null as well as non-null values, replacing the seven-day default. |
+| `DueBy` | `DateTimeOffset?` | Requested due instant; null preserves the default; a supplied date must not precede issue. |
 | `Terms` | `string?` | Optional invoice terms trimmed on update. |
-| `PaymentInstructions` | `string?` | Optional payment instructions trimmed on update; null replaces the biller default. |
+| `PaymentInstructions` | `string?` | Optional payment instructions trimmed on update; null inherits the biller default; empty clears it. |
 | `InvoiceItems` | `List<InvoiceItem>` required | Supplied replacement line collection; the flow does not rewrite each item parent key. |
-| `Settled` | `Amount` | Reported settlement amount, default Amount.Zero; update copies cents without checking currency. |
+| `Settled` | `Amount` | Reported settlement amount, default Amount.Zero; nonzero amounts must match invoice currency; zero is currency-neutral. |
 | `NotifyBillee` | `bool` | Whether IssueFlow should enqueue notification after persistence; the HTTP endpoint always resets this to false. |
 
 ### IssueInvoiceCommand

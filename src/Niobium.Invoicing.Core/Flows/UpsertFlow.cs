@@ -31,6 +31,7 @@ namespace Niobium.Invoicing.Flows
         /// <exception cref="Niobium.ApplicationException">The biller or customer cannot be found.</exception>
         public virtual async Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
         {
+            InvoiceValidation.ValidateRequest(request);
             Biller? biller = await profileService.RetrieveAsync(request.Tenant, request.BillerID, cancellationToken: cancellationToken)
                 ?? throw new ApplicationException(InternalError.NotFound, "Biller does not exist.");
 
@@ -43,6 +44,7 @@ namespace Niobium.Invoicing.Flows
                 throw new ApplicationException(InternalError.NotFound, "Billee does not exist.");
             }
 
+            InvoiceValidation.ValidateParties(request, biller, billee);
             Invoice newInvoice = Invoice.BuildNew(request.InvoiceID, biller, billee);
             InvoiceDomain domain = await invoiceRepo.BuildAsync(newInvoice, cancellationToken);
             await domain.UpdateAsync(request, request.InvoiceItems, cancellationToken);
