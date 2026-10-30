@@ -1,0 +1,29 @@
+name: PR readiness
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_run:
+    workflows: [Azure Deployment]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Never execute code from a pull request under pull_request_target.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            await require('./scripts/delivery-policy.cjs').readiness({github, context, core});

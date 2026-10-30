@@ -2,76 +2,93 @@ name: Azure Deployment
 
 on:
   push:
-    branches: ["*"]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-  pull_request:
-    branches: ["main"]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-  workflow_dispatch:
+    branches: ['**']
 
 permissions:
-  id-token: write
   contents: read
 
 env:
   buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
+  SourceRevisionId: '${{ github.sha }}'
 
 jobs:
   verify:
+    name: Build and local tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     services:
       azurite:
         image: mcr.microsoft.com/azure-storage/azurite:3.35.0
         ports:
           - 10002:10002
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.x.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Restore
-        run: dotnet restore Niobium.Invoicing.slnx --nologo
+        run: |
+          dotnet restore Niobium.Invoicing.slnx --nologo
+          dotnet restore src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --nologo
       - name: Build
-        run: dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo
-      - name: Unit tests
-        run: dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore
-      - name: Local storage and HTTP boundary integration tests
+        run: |
+          dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo
+          dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo
+      - name: Delivery policy tests
+        run: |
+          node --test scripts/delivery-policy.test.cjs
+          python -m unittest discover -s scripts -p "test_*.py"
+      - name: Unit tests with coverage
+        run: dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/unit
+      - name: Local integration tests with coverage
         env:
           NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT: 'http://127.0.0.1:10002/devstoreaccount1'
-        run: dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore
+        run: dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/local-integration
+      - name: Check application coverage
+        run: python scripts/check-coverage.py artifacts/unit/coverage.cobertura.xml artifacts/local-integration/coverage.cobertura.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-test-evidence-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+
   test:
+    name: Deploy test and run integration
+    if: github.ref != 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
-    environment: 'test'
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
     concurrency:
+      # Keep deployment and its tests under the SAME lock, including across feature branches.
       group: test-deploy
       cancel-in-progress: false
-
+    env:
+      AZURE_ENV_NAME: test
+      APP_SHORT_NAME: niobiuminvoicing
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      SERVICE_BUS_QUEUE_NAMES: 'issueinvoicecommand,notifycommand'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Install azd
-        uses: Azure/setup-azd@v2
-        
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+      - uses: Azure/setup-azd@v2
       - name: Azure login
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: azd login
         run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
-
+      - name: Configure isolated notification sink
+        run: python scripts/test-resources.py configure
       - name: Publish
         env:
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
@@ -90,19 +107,52 @@ jobs:
           APPSETTING_IDENTITYSERVICEOPTIONS__IDTOKENPUBLICKEY: '-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlmuIHhRUT+IvTdTajuOEdPZ75pqJrajOyDdJqf42siofTKHCPCZqtWaftL8Jae5VMHUNCflXzm9aKTLgerAxrGyCL3BkZj/dj4KjbeFoY1Akz5EJd5qjRNtzdoqUkDsuaigJTDDhyHvdVKRHzYAJSKgiw9CLRkzyKDZAp1Fxm2xICzRoF9OfH0jv5Qn11gkMHrkVkB6nv7QD3EGS2rnDwKudjnlsvgjpoNMMNvY7EHqkuxjHdGh4Hy7M3UXl50Bft9ky3gKeCgpvVYRPXHdT6k3e+81J7liEJYdVb5taPeNf3wB8WCP8Xc7FO6vod9ziDIkJv+xqUWYtlyGZBGTBrQIDAQAB-----END PUBLIC KEY-----'
           APPSETTING_PROFILEOPTIONS__PROFILEAPPID: 'e514f381-77cd-4ce9-ab6c-1a960fc7d9ed'
           APPSETTING_PROFILEOPTIONS__PROFILESERVICEHOST: 'https://api.identity.niobium.co.nz'
-          APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE: 'niobiumnotify-sb-test.servicebus.windows.net'
           APPSETTING_BILLINGOPTIONS__INVOICETOKENSECRETSALT: '1234567890'
-          APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET: '012345678901234567890123456789AB'
         run: |
           azd package --no-prompt
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
-  prod:
-    # B04 remains partial: a deployed-environment integration gate still needs isolated resources (B07).
-    needs: test
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      - name: Prepare deployed integration credentials
+        run: python scripts/test-resources.py credentials
+      - name: Run deployed integration tests
+        timeout-minutes: 10
+        env:
+          TEST_TOKEN_ISSUER: Niobium.Invoicing.Server.Test
+          TEST_TOKEN_AUDIENCE: Niobium.Invoicing.Client.Test
+        run: dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
+      - name: Upload deployed test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-test-evidence-${{ github.sha }}
+          path: artifacts/deployed/
+          if-no-files-found: error
+
+  reviewed-change:
+    name: Verify reviewed production change
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: 'prod'
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            await require('./scripts/delivery-policy.cjs').production({github, context, core});
+
+  prod:
+    if: github.ref == 'refs/heads/main'
+    needs: [verify, reviewed-change]
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
     concurrency:
       group: production-deploy
       cancel-in-progress: false
@@ -111,6 +161,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+
       - name: Install azd
         uses: Azure/setup-azd@v2
 
