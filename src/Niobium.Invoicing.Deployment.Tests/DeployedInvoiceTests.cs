@@ -85,13 +85,15 @@ public sealed class DeployedInvoiceTests
             {
                 try
                 {
+                    TableEntity owned = await Read(id, owningBiller);
+                    Assert.IsTrue(owned.GetGuid(nameof(Invoice.Billee)) == customer, "Refusing to delete an unrelated invoice.");
                     TableClient items = tables.GetTableClient(nameof(InvoiceItem));
                     await foreach (TableEntity item in items.QueryAsync<TableEntity>(TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}")))
                     {
                         Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)), "Refusing to delete an unrelated item.");
                         await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
                     }
-                    await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(Invoice.BuildPartitionKey(owningBiller), Invoice.BuildRowKey(id));
+                    await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
                 }
                 catch (Exception error) { failures.Add(error); }
             }
@@ -221,6 +223,18 @@ public sealed class DeployedInvoiceTests
     }
 
     [TestMethod]
+    public async Task Fixture_collision_leaves_the_existing_invoice_unchanged_and_unclaimed_for_cleanup()
+    {
+        long id = await SeedInvoice();
+        TableEntity existing = await Read(id);
+        int trackedCount = invoices.Count;
+        RequestFailedException collision = await Assert.ThrowsAsync<RequestFailedException>(() => SeedInvoice(invoiceID: id));
+        Assert.AreEqual(409, collision.Status);
+        Assert.AreEqual(trackedCount, invoices.Count, "A failed creation must not schedule the existing row for cleanup.");
+        Assert.AreEqual(existing.ETag, (await Read(id)).ETag, "A fixture collision must not replace the existing invoice.");
+    }
+
+    [TestMethod]
     public async Task Debug_email_route_is_absent_from_deployment()
     {
         using HttpResponseMessage response = await http.GetAsync($"/email/{Guid.NewGuid()}/invoices/1");
@@ -310,19 +324,15 @@ public sealed class DeployedInvoiceTests
         Console.WriteLine($"Persistent test fixture: TEST_INVOICE_BILLER={referenceBiller}; TEST_INVOICE_ID={referenceInvoice}");
     }
 
-    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, bool persistent = false)
+    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, bool persistent = false, long? invoiceID = null)
     {
-        long id = Invoice.ParseID(DateTimeOffset.UtcNow.AddMilliseconds(invoices.Count));
+        long id = invoiceID ?? Invoice.ParseID(DateTimeOffset.UtcNow.AddMilliseconds(invoices.Count));
         await foreach (TableEntity _ in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(
             TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}"), maxPerPage: 1))
         {
             Assert.Fail("Generated invoice ID collides with existing items; refusing to modify them.");
         }
         Guid owningBiller = issuer ?? biller;
-        if (!persistent)
-        {
-            invoices.Add((owningBiller, id));
-        }
         Invoice invoice = Invoice.BuildNew(id, new Biller
         {
             PartitionKey = group ?? tenant,
@@ -334,6 +344,11 @@ public sealed class DeployedInvoiceTests
             TimeZone = "Pacific/Auckland"
         }, Customer(owningBiller, recipient));
         await services.GetRequiredService<IRepository<Invoice>>().CreateAsync([invoice]);
+        // A rejected or uncertain creation must never claim a pre-existing row for cleanup.
+        if (!persistent)
+        {
+            invoices.Add((owningBiller, id));
+        }
         return id;
     }
 
