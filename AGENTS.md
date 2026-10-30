@@ -4,7 +4,7 @@
 
 - Read this file and task-specific documents below; linked Markdown is not automatically loaded.
 - Record working directory, branch, commit and `git status --short`. Preserve unrelated changes.
-- The default branch and normal integration target is `main` (owner-confirmed 2026-10-30). Use `main` for authorized pushes and PR bases; `master` is a legacy branch.
+- The default branch and normal integration target is `main` (owner-confirmed 2026-10-30). Push implementation changes to a feature branch; `main` is only the reviewed PR merge target. `master` is retired.
 - Use the analyzed baseline in [docs/README.md](docs/README.md) as a reference, not an assumption about the current checkout.
 - Distinguish observed behavior from owner-confirmed requirements and planned improvements.
 - Do not silently fix a discrepancy while documenting it. Keep changes within the requested scope.
@@ -16,6 +16,7 @@
 - `src/Niobium.Invoicing.Server`: Functions, middleware composition, entitlement registration.
 - `src/Niobium.Invoicing.Core.Tests`: MSTest/Moq unit tests with mocked infrastructure.
 - `src/Niobium.Invoicing.Integration.Tests`: isolated local Table/HTTP component tests; opt-in setup and limitations in [integration tests](docs/integration-tests.md).
+- `src/Niobium.Invoicing.Deployment.Tests`: mandatory test-environment HTTP/Service Bus checks, invoked separately from the solution after deployment.
 - `infra/`, `azure.yaml`, `.github/workflows/`: provisioning and publishing side effects.
 - Niobium is a read-only reference unless a task explicitly authorizes framework changes.
 - Match NuGet versions to pinned source in [niobium-integration.md](docs/niobium-integration.md). Do not substitute current framework main or replace PackageReferences with ProjectReferences.
@@ -67,12 +68,21 @@ git diff --check
 - Do not add warning suppressions or run formatters to make unrelated changes appear clean.
 - Update relevant docs/tests when behavior changes; record actual commands/results and blockers.
 
+## Delivery policy (owner instruction, 2026-10-30)
+
+- Every change ends with verification of CI/CD on the latest pushed commit. Report the run URL, commit and terminal result, including test deployment and deployed integration tests. Local success, an older run, skipped jobs or a still-running workflow do not establish success. Fix failures within scope; identify any external blocker honestly.
+- Implement and push to a feature branch directly. Do not use `[skip ci]`, skip-check trailers or docs-only deployment exclusions. Normal feature pushes and their test-environment deployment/fixtures are authorized by the standing owner instruction.
+- Do not automatically create a PR for each change. Create one only when requested, after that exact feature commit passes test deployment and deployed integration tests. PRs target `main` and require an independent approval of the current head before production.
+- Aim for high coverage with meaningful boundary, failure/retry and integration cases. CI requires at least 90% combined authored application line coverage and 80% per Contracts/Core/Server module. Do not weaken thresholds or exclude authored files to make a failing change pass. Add deployed cases when the changed behavior crosses the HTTP, queue or persistence boundary.
+- Read [delivery/operations](docs/delivery-and-operations.md) and [integration tests](docs/integration-tests.md) before changing workflows or running deployed tests. Use the controlled test notification sink and synthetic records; never production data or an email provider.
+- A successful feature pipeline makes a commit eligible for review; it is not permission to merge or deploy production. Main production/package jobs independently require reviewed, tested content. Protected-branch administration remains an external requirement described in the delivery guide.
+
 ## Operational boundaries
 
-- Do not commit, push, open a PR, publish, deploy, dispatch workflows, run migrations, consume real queues, send notifications or write cloud resources without explicit task authorization.
+- The delivery policy above authorizes feature commits/pushes and their automated test deployment, test-only queue fixtures and cleanup. Other publication, production deployment, migrations, real notifications, cloud writes and workflow dispatch require task authorization. Do not open a PR unless requested after the deployment gate passes.
 - Read workflow triggers before suggesting submission. Documentation edits can deploy; Contracts edits can publish a package.
 - Inspect scripts before execution. `azd provision` hooks modify a parameter file and write Key Vault secrets.
-- Do not start against existing resources. Names such as `dev` and `test` are not isolation guarantees.
+- Local integration tests use disposable loopback storage. Deployed tests use only the workflow-selected test resources, a controlled notification sink and synthetic run-scoped records. Names such as `dev` and `test` alone are not isolation guarantees.
 - Do not use credentials found in files. Use synthetic data and approved isolated services for validation.
 - Never copy secrets, customer data, full bearer/SAS/link tokens or sensitive operational values into docs/logs. Use configuration names and redacted examples.
 - Report suspected security exposures privately with locations. Do not publish exploit details or perform unrelated remediation.

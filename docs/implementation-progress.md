@@ -123,7 +123,7 @@ in-memory Azurite process is stopped after verification.
 | Item | Specific work or decision still required |
 | --- | --- |
 | B02 | Implement the concurrency-safe inbox in Niobium.Notification, with provider acceptance/timeout/crash recovery rules and tests. That repository is outside the target scope. Repeated publication remains intentional. |
-| B07 / final B04 | Supply a reviewed isolated Azure test stack and controlled queue sink; authorize its deployment/verification in a separate task. Add real Functions middleware/binding, Service Bus ingestion/emission and post-deployment checks before claiming production promotion is fully gated. The present task forbids deployment. |
+| B07 / final B04 | The follow-up below authorizes and implements test deployment/host/queue verification and reviewed promotion. Confirm its exact pushed CI result; direct-resource entitlement and external-service/recovery integration remain outside this suite. |
 | B06 / U05 | Approve confirmation event identity, authentication, provider outcome mapping, duplicate/out-of-order rules, cancellation while Delivering, and legacy delivery-state interpretation. No confirmation or cancellation contract invented. |
 | B08 / U04 | Decide audit/version schema and consumer compatibility, retention start/exception/purge policy, backup/restore ownership and RPO/RTO. No append-only version store, soft-delete migration, automated deletion or restore claim implemented. |
 | B05 / Q16 | Explicitly deferred. Reopen key migration/dual-read/backfill/rollback compatibility before changing InvoiceItem partitions. Existing cross-biller collision risk remains. |
@@ -165,3 +165,31 @@ Logs and the temporary syntax checker are in
 and the local emulator is stopped after verification. The merge commit uses
 `[skip ci]` to avoid deployment/publication side effects on submission. Remaining
 roadmap decisions and deployed integration gaps above are unchanged.
+
+
+## Feature delivery policy follow-up (2026-10-30)
+
+Owner instruction Q22 supersedes the earlier prohibition on test deployment and skip-CI submission: push feature changes directly, confirm the latest commit's complete CI/CD result after every change, deploy and integration-test test before creating a requested PR, and require review before production. No PR is created automatically. Production deployment, production data and migrations remain outside this feature task.
+
+The branch `codex/test-deployment-gates` starts at conflict-resolution commit `0bdf34b894a8109285001ea28d22c8838d830ddd`, which already contains main `9ea7280b2ef1271313555f6bee6425ccd4352421`. The original implementation baseline remains `e2f7269676359d85cc7e4308d4babfd1f6f0b39c`. The owner subsequently merged PR #4 as `a14aca1de948589e1e47b44e179e8a84a8f0537a`; this feature is based on that current main commit. The agent did not merge it.
+
+| Plan / policy item | Change and acceptance evidence | Remaining limits |
+| --- | --- | --- |
+| B04 / Q22 | All feature pushes, including docs and slash branches, run local checks, deploy test and run deployed integration under one environment lock. Main production and package publication require the reviewed PR head's prior successful deployment and identical source tree. Manual/PR deployment and feature package publication are removed. | Required status/review branch protection needs repository administration. Workflows cannot prevent PR object creation. Listener activates when merged to the default branch. |
+| B07 / Q22 | Standalone deployed suite checks exact binary SHA, middleware/HTTP status, saved records, replay/HTML/token freeze, real incoming/outgoing Service Bus and missing debug route. Notifications use a controlled test sink. | Actual deployed outcome must be read from the pushed commit's workflow; external profile, direct-resource entitlement, Notification provider and operational recovery remain separate. |
+| B03 / test quality | Seven added public calculation/construction cases, seven transport boundary cases and stronger real-storage HTML verification. Coverage gate is 90% combined / 80% per module. Ten Node and five Python tests exercise the delivery policy/tooling. | Coverage is authored line coverage, not proof of every branch or deployed behavior. |
+| Documentation | AGENTS, delivery, integration, API and testing pages record the standing policy, exact gates, safe fixture boundaries and external settings. | No production review/merge authority is granted to the agent. |
+
+Local verification from the repository root after the reviewed SDK setup:
+
+| Exact command | Result |
+| --- | --- |
+| `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo` | Passed with zero warnings/errors. |
+| `dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo` | Compiles separately; no Azure deployment is inferred from compilation. |
+| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/invoicing-delivery-evidence/unit` | 121 passed, zero skipped. |
+| `NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18484/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/invoicing-delivery-evidence/local-integration` | 23 passed, zero skipped. |
+| `python scripts/check-coverage.py /workspace/scratch/invoicing-delivery-evidence/unit/coverage.cobertura.xml /workspace/scratch/invoicing-delivery-evidence/local-integration/coverage.cobertura.xml` | 697/762 authored lines, 91.47%; Contracts 100%, Core 90.72%, Server 84.81%; gate passed. |
+| `node --test scripts/delivery-policy.test.cjs` | 10 passed. |
+| `python -m unittest discover -s scripts -p 'test_*.py'` | 5 passed. |
+
+Live evidence must be attached to the final delivery response with the exact commit and workflow URL. Local logs are under `/workspace/scratch/invoicing-delivery-evidence/`; uploaded CI reports are the durable per-commit evidence. Never label a pending, failed or skipped deployment run successful.

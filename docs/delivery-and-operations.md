@@ -1,33 +1,46 @@
 # Delivery and operations
 
-## Workflow eligibility and side effects
+## Required delivery sequence
 
-These are source declarations, not verified GitHub/Azure settings or deployed state. Test/prod resource separation is owner-confirmed (Q06). Environment reviewers, protections and actual credential grants remain unknown.
+The owner confirmed this policy on 2026-10-30. It replaces earlier skip-CI submission and deployment restrictions for the **test environment only**.
 
-Azure Deployment now runs restore/build, unit tests and local Azurite/HTTP component integration checks in `verify`, then permits the test deployment through `needs: verify`. Production depends on test deployment and is eligible only on main push or main manual dispatch. PRs cannot select production. A meaningful post-deployment integration gate is still missing (B07); B04 is partial, not a completed production-promotion design.
+1. Implement on a feature branch, run applicable local checks, and push directly. Do not create a PR automatically or use skip-CI markers. Slash-containing branches and documentation-only changes also run the deployment workflow.
+2. `Azure Deployment` restores/builds the solution and the separate deployed-test project, runs delivery-policy tests, and runs unit/local Azurite integration tests with coverage. Authored Contracts/Core/Server source must reach **90% combined line coverage and 80% per module**. Coverage is a union of executed source lines across suites; generated `obj`/`bin` files are excluded, authored application files are not.
+3. A feature push then deploys the test environment and runs the [deployed integration suite](integration-tests.md). Deployment and testing share one concurrency lock across all feature branches. A failed or skipped suite never qualifies as deployment verification. The deployed binary must report the exact pushed commit at `GET /health`.
+4. End every change with the latest commit's CI/CD run URL and terminal outcome. Wait for deployment and integration completion. Resolve failures or report their concrete blocker; do not equate local tests or a green older commit with success.
+5. Only after success, and when requested, create a PR to `main`. Review must approve the current head. Update the feature branch from current main and repeat deployment/tests when needed so the final merged tree is exactly the tested tree.
+6. A main push runs local verification and an independent production gate. It must correspond to one merged same-repository PR, with an approval from someone other than its author and no outstanding change request. The exact PR head must have passed the feature deployment before merge; its Git tree must equal the main commit's tree. Only then can production deployment proceed.
 
-| Matching event | Test deployment | Production deployment | Package workflow |
-| --- | --- | --- | --- |
-| Push main | After verification | After successful test deployment | Production release |
-| Push matching non-main branch | After verification | No | Prerelease |
-| PR targeting main | After verification | No | No PR trigger |
-| Manual dispatch on main | After verification | After successful test deployment | Production release if that workflow is dispatched |
-| Manual dispatch on another ref | After verification | No | Prerelease if that workflow is dispatched |
-| Markdown/docs-only push or PR | Filtered out | Filtered out | Push filtered out |
+| Event | Verification / test deployment | Production / packages |
+| --- | --- | --- |
+| Feature push, including docs-only and branches containing `/` | Local checks, coverage, deploy test, deployed integration | Neither |
+| Main push | Local checks plus reviewed/tested-content gate; no test redeployment | Production after both gates; package publication has the same reviewed/tested-content gate |
+| PR targeting main | API-only `Test deployment verified` status checks existing feature-run evidence | Neither |
+| Manual dispatch / PR event in deployment workflow | No trigger | Neither |
 
-Both workflows exclude `**/*.md` and `docs/**` on automatic triggers. C# comments still count as code-path changes. The literal push branch pattern `["*"]` is unchanged; do not assume it matches slash-containing branches. Manual dispatch bypasses path filtering. Package publication still has its original version/changed-project rules and does not inherit the deployment verification job.
+The package workflow no longer publishes feature prereleases. Its existing changed-project/version logic is retained for reviewed main pushes. It filters docs-only changes; Azure Deployment does not. There is no manual-dispatch bypass in either workflow. No change here merges a PR, deploys production or publishes a package.
 
-Deployment concurrency groups serialize each environment, with cancellation disabled; they do not themselves provide verification. This task submitted commits with `[skip ci]`, ran local checks, and did not dispatch, deploy, provision, publish or change external environment protections. The main formatting update resolves the earlier style failures; the normal Release build now passes. See the [acceptance ledger](implementation-progress.md) for verification and remaining deployment gaps.
+## Enforcement and repository settings
+
+[`scripts/delivery-policy.cjs`](../scripts/delivery-policy.cjs) checks GitHub run, job, deployed-test-step, review and Git-tree evidence. Both required feature jobs must succeed, as must the explicitly named deployed-test step. Production rejects direct pushes, stale reviews, untested heads, test completion after merge, and extra content introduced by a newer base branch. Local policy tests exercise these rejection paths.
+
+[`pr-readiness.yml`](../.github/workflows/pr-readiness.yml) handles PR changes and deployment completion, checks out only the default branch's trusted policy, and writes the `Test deployment verified` commit status. It never runs PR code with `pull_request_target` credentials. This listener becomes active once the workflow reaches the default branch; the initial policy feature branch still obtains evidence from its push-triggered deployment workflow.
+
+**Repository administration still required:** protect `main` with PR-only changes, at least one independent approval, dismissal of stale approvals, up-to-date branches, the required `Test deployment verified` status, and no bypass/direct pushes. Keep workflow and environment administration restricted to trusted maintainers. The connected GitHub identity could not read branch protection (403); the rulesets API returned no rulesets. This task cannot claim these external settings are configured. The production gate blocks deployment without its evidence even when merge protection is absent.
+
+GitHub Actions cannot prevent creation of a PR object. Opening a PR only after green deployed tests is the owner/agent process rule in [AGENTS.md](../AGENTS.md). Required status/review protection prevents an ineligible PR from merging; the workflow additionally blocks unqualified production promotion. Neither environment approval settings nor review rules should be inferred merely from YAML.
 
 ## Build, tests, packages and identity
 
-Deployment: checkout v4, Azure/setup-azd v2, azure/login v3 and azd federation login, followed by `azd package --no-prompt`, `azd provision --no-state --no-prompt`, `azd deploy --no-prompt`. The workflow grants id-token write and contents read. Login uses GitHub secret names AZURE_CLIENT_ID/TENANT_ID/SUBSCRIPTION_ID; no values are documented. Actual federated credentials/permissions are external.
+The workflow explicitly installs .NET 10 in build and deployment jobs. Test deployment uses GitHub OIDC through `azure/login` and `azd auth login`, then the existing `azd package`, `azd provision --no-state` and `azd deploy` sequence. Provision hooks still perform cloud writes. Local runners receive no Azure identity from this workflow.
 
-[azure.yaml](../azure.yaml) prepackage runs `dotnet test --solution ../../Niobium.Invoicing.slnx --configuration Release` in the service context, before deployment. Job name `test` denotes a deployment environment, not a separate integration suite. There are no post-deployment tests in source. The verification job explicitly installs .NET 10. Deployment jobs still depend on their runner/azd tooling. The debug EmailInvoice function has been removed, with local compiled-route evidence; no deployed route check was run.
+The test job creates a `notifycommand` sink in Invoicing's own test Service Bus namespace and configures the test function to emit there, rather than the Notification email service. A fresh masked access-token signing key is generated for each test deployment and written using the existing Key Vault hook. Deployed tests obtain test-only keys in memory/environment from the authenticated workflow; no credential is committed in fixtures or artifacts. Production notification routing and secrets retain their existing configuration.
 
-Package publication: checkout v7, setup-dotnet v6 (`10.x.x`), NuGet/login v1. Version is `MAJOR_VERSION.MINOR_VERSION.github.run_number`, plus `-prerelease` off main, passed to build as BUILD_BUILDNUMBER. Contracts has GeneratePackageOnBuild/IsPackable true, repository metadata, embedded untracked sources and snupkg symbols. Only Contracts is selected for push to the public NuGet feed; no explicit symbol-push command is present. Without BUILD_BUILDNUMBER, application project version properties default to 1.0.0.0. Deployment injects SERVICE_VERSION from its workflow buildVersion; that is not proof that assembly/package versions received the same property during azd packaging.
+`SourceRevisionId` stamps the commit into Server assembly metadata. The anonymous `/health` response exposes only `status` and `commit`; it proves which host binary responds, not that all dependencies are healthy. The deployed tests exercise HTTP authentication/validation, Table persistence, saved-token HTML, replay, real incoming Service Bus processing and the controlled notification sink, and the removed debug route.
 
-Publishing uses a short-lived NuGet credential obtained through OIDC; `NUGET_USER` identifies the publishing account. No release-tag, manual package approval or rollback workflow is declared. Dependency versions are fixed in csproj files, with no lockfile.
+[azure.yaml](../azure.yaml)'s prepackage solution tests remain an additional check; their unconfigured local storage skips are not deployed integration evidence. The required verification job explicitly opts into Azurite, and the separately invoked deployed suite fails on missing configuration instead of skipping. Test and coverage artifacts are uploaded even on failures where reports exist.
+
+Package version remains `MAJOR_VERSION.MINOR_VERSION.github.run_number`, passed as BUILD_BUILDNUMBER; only changed Contracts packages are selected. NuGet uses its existing OIDC login. No package version or Niobium dependency was upgraded for this delivery change. Production rollback and artifact promotion runbooks remain separate work; rebuilding an identical source tree does not guarantee identical dependency restore or byte-for-byte binaries.
 
 ## Provisioning and settings flow
 
@@ -46,7 +59,7 @@ Do not run these scripts to validate documentation. Settings and precedence are 
 | --- | --- | --- |
 | Functions | Linux .NET 10 isolated, FC1 Flex Consumption, 512 MB instances, max 10, alwaysOn false | Not a measured capacity or actual scale record |
 | Storage | Two Standard_LRS StorageV2 accounts: data/host dependencies and deployment package blob container | LRS is not evidence of recoverability from overwrite/delete; no application backup policy declared |
-| Service Bus | Basic default, incoming queue `issueinvoicecommand`; 5-minute lock, 14-day TTL, max deliveries 10, expiry dead-lettering, sessions/duplicate detection/partitioning off | No observed live queue contents/configuration; Notification queue is external |
+| Service Bus | Basic default, incoming queue `issueinvoicecommand` plus the controlled `notifycommand` sink in test; 5-minute lock, 14-day TTL, max deliveries 10, expiry dead-lettering, sessions/duplicate detection/partitioning off | Production Notification is external; test fixtures use only the local namespace sink |
 | Identity | User-assigned shared identity plus function system identity | Actual identity permissions outside declarations not verified |
 | RBAC | Table Data Contributor, Blob Data Owner, Service Bus Data Owner, telemetry publishing and Key Vault read roles as declared; optional user/deployer assignments | External profile and Notification permissions require separate configuration |
 | Observability | Application Insights linked to Log Analytics; host OpenTelemetry mode | Alerts, dashboards, retention and ingestion/cost behavior unverified |
@@ -59,10 +72,10 @@ Azure Verified Modules and API versions are pinned in Bicep. Some comments descr
 
 Matched Niobium service defaults configure OpenTelemetry logs (formatted messages/scopes), ASP.NET/HTTP client/runtime metrics and tracing, service name/version/environment attributes, optional OTLP and Azure Monitor exporters. App code does not establish a durable correlation ID connecting request, invoice, queue and downstream provider. Message ID/full invoice identity help investigation, but do not constitute a complete tracing policy.
 
-Health checks are registered, but `/health` and `/alive` are not mapped by this Functions startup. No application alert rules, on-call procedure, queue replay tool, backup export, restore automation or disaster-recovery test is tracked. Platform capabilities and configured operations must be distinguished.
+`GET /health` identifies the responding binary; `/alive` is not mapped. Framework health-check registration does not by itself test dependencies through this endpoint. No application alert rules, on-call procedure, queue replay tool, backup export, restore automation or disaster-recovery test is tracked. Platform capabilities and configured operations must be distinguished.
 
 **Proposed investigation procedure, not a verified recovery runbook:** identify the affected stage and full invoice identity; inspect authorized sanitized telemetry; compare invoice/items and enqueue/status outcomes; establish whether Notification/provider may already have accepted a send; then agree replay or repair with the owner. Do not automatically replay a dead-letter message or mark Delivered based on queue acceptance. Each may repeat side effects. Inspect message age, attempt history and failure cause before an authorized replay.
 
 Backups/restores, recovery objectives, incident/support ownership and detailed retention/privacy policy remain U04/U06. The owner expects Azure PaaS support and has committed no SLA. No evidence here proves automatic five-year history, point-in-time table recovery or cross-region disaster recovery. Costs/capacity have not been measured; scale and queue limits above are declarations only. Downstream duplicate detection was deferred for cost reasons, with message-ID storage planned (Q11).
 
-Rollback and environment promotion are not implemented as dedicated runbooks. A proposed redeploy of a prior artifact still needs known artifact/version, compatibility review and authorization; package publication and storage schema changes cannot be treated as automatically reversible. No cloud resources, queues or workflows were invoked during this documentation work.
+Rollback and environment promotion are not implemented as dedicated runbooks. A proposed redeploy of a prior artifact still needs known artifact/version, compatibility review and authorization; package publication and storage schema changes cannot be treated as automatically reversible. Feature changes now invoke the authorized test workflow; production operations still require reviewed promotion.

@@ -1,4 +1,4 @@
-# Local integration tests (B07)
+# Integration tests (B07)
 
 The separate `Niobium.Invoicing.Integration.Tests` project references Server and
 uses the existing MSTest SDK and Moq versions. It does not upgrade Niobium packages.
@@ -48,15 +48,24 @@ After abrupt runner termination, cleanup might not execute. Stop the disposable
 in-memory emulator to discard its test data. Do not point this suite at existing
 resources or reuse application credentials. No local settings file is required.
 
-## Outstanding deployed coverage
+## Deployed test-environment suite
 
-B07 remains partial. Still required: a reviewed isolated Azure test deployment,
-real Functions host startup/middleware/binding, issued-resource authorization,
-Service Bus command ingestion and controlled NotifyCommand sink, deployed retry
-and failure handling, and a deployed check that the debug route is absent.
-No such resources, transport credentials or deployment authorization were supplied.
-The target task expressly forbids deployment and production data access.
+`Niobium.Invoicing.Deployment.Tests` is deliberately outside the solution and runs explicitly after test deployment. Missing configuration fails class initialization; it cannot silently skip. It uses the existing MSTest SDK and Server's resolved Azure/Niobium dependencies without upgrades.
 
-These missing checks block B04's final post-deployment promotion gate. Local
-Azurite checks occur before test deployment and must not be described as that gate.
-See [progress](implementation-progress.md) for exact results and baseline failures.
+The workflow obtains these settings through its test-environment OIDC identity and [`scripts/test-resources.py`](../scripts/test-resources.py): `TEST_ENVIRONMENT`, `TEST_API_URL`, `TEST_STORAGE_ACCOUNT`, `TEST_STORAGE_KEY`, `TEST_SERVICEBUS_CONNECTION`, `TEST_SIGNING_KEY`, `TEST_EXPECTED_COMMIT`, `TEST_TOKEN_ISSUER`, `TEST_TOKEN_AUDIENCE`. Do not copy values into local settings, logs or documentation. The suite rejects non-test environments, non-HTTPS/non-test Functions hosts, storage accounts and Service Bus namespaces outside the test naming convention. This guard complements the workflow's selected resources; it is not an authorization boundary for arbitrary user-supplied credentials.
+
+```sh
+dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
+```
+
+Run this only inside the authorized test deployment job. It first waits for `/health` to report the exact pushed SHA, then exercises seven deployed cases: four authentication/ownership rejection cases; successful HTTP issuance with durable storage, validation, exact replay and saved-token HTML; real Service Bus ingestion with stable notification content/token on retry; and absence of the debug email route. It uses synthetic biller/customer snapshots seeded through the matched Table adapter, so external profile lookup is intentionally outside this suite.
+
+The incoming command uses `issueinvoicecommand`; outgoing messages go to `notifycommand` in Invoicing's **own test namespace**, which has no email consumer. The suite completes only messages matching its own synthetic invoice identity. Unrelated messages are abandoned during cleanup. It deletes only its own synthetic invoice/item records, never shared tables. Deployment plus testing is serialized across branches. Abrupt cancellation or a failed storage cleanup can leave synthetic fixtures; never delete unrelated records to repair a test run.
+
+The deployed suite covers real Functions middleware/binding, HTTP error translation, storage and Service Bus paths that local component tests cannot establish. It does not test external profile provisioning, direct-resource entitlement issuance, downstream email/provider idempotency, confirmation events, production scale, backup/restore or abandoned-writer recovery. Passing tests are evidence for these scenarios and this exact deployment, not a blanket delivery guarantee.
+
+## Remaining coverage and evidence
+
+The owner authorized test deployment and required post-deployment verification on 2026-10-30. This supersedes the original task's test-deployment prohibition. [Delivery policy](delivery-and-operations.md) describes the gate, required review and external repository protection settings. [Progress](implementation-progress.md) records historical results and current verification; a source declaration alone is not a successful deployed run.
+
+Direct-resource grants in Azure, the external profile/Notification services and operational recovery scenarios above remain separate integration work. B07's full research acceptance is not claimed solely from this suite.
