@@ -191,8 +191,8 @@ public sealed class DeployedInvoiceTests
         Assert.AreEqual("frozen-v1", saved.GetString(nameof(Invoice.IssuanceState)));
         Assert.IsFalse(string.IsNullOrWhiteSpace(saved.GetString(nameof(Invoice.Token))));
         await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
-        Assert.AreEqual(first, await Notification(messageID), "Exact retry must emit identical notification content.");
-        Assert.AreEqual(saved.GetString(nameof(Invoice.Token)), (await Read(id)).GetString(nameof(Invoice.Token)));
+        Assert.IsTrue(string.Equals(first, await Notification(messageID), StringComparison.Ordinal), "Exact retry must emit identical notification content (payloads omitted to protect link tokens).");
+        Assert.IsTrue(string.Equals(saved.GetString(nameof(Invoice.Token)), (await Read(id)).GetString(nameof(Invoice.Token)), StringComparison.Ordinal), "Exact retry must preserve the link token.");
         using JsonDocument notification = JsonDocument.Parse(first);
         Assert.AreEqual(messageID, notification.RootElement.GetProperty("id").GetString());
         Assert.AreEqual("sink@example.invalid", notification.RootElement.GetProperty("destination").GetString());

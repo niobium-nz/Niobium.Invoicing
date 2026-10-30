@@ -2,7 +2,7 @@
 
 ## Effective HTTP surface
 
-Observed source contract with local result-execution tests, not a deployed Functions HTTP verification. [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
+The test-deployment suite now verifies invoice issuance, saved-token HTML, health identity and absence of the debug route through the real Functions host. Token/resource-grant endpoints remain outside that deployed suite; see [integration evidence](integration-tests.md). [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
 
 | Method / path | Handler and input | Controls | Success / side effects |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ Observed source contract with local result-execution tests, not a deployed Funct
 
 Middleware endpoint names are configurable, but placeholder trigger routes are compiled from default constants. Changing options alone does not create a new Functions route. No `/auth`, `/alive`, payment, settlement, cancellation, invoice-list HTTP endpoint or MCP route is declared. Listing historically used direct table access.
 
-`NewInvoice.Run` rejects an issue time more than 30 minutes old; it does not implement a symmetric clock-skew window. It returns 401 for missing claims and explicit 403 for identity/age mismatches. Invalid date encoding returns 400. Local tests parse signed synthetic access tokens through the installed PrincipalParser and execute ASP.NET results. Full Functions middleware/binding and deployed behavior still need integration evidence.
+`NewInvoice.Run` rejects an issue time more than 30 minutes old; it does not implement a symmetric clock-skew window. It returns 401 for missing claims and explicit 403 for identity/age mismatches. Invalid date encoding returns 400. Local tests parse signed synthetic access tokens through the installed PrincipalParser and execute ASP.NET results. The deployed suite exercises missing/invalid credentials, identity mismatches, successful issuance, validation errors and frozen-update rejection through the real middleware/binding pipeline.
 
 ## Requests, serialization and errors
 
