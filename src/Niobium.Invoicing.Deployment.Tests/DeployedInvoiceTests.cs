@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -26,9 +27,10 @@ public sealed class DeployedInvoiceTests
     private static readonly Guid biller = Guid.NewGuid();
     private static readonly Guid customer = Guid.NewGuid();
     private static readonly string itemSubject = $"Synthetic CI service {biller:N}";
-    private static readonly List<long> invoices = [];
-    private static readonly List<ServiceBusReceivedMessage> unrelated = [];
-    private static ServiceBusReceiver? receiver;
+    private static readonly List<(Guid Biller, long ID)> invoices = [];
+    private static Guid referenceBiller;
+    private static long referenceInvoice;
+    private const string ReferenceTerms = "Niobium.Invoicing CI reference fixture";
 
     [ClassInitialize]
     public static async Task Initialize(TestContext context)
@@ -60,8 +62,6 @@ public sealed class DeployedInvoiceTests
             catch (JsonException) { return false; }
         }, "The deployed binary did not report the expected commit.");
         tables = new TableServiceClient(new Uri($"https://{account}.table.core.windows.net"), new TableSharedKeyCredential(account, Required("TEST_STORAGE_KEY")));
-        await tables.CreateTableIfNotExistsAsync(nameof(Invoice));
-        await tables.CreateTableIfNotExistsAsync(nameof(InvoiceItem));
         ServiceCollection collection = new();
         collection.AddLogging();
         collection.AddDatabase();
@@ -71,6 +71,7 @@ public sealed class DeployedInvoiceTests
         _ = Required("TEST_SIGNING_KEY");
         _ = Required("TEST_TOKEN_ISSUER");
         _ = Required("TEST_TOKEN_AUDIENCE");
+        await EnsureReferenceInvoice();
     }
 
     [ClassCleanup]
@@ -80,7 +81,7 @@ public sealed class DeployedInvoiceTests
         // Delete only this run's randomly scoped records, never tables or another run's rows.
         if (tables != null)
         {
-            foreach (long id in invoices)
+            foreach ((Guid owningBiller, long id) in invoices)
             {
                 try
                 {
@@ -90,23 +91,10 @@ public sealed class DeployedInvoiceTests
                         Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)), "Refusing to delete an unrelated item.");
                         await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
                     }
-                    await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id));
+                    await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(Invoice.BuildPartitionKey(owningBiller), Invoice.BuildRowKey(id));
                 }
                 catch (Exception error) { failures.Add(error); }
             }
-        }
-        if (receiver != null)
-        {
-            foreach (ServiceBusReceivedMessage message in unrelated)
-            {
-                try
-                {
-                    await receiver.AbandonMessageAsync(message);
-                }
-                catch (ServiceBusException error) when (error.Reason == ServiceBusFailureReason.MessageLockLost) { }
-                catch (Exception error) { failures.Add(error); }
-            }
-            await receiver.DisposeAsync();
         }
         if (bus != null)
             await bus.DisposeAsync();
@@ -163,10 +151,11 @@ public sealed class DeployedInvoiceTests
         request.InvoiceItems[0].Quantity = 2;
         using HttpResponseMessage changed = await Post(request, Token(biller, tenant));
         Assert.AreEqual(HttpStatusCode.Conflict, changed.StatusCode);
+        await VerifyReadOnlyClient(id, linkToken);
     }
 
     [TestMethod]
-    public async Task Deployed_queue_consumer_emits_stable_notifications_on_exact_retry()
+    public async Task Deployed_queue_consumer_persists_and_updates_through_the_real_test_queue()
     {
         long id = await SeedInvoice();
         IssueInvoiceRequest request = Request(id);
@@ -179,23 +168,56 @@ public sealed class DeployedInvoiceTests
             Billee = Customer(),
             InvoiceItems = request.InvoiceItems,
             Terms = request.Terms,
+            NotifyBillee = false
+        };
+        await using ServiceBusSender sender = bus.CreateSender("issueinvoicecommand");
+        await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
+        await Eventually(async () => (await Read(id)).GetInt64(nameof(Invoice.GrandTotalCents)) == 11500L, "The real queue consumer did not persist the invoice.");
+        TableEntity saved = await Read(id);
+        Assert.AreEqual("ready-v1", saved.GetString(nameof(Invoice.IssuanceState)));
+        Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Token)));
+        Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Delivered)));
+        // Observe a second completed processing cycle without competing with the real notification consumer.
+        command.InvoiceItems[0].Quantity = 2;
+        await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
+        await Eventually(async () => (await Read(id)).GetInt64(nameof(Invoice.GrandTotalCents)) == 23000L, "The real queue consumer did not persist the update.");
+        Assert.AreEqual("ready-v1", (await Read(id)).GetString(nameof(Invoice.IssuanceState)));
+    }
+
+    [TestMethod]
+    public async Task Real_test_notification_service_accepts_an_invoice_for_the_approved_mailbox()
+    {
+        string recipient = Required("TEST_NOTIFICATION_RECIPIENT");
+        Assert.IsTrue(System.Net.Mail.MailAddress.TryCreate(recipient, out _), "A valid approved test mailbox is required.");
+        Guid sender = referenceBiller;
+        TableEntity fixture = await Read(referenceInvoice, sender);
+        Guid group = fixture.GetGuid(nameof(Invoice.Tenant)) ?? throw new InvalidOperationException("The existing test invoice has no tenant.");
+        long id = await SeedInvoice(sender, group, recipient);
+        IssueInvoiceCommand command = new()
+        {
+            Tenant = group,
+            BillerID = sender,
+            BilleeID = customer,
+            InvoiceID = id,
+            Billee = Customer(sender, recipient),
+            InvoiceItems = Request(id).InvoiceItems,
             NotifyBillee = true
         };
-        receiver = bus.CreateReceiver("notifycommand", new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock });
-        await using ServiceBusSender sender = bus.CreateSender("issueinvoicecommand");
-        string messageID = Invoice.BuildFullID(biller, id);
-        await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
-        string first = await Notification(messageID);
-        await Eventually(async () => (await Read(id)).ContainsKey(nameof(Invoice.Delivered)), "Enqueue completion was not persisted.");
-        TableEntity saved = await Read(id);
+        await using ServiceBusSender incoming = bus.CreateSender("issueinvoicecommand");
+        await incoming.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command))
+        {
+            MessageId = Guid.NewGuid().ToString(),
+            ContentType = "application/json"
+        });
+        await Eventually(async () => (await Read(id, sender)).ContainsKey(nameof(Invoice.Delivered)), "The real notification enqueue was not acknowledged.");
+        TableEntity saved = await Read(id, sender);
         Assert.AreEqual("frozen-v1", saved.GetString(nameof(Invoice.IssuanceState)));
-        Assert.IsFalse(string.IsNullOrWhiteSpace(saved.GetString(nameof(Invoice.Token))));
-        await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
-        Assert.IsTrue(string.Equals(first, await Notification(messageID), StringComparison.Ordinal), "Exact retry must emit identical notification content (payloads omitted to protect link tokens).");
-        Assert.IsTrue(string.Equals(saved.GetString(nameof(Invoice.Token)), (await Read(id)).GetString(nameof(Invoice.Token)), StringComparison.Ordinal), "Exact retry must preserve the link token.");
-        using JsonDocument notification = JsonDocument.Parse(first);
-        Assert.AreEqual(messageID, notification.RootElement.GetProperty("id").GetString());
-        Assert.AreEqual("sink@example.invalid", notification.RootElement.GetProperty("destination").GetString());
+        Assert.IsTrue(saved.GetString(nameof(Invoice.RecipientEmail)) == recipient, "The stored recipient must match the approved test mailbox.");
+        string? token = saved.GetString(nameof(Invoice.Token));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(token));
+        using HttpResponseMessage html = await http.GetAsync($"/{sender}/invoices/{id}?token={token}");
+        Assert.AreEqual(HttpStatusCode.OK, html.StatusCode);
+        // Delivered is an enqueue acknowledgement, not a provider receipt. Do not steal the real consumer's messages.
     }
 
     [TestMethod]
@@ -205,28 +227,90 @@ public sealed class DeployedInvoiceTests
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task<string> Notification(string expected)
+    private static async Task VerifyReadOnlyClient(long id, string token)
     {
-        string? body = null;
-        await Eventually(async () =>
+        string root = Required("GITHUB_WORKSPACE");
+        ProcessStartInfo start = new("python")
         {
-            ServiceBusReceivedMessage? message = await receiver!.ReceiveMessageAsync(TimeSpan.FromSeconds(2));
-            if (message == null)
-                return false;
-            if (message.MessageId != expected)
-            {
-                unrelated.Add(message); // Never complete another run's message.
-                Assert.IsTrue(unrelated.Count <= 100, "The controlled test sink has too many unrelated messages.");
-                return false;
-            }
-            body = message.Body.ToString();
-            await receiver.CompleteMessageAsync(message);
-            return true;
-        }, "No matching notification arrived in the isolated test sink.");
-        return body!;
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        start.ArgumentList.Add(Path.Combine(root, "scripts", "read-only-deployment.py"));
+        start.ArgumentList.Add("--require-fixture");
+        start.ArgumentList.Add("--report");
+        start.ArgumentList.Add(Path.Combine(root, "artifacts", "deployed", "read-only.json"));
+        start.Environment["READONLY_API_URL"] = Required("TEST_API_URL");
+        start.Environment["READONLY_EXPECTED_COMMIT"] = Required("TEST_EXPECTED_COMMIT");
+        start.Environment["READONLY_INVOICE_BILLER_ID"] = biller.ToString();
+        start.Environment["READONLY_INVOICE_ID"] = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        start.Environment["READONLY_INVOICE_TOKEN"] = token;
+        using Process process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start the read-only integration client.");
+        await Task.WhenAll(process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
+        await process.WaitForExitAsync();
+        Assert.AreEqual(0, process.ExitCode, "The production read-only client failed against test; inspect the read-only report artifact.");
     }
 
-    private static async Task<long> SeedInvoice()
+    private static async Task EnsureReferenceInvoice()
+    {
+        string? configuredBiller = Environment.GetEnvironmentVariable("TEST_INVOICE_BILLER");
+        string? configuredID = Environment.GetEnvironmentVariable("TEST_INVOICE_ID");
+        if (!string.IsNullOrWhiteSpace(configuredBiller) || !string.IsNullOrWhiteSpace(configuredID))
+        {
+            referenceBiller = Guid.Parse(Required("TEST_INVOICE_BILLER"));
+            referenceInvoice = long.Parse(Required("TEST_INVOICE_ID"), System.Globalization.CultureInfo.InvariantCulture);
+            _ = await Read(referenceInvoice, referenceBiller);
+        }
+        else
+        {
+            TableEntity? reference = null;
+            await foreach (TableEntity row in tables.GetTableClient(nameof(Invoice)).QueryAsync<TableEntity>(
+                TableClient.CreateQueryFilter($"Terms eq {ReferenceTerms}"), maxPerPage: 1))
+            {
+                reference = row;
+                break;
+            }
+            if (reference != null)
+            {
+                referenceBiller = Guid.Parse(reference.PartitionKey);
+                referenceInvoice = long.Parse(reference.RowKey, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                // Reuse a real test biller when an existing invoice identifies one. Only test data is read.
+                Guid owner = biller;
+                Guid group = tenant;
+                await foreach (TableEntity existing in tables.GetTableClient(nameof(Invoice)).QueryAsync<TableEntity>(maxPerPage: 1))
+                {
+                    if (Guid.TryParse(existing.PartitionKey, out Guid candidate) && existing.GetGuid(nameof(Invoice.Tenant)) is Guid existingGroup)
+                    {
+                        owner = candidate;
+                        group = existingGroup;
+                        break;
+                    }
+                }
+                referenceBiller = owner;
+                referenceInvoice = await SeedInvoice(owner, group, Required("TEST_NOTIFICATION_RECIPIENT"), persistent: true);
+                IssueInvoiceRequest request = Request(referenceInvoice);
+                request.BillerID = owner;
+                request.Tenant = group;
+                request.Terms = ReferenceTerms;
+                using HttpResponseMessage response = await Post(request, Token(owner, group));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "The persistent test invoice could not be issued.");
+            }
+        }
+        string path = Path.Combine(Environment.GetEnvironmentVariable("GITHUB_WORKSPACE") ?? Directory.GetCurrentDirectory(), "artifacts", "deployed", "test-invoice-fixture.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new
+        {
+            biller = referenceBiller,
+            invoice = referenceInvoice
+        }));
+        // IDs are synthetic test-fixture metadata. Never print recipient addresses or link tokens.
+        Console.WriteLine($"Persistent test fixture: TEST_INVOICE_BILLER={referenceBiller}; TEST_INVOICE_ID={referenceInvoice}");
+    }
+
+    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, bool persistent = false)
     {
         long id = Invoice.ParseID(DateTimeOffset.UtcNow.AddMilliseconds(invoices.Count));
         await foreach (TableEntity _ in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(
@@ -234,22 +318,26 @@ public sealed class DeployedInvoiceTests
         {
             Assert.Fail("Generated invoice ID collides with existing items; refusing to modify them.");
         }
-        invoices.Add(id);
+        Guid owningBiller = issuer ?? biller;
+        if (!persistent)
+        {
+            invoices.Add((owningBiller, id));
+        }
         Invoice invoice = Invoice.BuildNew(id, new Biller
         {
-            PartitionKey = tenant,
-            RowKey = biller,
+            PartitionKey = group ?? tenant,
+            RowKey = owningBiller,
             BusinessName = "Synthetic CI biller",
             TaxRatePercentile = 1500,
             Currency = "NZD",
             Culture = "en-NZ",
             TimeZone = "Pacific/Auckland"
-        }, Customer());
+        }, Customer(owningBiller, recipient));
         await services.GetRequiredService<IRepository<Invoice>>().CreateAsync([invoice]);
         return id;
     }
 
-    private static Billee Customer() => new() { Biller = biller, ID = customer, Name = "Synthetic CI customer", Email = "sink@example.invalid", Currency = "NZD", Culture = "en-NZ", TimeZone = "Pacific/Auckland" };
+    private static Billee Customer(Guid? issuer = null, string? recipient = null) => new() { Biller = issuer ?? biller, ID = customer, Name = "Synthetic CI customer", Email = recipient ?? "unused@example.invalid", Currency = "NZD", Culture = "en-NZ", TimeZone = "Pacific/Auckland" };
     private static IssueInvoiceRequest Request(long id) => new()
     {
         Tenant = tenant,
@@ -259,7 +347,7 @@ public sealed class DeployedInvoiceTests
         Terms = "<script>literal</script>",
         InvoiceItems = [new InvoiceItem { Invoice = Invoice.ParseID(id), ID = 1, Subject = itemSubject, UnitPriceCents = 10000, Quantity = 1, UnitPriceCurrency = "NZD", LineTotalCurrency = "NZD" }]
     };
-    private static async Task<TableEntity> Read(long id) => (await tables.GetTableClient(nameof(Invoice)).GetEntityAsync<TableEntity>(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id))).Value;
+    private static async Task<TableEntity> Read(long id, Guid? issuer = null) => (await tables.GetTableClient(nameof(Invoice)).GetEntityAsync<TableEntity>(Invoice.BuildPartitionKey(issuer ?? biller), Invoice.BuildRowKey(id))).Value;
     private static async Task<HttpResponseMessage> Post(IssueInvoiceRequest request, string? token)
     {
         using HttpRequestMessage message = new(HttpMethod.Post, "/invoices")

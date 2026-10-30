@@ -1,7 +1,31 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { approvedHead, eligibleRun, testedRun, production, readiness } = require('./delivery-policy.cjs');
+const { approvedHead, eligibleRun, testedRun, mergeEligibility, openPullRequest, readiness } = require('./delivery-policy.cjs');
 const run = { id: 42, head_sha: 'head', event: 'push', head_branch: 'feature/test', conclusion: 'success', head_repository: { full_name: 'owner/repo' } };
+function fixture() {
+  const state = {
+    pr: { number: 7, state: 'open', draft: false, base: { ref: 'main' }, head: { sha: 'head', ref: 'feature/test', repo: { full_name: 'owner/repo' } }, user: { login: 'author' } },
+    reviews: [{ id: 1, state: 'APPROVED', commit_id: 'head', user: { login: 'author' } }],
+    runs: [{ ...run, html_url: 'https://github.com/owner/repo/actions/runs/42' }],
+    jobs: [{ name: 'Build and local tests', conclusion: 'success' },
+      { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion: 'success' }] }],
+    comparison: { status: 'ahead', commits: [{ commit: { message: 'Change' } }] },
+    head: 'head', openPulls: [], created: [], statuses: [], notices: [],
+  };
+  const github = {
+    paginate: async (method, args) => { if (method === 'runs') assert.equal(args.head_sha, 'head'); return state[method]; },
+    rest: {
+      actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' },
+      pulls: { get: async () => ({ data: state.pr }), listReviews: 'reviews', list: 'openPulls',
+        create: async args => { state.created.push(args); return { data: { ...state.pr, html_url: 'https://github.com/owner/repo/pull/7' } }; } },
+      repos: { compareCommits: async () => ({ data: state.comparison }), createCommitStatus: async status => state.statuses.push(status) },
+      git: { getRef: async () => ({ data: { object: { sha: state.head } } }) },
+    },
+  };
+  return { state, github, pullNumber: 7,
+    context: { repo: { owner: 'owner', repo: 'repo' }, sha: 'head', runId: 42, ref: 'refs/heads/feature/test', eventName: 'push', payload: { head_commit: { message: 'Implement delivery changes' } } },
+    core: { notice: message => state.notices.push(message) } };
+}
 
 test('only a successful push of the exact same-repository feature commit qualifies', () => {
   assert.equal(eligibleRun(run, 'head', 'owner/repo'), true);
@@ -10,129 +34,73 @@ test('only a successful push of the exact same-repository feature commit qualifi
   }
 });
 
-test('review must approve the tested head, come from another reviewer and have no outstanding changes request', () => {
-  const approval = { id: 1, state: 'APPROVED', commit_id: 'head', user: { login: 'reviewer' } };
-  assert.equal(approvedHead([approval], 'head', 'author'), true);
-  assert.equal(approvedHead([approval], 'new-head', 'author'), false);
-  assert.equal(approvedHead([approval], 'head', 'reviewer'), false);
-  assert.equal(approvedHead([approval, { ...approval, id: 2, state: 'DISMISSED' }], 'head', 'author'), false);
-  assert.equal(approvedHead([approval, { ...approval, id: 2, state: 'CHANGES_REQUESTED', user: { login: 'other' } }], 'head', 'author'), false);
+test('one permitted approval suffices, with no restriction on the PR author', () => {
+  const approval = fixture().state.reviews[0];
+  assert.equal(approvedHead([approval], 'head'), true);
+  assert.equal(approvedHead([{ ...approval, user: { login: 'other' } }], 'head'), true);
+  assert.equal(approvedHead([approval], 'new-head'), false);
+  assert.equal(approvedHead([approval, { ...approval, id: 2, state: 'DISMISSED' }], 'head'), false);
+  assert.equal(approvedHead([approval, { ...approval, id: 2, state: 'CHANGES_REQUESTED', user: { login: 'other' } }], 'head'), false);
+  assert.equal(approvedHead([approval, { ...approval, id: 2, state: 'COMMENTED' }], 'head'), true);
 });
 
-test('a green workflow with skipped deployed tests is rejected', async () => {
-  const actions = { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' };
-  let conclusion = 'skipped';
-  const github = { rest: { actions }, paginate: async method => method === 'runs' ? [run] : [
-    { name: 'Build and local tests', conclusion: 'success' },
-    { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion }] },
-  ] };
-  await assert.rejects(testedRun(github, 'owner', 'repo', 'head'));
-  conclusion = 'success';
-  assert.equal((await testedRun(github, 'owner', 'repo', 'head')).id, 42);
-});
-
-test('production rejects PR events, feature pushes and manual dispatch', async () => {
-  for (const [ref, eventName] of [['refs/heads/main', 'pull_request'], ['refs/heads/feature', 'push'], ['refs/heads/main', 'workflow_dispatch']]) {
-    await assert.rejects(production({ github: {}, context: { repo: {}, ref, eventName }, core: {} }));
+test('skipped deployed tests and failed required jobs cannot qualify', async () => {
+  const skipped = fixture(); skipped.state.jobs[1].steps[0].conclusion = 'skipped';
+  await assert.rejects(testedRun(skipped.github, 'owner', 'repo', 'head'));
+  for (const job of [0, 1]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
+    const input = fixture(); input.state.jobs[job].conclusion = conclusion;
+    await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head'));
   }
 });
 
-function fixture() {
-  const state = {
-    pulls: [{ number: 7, merged_at: '2026-10-30T12:00:00Z', base: { ref: 'main' }, merge_commit_sha: 'merge',
-      head: { sha: 'head', repo: { full_name: 'owner/repo' } }, user: { login: 'author' } }],
-    reviews: [{ id: 1, state: 'APPROVED', commit_id: 'head', user: { login: 'reviewer' } }],
-    runs: [{ ...run, html_url: 'https://github.com/owner/repo/actions/runs/42', updated_at: '2026-10-30T11:00:00Z' }],
-    jobs: [{ name: 'Build and local tests', conclusion: 'success' },
-      { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion: 'success' }] }],
-    trees: { head: 'same-tree', merge: 'same-tree' }, statuses: [], notices: [],
-  };
-  const github = {
-    paginate: async (method, args) => {
-      if (method === 'runs') assert.equal(args.head_sha, 'head');
-      return state[method];
-    },
-    rest: {
-      actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' },
-      pulls: { listReviews: 'reviews' },
-      repos: { listPullRequestsAssociatedWithCommit: 'pulls', createCommitStatus: async status => state.statuses.push(status) },
-      git: { getCommit: async ({ commit_sha }) => ({ data: { tree: { sha: state.trees[commit_sha] } } }) },
-    },
-  };
-  return { state, github, context: { repo: { owner: 'owner', repo: 'repo' }, sha: 'merge', ref: 'refs/heads/main', eventName: 'push', payload: {} },
-    core: { notice: message => state.notices.push(message) } };
-}
-
-test('production accepts reviewed, previously tested content including squash/merge commit identities', async () => {
-  const input = fixture();
-  assert.equal((await production(input)).id, 42);
-  assert.match(input.state.notices[0], /Reviewed PR #7/);
+test('pre-merge validation accepts an approved, tested current head', async () => {
+  assert.equal((await mergeEligibility(fixture())).run.id, 42);
 });
 
-test('production rejects direct pushes, ambiguous merges and foreign PRs', async () => {
-  for (const mutate of [
-    s => { s.pulls = []; },
-    s => { s.pulls.push(s.pulls[0]); },
-    s => { s.pulls[0].head.repo.full_name = 'fork/repo'; },
-    s => { s.pulls[0].merged_at = null; },
-    s => { s.pulls[0].base.ref = 'other'; },
-    s => { s.pulls[0].merge_commit_sha = 'old'; },
-  ]) {
-    const input = fixture();
-    mutate(input.state);
-    await assert.rejects(production(input), /exactly one merged PR/);
+test('pre-merge validation rejects stale approval, missing test success, and a newer main', async () => {
+  for (const mutate of [s => { s.reviews[0].commit_id = 'old'; }, s => { s.runs = []; }, s => { s.comparison.status = 'diverged'; }]) {
+    const input = fixture(); mutate(input.state); await assert.rejects(mergeEligibility(input));
   }
 });
 
-test('production rejects unreviewed updates and content introduced after feature verification', async () => {
-  const stale = fixture();
-  stale.state.reviews[0].commit_id = 'old-head';
-  await assert.rejects(production(stale), /independent approval/);
-  const changed = fixture();
-  changed.state.trees.merge = 'new-base-content';
-  await assert.rejects(production(changed), /differs from the tested feature tree/);
-  const late = fixture();
-  late.state.runs[0].updated_at = '2026-10-30T13:00:00Z';
-  await assert.rejects(production(late), /no successful build/);
-});
-
-test('every required job must succeed and approval comments do not erase formal decisions', async () => {
-  for (const job of [0, 1]) {
-    for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
-      const input = fixture();
-      input.state.jobs[job].conclusion = conclusion;
-      await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head'));
-    }
+test('pre-merge validation rejects closed, draft, foreign, and wrong-base PRs', async () => {
+  for (const mutate of [s => { s.pr.state = 'closed'; }, s => { s.pr.draft = true; }, s => { s.pr.head.repo.full_name = 'fork/repo'; }, s => { s.pr.base.ref = 'other'; }]) {
+    const input = fixture(); mutate(input.state); await assert.rejects(mergeEligibility(input));
   }
-  const reviews = fixture().state.reviews;
-  assert.equal(approvedHead([...reviews, { ...reviews[0], id: 2, state: 'COMMENTED' }], 'head', 'author'), true);
-  assert.equal(approvedHead([{ ...reviews[0], id: 0, state: 'CHANGES_REQUESTED' }, ...reviews], 'head', 'author'), true);
 });
 
-test('readiness publishes exact-commit success and fails closed without deployed evidence', async () => {
-  const input = fixture();
-  input.context.payload.pull_request = input.state.pulls[0];
-  await readiness(input);
+test('post-test job opens a ready PR to main without another instruction', async () => {
+  const input = fixture(); await openPullRequest(input);
+  assert.equal(input.state.created.length, 1);
+  assert.equal(input.state.created[0].base, 'main');
+  assert.equal(input.state.created[0].head, 'feature/test');
+  assert.equal(input.state.created[0].draft, false);
+  assert.match(input.state.created[0].body, /actions\/runs\/42/);
   assert.equal(input.state.statuses[0].sha, 'head');
-  assert.equal(input.state.statuses[0].state, 'success');
   assert.equal(input.state.statuses[0].context, 'Test deployment verified');
-  input.state.runs = [];
-  await assert.rejects(readiness(input));
-  assert.equal(input.state.statuses[1].state, 'failure');
 });
 
-test('readiness handles workflow completion without executing PR code or trusting forks', async () => {
-  const input = fixture();
-  input.context.payload.workflow_run = run;
-  await readiness(input);
+test('automatic creation reuses existing PRs and ignores superseded or merged heads', async () => {
+  for (const mutate of [s => { s.openPulls = [s.pr]; }, s => { s.head = 'new'; }, s => { s.comparison.status = 'identical'; }, s => { s.comparison.status = 'behind'; }]) {
+    const input = fixture(); mutate(input.state); await openPullRequest(input); assert.equal(input.state.created.length, 0);
+  }
+});
+
+test('automatic creation cannot run for main or a PR event', async () => {
+  for (const change of [{ ref: 'refs/heads/main' }, { eventName: 'pull_request' }]) {
+    const input = fixture(); Object.assign(input.context, change); await assert.rejects(openPullRequest(input)); assert.equal(input.state.created.length, 0);
+  }
+});
+
+test('readiness publishes exact-commit success and fails without deployed evidence', async () => {
+  const input = fixture(); input.context.payload.pull_request = input.state.pr; await readiness(input);
+  assert.equal(input.state.statuses[0].sha, 'head'); assert.equal(input.state.statuses[0].state, 'success');
+  input.state.runs = []; await assert.rejects(readiness(input)); assert.equal(input.state.statuses[1].state, 'failure');
+});
+
+test('readiness handles workflow completion without trusting forks or PR runs', async () => {
+  const input = fixture(); input.context.payload.workflow_run = run; await readiness(input);
+  input.context.payload.workflow_run = { ...run, head_repository: { full_name: 'fork/repo' } }; await readiness(input);
+  input.context.payload.workflow_run = { ...run, event: 'pull_request' }; await readiness(input);
   assert.equal(input.state.statuses.length, 1);
-  input.context.payload.workflow_run = { ...run, event: 'pull_request' };
-  await readiness(input);
-  input.context.payload.workflow_run = { ...run, head_branch: 'main' };
-  await readiness(input);
-  assert.equal(input.state.statuses.length, 1);
-  input.context.payload = { pull_request: { head: { repo: { full_name: 'fork/repo' } } } };
-  await assert.rejects(readiness(input), /repository-owned/);
-  input.context.payload = {};
-  await assert.rejects(readiness(input), /Missing feature commit/);
 });

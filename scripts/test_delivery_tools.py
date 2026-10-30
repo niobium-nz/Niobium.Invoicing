@@ -55,34 +55,35 @@ class ResourceBoundaryTests(unittest.TestCase):
                     resources.main()
                 azure.assert_not_called()
 
-    def test_configuration_uses_own_sink_and_a_masked_ephemeral_signing_key(self):
+    def test_configuration_preserves_existing_key_without_redirecting_notifications(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "env"
             with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing", "GITHUB_ENV": str(target)}), \
-                    patch("sys.argv", ["test-resources.py", "configure"]), patch.object(resources, "azure") as azure, contextlib.redirect_stdout(io.StringIO()) as log:
+                    patch("sys.argv", ["test-resources.py", "configure"]), patch.object(resources, "azure", return_value="existing-test-key") as azure, contextlib.redirect_stdout(io.StringIO()) as log:
                 resources.main()
                 values = dict(line.split("=", 1) for line in target.read_text().splitlines())
-                self.assertEqual(values["APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE"], "niobiuminvoicing-sb-test.servicebus.windows.net")
+                self.assertNotIn("APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE", values)
                 key = values["APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET"]
-                self.assertGreaterEqual(len(key), 64)
+                self.assertEqual(key, "existing-test-key")
                 self.assertEqual(log.getvalue().strip(), "::add-mask::" + key)
-                azure.assert_not_called()
+                self.assertEqual(azure.call_count, 1)
+                self.assertEqual(azure.call_args.args[:3], ("keyvault", "secret", "show"))
 
     def test_exports_reject_missing_values_and_newline_injection(self):
         for value in ["", "a\nb", "a\rb"]:
             with self.assertRaises(ValueError):
                 resources.export("SETTING", value)
 
-    def test_credentials_resolve_arm_hostname_and_refresh_only_the_test_function(self):
+    def test_credentials_read_existing_test_resources_without_cloud_mutations(self):
         with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing", "AZURE_RESOURCE_GROUP": "synthetic-test", "GITHUB_SHA": "a" * 40}), \
                 patch("sys.argv", ["test-resources.py", "credentials"]), patch.object(resources, "export") as export, \
                 patch.object(resources, "azure", side_effect=["niobiuminvoicing-func-test.azurewebsites.net",
-                    "/subscriptions/synthetic/resourceGroups/synthetic-test/providers/Microsoft.Web/sites/niobiuminvoicing-func-test", "", "storage-key", "bus-connection", "signing-key"]) as azure:
+                    "storage-key", "bus-connection", "signing-key"]) as azure:
             resources.main()
             self.assertEqual(azure.call_args_list[0].args[-1], "properties.defaultHostName")
-            refresh = azure.call_args_list[2].args
-            self.assertEqual(refresh[:3], ("rest", "--method", "post"))
-            self.assertIn("/sites/niobiuminvoicing-func-test/config/configreferences/appsettings/refresh", refresh[-1])
+            self.assertEqual(azure.call_count, 4)
+            for call in azure.call_args_list:
+                self.assertFalse({"create", "set", "delete", "post", "put", "patch"}.intersection(call.args))
             export.assert_any_call("TEST_EXPECTED_COMMIT", "a" * 40)
             export.assert_any_call("TEST_SIGNING_KEY", "signing-key", secret=True)
 

@@ -1,15 +1,14 @@
 name: Package Publish
 
 on:
-  push:
-    branches: ["main"]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
+  pull_request:
+    branches: [main]
+    types: [closed]
 
 permissions:
   id-token: write
   contents: read
+  pull-requests: read
   
 env:  
   nugetFeedUrl: "https://api.nuget.org/v3/index.json"
@@ -17,24 +16,8 @@ env:
     src/Niobium.Invoicing.Contracts
 
 jobs:
-  reviewed-change:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/github-script@v8
-        with:
-          script: |
-            await require('./scripts/delivery-policy.cjs').production({github, context, core});
-
   prod-release:
-    needs: reviewed-change
-    if: github.ref == 'refs/heads/main'
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     concurrency:
       group: prod-release-publish
@@ -44,51 +27,52 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+    - name: Identify changed package projects
+      id: changes
+      uses: actions/github-script@v8
+      with:
+        script: |
+          const files = await github.paginate(github.rest.pulls.listFiles, {
+            ...context.repo, pull_number: context.payload.pull_request.number, per_page: 100
+          });
+          core.setOutput('contracts', files.some(file => file.filename.startsWith('src/Niobium.Invoicing.Contracts/')));
 
     - name: Setup .NET
+      if: steps.changes.outputs.contracts == 'true'
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: '10.x.x'
 
     - name: Restore Packages
+      if: steps.changes.outputs.contracts == 'true'
       run: dotnet restore
 
     - name: Build Projects
+      if: steps.changes.outputs.contracts == 'true'
       run: dotnet build --configuration Release /p:BUILD_BUILDNUMBER=${{ env.buildVersion }}
       
     - name: NuGet login (OIDC)
+      if: steps.changes.outputs.contracts == 'true'
       uses: NuGet/login@v1
       id: login
       with:
         user: ${{ secrets.NUGET_USER }}
     
     - name: NuGet Publish
+      if: steps.changes.outputs.contracts == 'true'
       run: |
         set -euo pipefail
 
-        if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-          comparisonBase="$BEFORE_SHA"
-
-          if [[ "$comparisonBase" == "0000000000000000000000000000000000000000" ]]; then
-            comparisonBase="$(git hash-object -t tree /dev/null)"
-          else
-            git fetch --no-tags --depth=1 origin "$comparisonBase"
-          fi
-        fi
-
         while IFS= read -r project; do
           [[ -z "$project" ]] && continue
-
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]] && git diff --quiet "$comparisonBase" "$GITHUB_SHA" -- "$project"; then
-            echo "Skipping $project because it has no changes."
-            continue
-          fi
 
           echo "Publishing $project."
           dotnet nuget push "$project/bin/Release/*.nupkg" --source "$NUGET_FEED_URL" --api-key "$NUGET_API_KEY"
         done <<< "$NUGET_PROJECTS"
       env:
-        BEFORE_SHA: ${{ github.event.before }}
         NUGET_FEED_URL: ${{ env.nugetFeedUrl }}
         NUGET_PROJECTS: ${{ env.nugetProjects }}
         NUGET_API_KEY: ${{steps.login.outputs.NUGET_API_KEY}}

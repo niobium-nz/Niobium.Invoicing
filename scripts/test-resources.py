@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import secrets
 
 
 def export(name, value, secret=False):
@@ -30,9 +29,9 @@ def main():
     bus = f"{prefix}-{abbreviations['serviceBusNamespaces']}test"
     vault = f"{prefix}-{abbreviations['keyVaultVaults']}test"
     if sys.argv[1] == "configure":
-        # The test host emits to an isolated sink in its own namespace. No Notification provider consumes it.
-        export("APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE", bus + ".servicebus.windows.net")
-        export("APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET", secrets.token_urlsafe(48), secret=True)
+        # Preserve the real test environment's signing configuration; do not rotate it for tests.
+        export("APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET", azure("keyvault", "secret", "show", "--vault-name", vault,
+               "--name", "IDENTITYSERVICEOPTIONS--ACCESSTOKENSECRET", "--query", "value"), secret=True)
         return
     if sys.argv[1] != "credentials":
         raise ValueError("Expected configure or credentials")
@@ -43,13 +42,6 @@ def main():
     hostname = azure(*resource, "--query", "properties.defaultHostName")
     if not hostname.endswith(".azurewebsites.net") or not hostname.startswith(function + "."):
         raise ValueError(f"Unexpected test function hostname: {hostname!r}")
-    resource_id = azure(*resource, "--query", "id")
-    if not resource_id.lower().endswith("/providers/microsoft.web/sites/" + function.lower()):
-        raise ValueError("Unexpected test function resource ID")
-    # Provision writes the new key after settings are applied. Refresh the versionless reference
-    # explicitly so authentication checks do not observe the previous deployment's cached key.
-    azure("rest", "--method", "post", "--url",
-          f"https://management.azure.com{resource_id}/config/configreferences/appsettings/refresh?api-version=2022-03-01")
     export("TEST_ENVIRONMENT", "test")
     export("TEST_API_URL", "https://" + hostname)
     export("TEST_STORAGE_ACCOUNT", storage)

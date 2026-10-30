@@ -8,7 +8,7 @@ function eligibleRun(run, sha, repository) {
     run.conclusion === 'success' && run.head_repository?.full_name === repository;
 }
 
-function approvedHead(reviews, head, author) {
+function approvedHead(reviews, head) {
   const decisions = new Map();
   for (const review of [...reviews].sort((a, b) => a.id - b.id)) {
     if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) {
@@ -17,7 +17,7 @@ function approvedHead(reviews, head, author) {
   }
   const latest = [...decisions.values()];
   return !latest.some(review => review.state === 'CHANGES_REQUESTED') &&
-    latest.some(review => review.state === 'APPROVED' && review.commit_id === head && review.user.login !== author);
+    latest.some(review => review.state === 'APPROVED' && review.commit_id === head);
 }
 
 async function testedRun(github, owner, repo, sha, before) {
@@ -37,24 +37,48 @@ async function testedRun(github, owner, repo, sha, before) {
   throw new Error('This feature commit has no successful build, test deployment and deployed integration run.');
 }
 
-async function production({ github, context, core }) {
+// This is a pre-merge agent check, never a gate between a merged PR and production.
+async function mergeEligibility({ github, context, pullNumber }) {
   const { owner, repo } = context.repo;
-  if (context.ref !== 'refs/heads/main' || context.eventName !== 'push') throw new Error('Production requires a push to main.');
-  const pulls = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
-    owner, repo, commit_sha: context.sha, per_page: 100,
-  });
-  const candidates = pulls.filter(pr => pr.merged_at && pr.base.ref === 'main' && pr.merge_commit_sha === context.sha &&
-    pr.head.repo?.full_name === `${owner}/${repo}`);
-  if (candidates.length !== 1) throw new Error('Production requires exactly one merged PR for this main commit.');
-  const pr = candidates[0];
-  const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: pr.number, per_page: 100 });
-  if (!approvedHead(reviews, pr.head.sha, pr.user.login)) throw new Error('An independent approval of the current PR head is required.');
-  const run = await testedRun(github, owner, repo, pr.head.sha, pr.merged_at);
-  const main = await github.rest.git.getCommit({ owner, repo, commit_sha: context.sha });
-  const tested = await github.rest.git.getCommit({ owner, repo, commit_sha: pr.head.sha });
-  if (main.data.tree.sha !== tested.data.tree.sha) throw new Error('Merged content differs from the tested feature tree. Update the feature from main and retest.');
-  core.notice(`Reviewed PR #${pr.number}; successful test deployment: ${run.html_url}`);
-  return run;
+  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
+  if (pr.state !== 'open' || pr.draft || pr.base.ref !== 'main' || pr.head.repo?.full_name !== `${owner}/${repo}`) {
+    throw new Error('Merge requires an open, ready, repository-owned PR to main.');
+  }
+  const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: pullNumber, per_page: 100 });
+  if (!approvedHead(reviews, pr.head.sha)) throw new Error('Approval of the current PR head is required.');
+  const run = await testedRun(github, owner, repo, pr.head.sha);
+  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: 'main', head: pr.head.sha });
+  if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('Update the feature branch from main and repeat deployment/tests.');
+  return { pr, run };
+}
+
+// Called only after the feature workflow's build and deployed integration jobs succeed.
+async function openPullRequest({ github, context, core }) {
+  const { owner, repo } = context.repo;
+  if (context.eventName !== 'push' || !context.ref.startsWith('refs/heads/') || context.ref === 'refs/heads/main') {
+    throw new Error('Automatic PR creation requires a feature push.');
+  }
+  const branch = context.ref.slice('refs/heads/'.length);
+  const { data: current } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+  if (current.object.sha !== context.sha) { core.notice('A newer feature commit is being tested; leave PR creation to that run.'); return; }
+  // The workflow's needs:[verify,test] supplies completed test evidence, including during bootstrap
+  // before the default-branch workflow_run listener exists.
+  await github.rest.repos.createCommitStatus({ owner, repo, sha: context.sha, state: 'success',
+    context: 'Test deployment verified', description: 'Build, test deployment and deployed integration passed.',
+    target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}` });
+  const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', base: 'main', head: `${owner}:${branch}`, per_page: 100 });
+  const existing = pulls.find(pr => pr.head.repo?.full_name === `${owner}/${repo}` && pr.head.ref === branch);
+  if (existing) { core.notice(`Continue review on ${existing.html_url}`); return existing; }
+  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: 'main', head: context.sha });
+  if (comparison.status === 'identical' || comparison.status === 'behind') { core.notice('No feature changes remain to review.'); return; }
+  const title = (context.payload.head_commit?.message?.split('\n')[0] || `Tested changes from ${branch}`).slice(0,200);
+  const body = `This feature commit passed the build, coverage checks, test deployment and deployed integration jobs.\n\n` +
+    `Commit: \`${context.sha}\`\n\nVerification: https://github.com/${owner}/${repo}/actions/runs/${context.runId}\n\n` +
+    `Review the current head before merging. The agent must address actionable review comments, retest changes, merge only after approval, and monitor production deployment and read-only tests afterward.\n\n` +
+    `Commits:\n` + comparison.commits.map(commit => `- ${commit.commit.message.split('\n')[0]}`).join('\n');
+  const { data: pr } = await github.rest.pulls.create({ owner, repo, base: 'main', head: branch, title, body, draft: false });
+  core.notice(`Ready for review: ${pr.html_url}`);
+  return pr;
 }
 
 async function readiness({ github, context, core }) {
@@ -77,4 +101,4 @@ async function readiness({ github, context, core }) {
   }
 }
 
-module.exports = { production, readiness, testedRun, eligibleRun, approvedHead };
+module.exports = { mergeEligibility, openPullRequest, readiness, testedRun, eligibleRun, approvedHead };

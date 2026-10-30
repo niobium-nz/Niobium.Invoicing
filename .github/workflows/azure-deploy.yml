@@ -2,18 +2,22 @@ name: Azure Deployment
 
 on:
   push:
-    branches: ['**']
+    branches-ignore: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
 
 permissions:
   contents: read
 
 env:
   buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
-  SourceRevisionId: '${{ github.sha }}'
+  SourceRevisionId: '${{ github.event.pull_request.merge_commit_sha || github.sha }}'
 
 jobs:
   verify:
     name: Build and local tests
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     services:
       azurite:
@@ -57,7 +61,7 @@ jobs:
 
   test:
     name: Deploy test and run integration
-    if: github.ref != 'refs/heads/main'
+    if: github.event_name == 'push'
     needs: verify
     runs-on: ubuntu-latest
     environment: test
@@ -72,7 +76,7 @@ jobs:
       AZURE_ENV_NAME: test
       APP_SHORT_NAME: niobiuminvoicing
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      SERVICE_BUS_QUEUE_NAMES: 'issueinvoicecommand,notifycommand'
+      SERVICE_BUS_QUEUE_NAMES: 'issueinvoicecommand'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v6
@@ -87,7 +91,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: azd login
         run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
-      - name: Configure isolated notification sink
+      - name: Load existing test signing configuration
         run: python scripts/test-resources.py configure
       - name: Publish
         env:
@@ -107,6 +111,7 @@ jobs:
           APPSETTING_IDENTITYSERVICEOPTIONS__IDTOKENPUBLICKEY: '-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlmuIHhRUT+IvTdTajuOEdPZ75pqJrajOyDdJqf42siofTKHCPCZqtWaftL8Jae5VMHUNCflXzm9aKTLgerAxrGyCL3BkZj/dj4KjbeFoY1Akz5EJd5qjRNtzdoqUkDsuaigJTDDhyHvdVKRHzYAJSKgiw9CLRkzyKDZAp1Fxm2xICzRoF9OfH0jv5Qn11gkMHrkVkB6nv7QD3EGS2rnDwKudjnlsvgjpoNMMNvY7EHqkuxjHdGh4Hy7M3UXl50Bft9ky3gKeCgpvVYRPXHdT6k3e+81J7liEJYdVb5taPeNf3wB8WCP8Xc7FO6vod9ziDIkJv+xqUWYtlyGZBGTBrQIDAQAB-----END PUBLIC KEY-----'
           APPSETTING_PROFILEOPTIONS__PROFILEAPPID: 'e514f381-77cd-4ce9-ab6c-1a960fc7d9ed'
           APPSETTING_PROFILEOPTIONS__PROFILESERVICEHOST: 'https://api.identity.niobium.co.nz'
+          APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE: 'niobiumnotify-sb-test.servicebus.windows.net'
           APPSETTING_BILLINGOPTIONS__INVOICETOKENSECRETSALT: '1234567890'
         run: |
           azd package --no-prompt
@@ -117,9 +122,24 @@ jobs:
       - name: Run deployed integration tests
         timeout-minutes: 10
         env:
+          TEST_INVOICE_BILLER: ${{ vars.TEST_INVOICE_BILLER }}
+          TEST_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
+          TEST_NOTIFICATION_RECIPIENT: ${{ secrets.TEST_NOTIFICATION_RECIPIENT }}
           TEST_TOKEN_ISSUER: Niobium.Invoicing.Server.Test
           TEST_TOKEN_AUDIENCE: Niobium.Invoicing.Client.Test
         run: dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
+      - name: Report generated test fixture identifiers
+        if: always()
+        run: |
+          python - <<'PYREPORT'
+          import json
+          from pathlib import Path
+          path = Path('artifacts/deployed/test-invoice-fixture.json')
+          if path.exists():
+              fixture = json.loads(path.read_text())
+              print('TEST_INVOICE_BILLER=' + fixture['biller'])
+              print('TEST_INVOICE_ID=' + str(fixture['invoice']))
+          PYREPORT
       - name: Upload deployed test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,14 +148,15 @@ jobs:
           path: artifacts/deployed/
           if-no-files-found: error
 
-  reviewed-change:
-    name: Verify reviewed production change
-    if: github.ref == 'refs/heads/main'
+  open-pr:
+    name: Open PR after test success
+    if: github.event_name == 'push'
+    needs: [verify, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
-      pull-requests: read
+      pull-requests: write
+      statuses: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -143,11 +164,11 @@ jobs:
       - uses: actions/github-script@v8
         with:
           script: |
-            await require('./scripts/delivery-policy.cjs').production({github, context, core});
+            await require('./scripts/delivery-policy.cjs').openPullRequest({github, context, core});
 
   prod:
-    if: github.ref == 'refs/heads/main'
-    needs: [verify, reviewed-change]
+    name: Deploy production and run read-only integration
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     environment: prod
     permissions:
@@ -160,6 +181,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
         
       - uses: actions/setup-dotnet@v6
         with:
@@ -205,3 +228,19 @@ jobs:
           azd package --no-prompt
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
+      - name: Run production read-only integration tests
+        timeout-minutes: 5
+        env:
+          READONLY_API_URL: https://api.invoicing.niobium.co.nz
+          READONLY_EXPECTED_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+          READONLY_INVOICE_BILLER_ID: ${{ vars.TEST_INVOICE_BILLER }}
+          READONLY_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
+          READONLY_INVOICE_TOKEN: ${{ secrets.TEST_INVOICE_TOKEN }}
+        run: python scripts/read-only-deployment.py --require-fixture --report artifacts/production-read-only.json
+      - name: Upload production read-only results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-read-only-evidence-${{ github.event.pull_request.merge_commit_sha }}
+          path: artifacts/production-read-only.json
+          if-no-files-found: error
