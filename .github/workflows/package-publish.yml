@@ -3,6 +3,9 @@ name: Package Publish
 on:
   push:
     branches: ["*"]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -134,4 +137,3 @@ jobs:
         NUGET_FEED_URL: ${{ env.nugetFeedUrl }}
         NUGET_PROJECTS: ${{ env.nugetProjects }}
         NUGET_API_KEY: ${{steps.login.outputs.NUGET_API_KEY}}
-      

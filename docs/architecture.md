@@ -53,24 +53,25 @@ sequenceDiagram
     Caller->>Entry: Request / IssueInvoiceCommand
     Entry->>Issue: Entry-specific checks completed
     Issue->>Upsert: RunAsync
-    Upsert->>Profile: Retrieve biller by tenant and biller ID
-    Upsert->>DB: Retrieve billee unless embedded
-    Upsert->>DB: Save freshly built invoice with force=true
+    Upsert->>DB: Load stored invoice and items
+    opt New invoice
+        Upsert->>Profile: Retrieve biller by tenant and biller ID
+        Upsert->>DB: Retrieve billee unless embedded
+    end
+    Upsert->>DB: Conditionally claim preparation
     Upsert->>DB: Read and delete previous items
-    Upsert->>DB: Create supplied items
+    Upsert->>DB: Create supplied items, read back, mark ready
     alt NotifyBillee is true
         Issue->>Email: RunAsync
         Email->>DB: Read invoice and items
-        opt No saved invoice-link token
-            Email->>DB: Save a new token before enqueueing
-        end
+        Email->>DB: Verify items and conditionally freeze content/token/endpoint
         Email->>Bus: Enqueue NotifyCommand
         Email->>DB: Save Delivered timestamp with the same token
     end
     Issue-->>Entry: Completion or propagated failure
 ```
 
-HTTP issuance forces `NotifyBillee=false`. The trusted message path can notify and supplies an embedded billee. `IssueFlow` does not combine stages into a transaction. `UpsertFlow` creates a fresh invoice/domain rather than loading the existing invoice. Its delivered check does not establish a durable edit lock across retries.
+HTTP issuance forces `NotifyBillee=false`. The trusted message path can notify and supplies an embedded billee. `IssueFlow` does not combine stages into a transaction. `UpsertFlow` loads the stored aggregate, conditionally claims item preparation and verifies read-back content. `EmailFlow` freezes that content before enqueue. See [recovery](invoice-recovery.md) for partial-failure and abandoned-writer limits.
 
 Failure boundaries matter: profile lookup may fail before writes; invoice save can succeed before item replacement fails; item deletion can succeed before creation fails. New token persistence precedes enqueueing, so its failure prevents notification publication. Enqueueing can still succeed before Delivered persistence fails. Repeating the operation can repeat earlier work. Azure batch limits apply within repository operations, not across the flow. See [persistence](domain-and-data.md) and [retry contracts](api-and-messaging.md).
 
@@ -78,10 +79,10 @@ Failure boundaries matter: profile lookup may fail before writes; invoice save c
 
 `HTMLFlow.RunAsync` retrieves an invoice domain, requires a matching saved link token, renders encoded invoice parameters, enumerates item domains, renders each encoded line and replaces the marked line block in the embedded template. `HtmlTemplate` performs single-pass substitution; URL attributes are prepared separately. Formatting uses stored invoice culture/timezone and selected currency formatters. Rendering has no storage write. Saved `Template` does not select the HTML resource.
 
-`EmailFlow.RunAsync` reads persisted data and returns early for a blank recipient email. `InvoiceDomain.EnsureAccessTokenAsync` reuses an existing saved token or creates and saves a new one. The flow builds unencoded invoice/line parameters and `NotifyCommand`, enqueues, then calls `OnDeliveredAsync`. Existing emailed links retain their token on resend (Q17). Provider delivery is outside this application. `Delivered` is an observed enqueue-related timestamp, despite its name.
+`EmailFlow.RunAsync` reads persisted data and returns early for a blank recipient email. `InvoiceDomain.FreezeAsync` verifies items and persists content freeze, token and endpoint before enqueue. The flow builds unencoded invoice/line parameters and `NotifyCommand`, enqueues, then calls `OnDeliveredAsync`. Existing emailed links retain their token on resend (Q17). Provider delivery is outside this application. `Delivered` is an observed enqueue-related timestamp, despite its name.
 
 There is no lifecycle enum or persistent Delivering/Cancelled state. Intended transitions (Q04/Q10) are editable invoice -> queued/Delivering with content frozen -> confirmed Delivered. Cancellation before any payment is planned. These transitions depend on downstream changes and are deferred.
 
 ## Decisions and limits
 
-The owner confirmed that overwrite-based persistence was originally a simple retry/idempotency strategy for trusted usage, and private queue integration intentionally omits user-principal checks. These are retrospective explanations, not inferred historical decisions. Other rationale remains Unknown. See [decisions](decisions-and-risks.md); this documentation did not implement a redesign.
+The owner confirmed that overwrite-based persistence was originally a simple retry/idempotency strategy for trusted usage, and private queue integration intentionally omits user-principal checks. These are retrospective explanations, not inferred historical decisions. Other rationale remains Unknown. See [decisions](decisions-and-risks.md); the current research implementation is tracked in the [acceptance ledger](implementation-progress.md).

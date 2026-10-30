@@ -1,7 +1,7 @@
-using Niobium.Finance;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Niobium.Finance;
 
 namespace Niobium.Invoicing.Domains;
 
@@ -61,43 +61,43 @@ internal static class InvoiceExtensions
     public static IReadOnlyDictionary<string, string> BuildTemplateParameters(this Invoice invoice, TimeZoneInfo timeZone, CultureInfo culture)
     {
         var parameters = new Dictionary<string, string>
-            {
-                { "INVOICE_ID", invoice.GetID().ToString() },
-                { "BILL_DATE", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture) },
-                { nameof(invoice.BillerName).ToSnakeCaseUpper(), invoice.BillerName },
-                { nameof(invoice.BillerBusinessID).ToSnakeCaseUpper(), invoice.BillerBusinessID ?? string.Empty },
-                { nameof(invoice.BillerTaxID).ToSnakeCaseUpper(), invoice.BillerTaxID ?? string.Empty },
-                { nameof(invoice.BillerAddressLine1).ToSnakeCaseUpper(), invoice.BillerAddressLine1 ?? string.Empty },
-                { nameof(invoice.BillerAddressLine2).ToSnakeCaseUpper(), invoice.BillerAddressLine2 ?? string.Empty },
-                { nameof(invoice.BillerAddressSuburb).ToSnakeCaseUpper(), invoice.BillerAddressSuburb ?? string.Empty },
-                { nameof(invoice.BillerAddressCity).ToSnakeCaseUpper(), invoice.BillerAddressCity ?? string.Empty },
-                { nameof(invoice.BillerAddressState).ToSnakeCaseUpper(), invoice.BillerAddressState ?? string.Empty },
-                { nameof(invoice.BillerAddressCountry).ToSnakeCaseUpper(), !string.IsNullOrWhiteSpace(invoice.BillerAddressCountry) ? Country.Parse(invoice.BillerAddressCountry).ToString() : string.Empty },
-                { nameof(invoice.BillerAddressZipcode).ToSnakeCaseUpper(), invoice.BillerAddressZipcode ?? string.Empty },
-                { nameof(invoice.BilleeName).ToSnakeCaseUpper(), invoice.BilleeName },
-                { nameof(invoice.BilleeBusinessID).ToSnakeCaseUpper(), invoice.BilleeBusinessID ?? string.Empty },
-                { nameof(invoice.BilleeAddressLine1).ToSnakeCaseUpper(), invoice.BilleeAddressLine1 ?? string.Empty },
-                { nameof(invoice.BilleeAddressLine2).ToSnakeCaseUpper(), invoice.BilleeAddressLine2 ?? string.Empty },
-                { nameof(invoice.BilleeAddressSuburb).ToSnakeCaseUpper(), invoice.BilleeAddressSuburb ?? string.Empty },
-                { nameof(invoice.BilleeAddressCity).ToSnakeCaseUpper(), invoice.BilleeAddressCity ?? string.Empty },
-                { nameof(invoice.BilleeAddressState).ToSnakeCaseUpper(), invoice.BilleeAddressState ?? string.Empty },
-                { nameof(invoice.BilleeAddressCountry).ToSnakeCaseUpper(), !string.IsNullOrWhiteSpace(invoice.BilleeAddressCountry) ? Country.Parse(invoice.BilleeAddressCountry).ToString() : string.Empty },
-                { nameof(invoice.BilleeAddressZipcode).ToSnakeCaseUpper(), invoice.BilleeAddressZipcode ?? string.Empty },
-                { nameof(invoice.ContactName).ToSnakeCaseUpper(), invoice.ContactName ?? string.Empty },
-                { nameof(invoice.PaymentInstructions).ToSnakeCaseUpper(), invoice.PaymentInstructions ?? string.Empty },
-                { nameof(invoice.Particulars).ToSnakeCaseUpper(), invoice.Particulars ?? string.Empty },
-                { nameof(invoice.Reference).ToSnakeCaseUpper(), invoice.Reference ?? string.Empty },
-                { nameof(invoice.ContactPhoneNumber).ToSnakeCaseUpper(), invoice.ContactPhoneNumber ?? string.Empty },
-                { nameof(invoice.ContactEmailAddress).ToSnakeCaseUpper(), invoice.ContactEmailAddress ?? string.Empty },
-                { "SUBTOTAL", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d) },
-                { "TAX_AMOUNT", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d) },
-                { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d) },
-                { "TAX_KIND", invoice.TaxKind.HasValue ? ((TaxKind)(invoice.TaxKind.Value)).ToString() : string.Empty },
-                { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
-                { "SETTLED", new Amount(invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },
-                { nameof(invoice.BillerLogo).ToSnakeCaseUpper(), invoice.BillerLogo ?? string.Empty },
-                { nameof(invoice.Terms).ToSnakeCaseUpper(), invoice.Terms ?? string.Empty },
-            };
+        {
+            { "INVOICE_ID", invoice.GetID().ToString() },
+            { "BILL_DATE", invoice.GetCreated(timeZone).ToYearMonthDayInNames(culture) },
+            { nameof(invoice.BillerName).ToSnakeCaseUpper(), invoice.BillerName },
+            { nameof(invoice.BillerBusinessID).ToSnakeCaseUpper(), invoice.BillerBusinessID ?? string.Empty },
+            { nameof(invoice.BillerTaxID).ToSnakeCaseUpper(), invoice.BillerTaxID ?? string.Empty },
+            { nameof(invoice.BillerAddressLine1).ToSnakeCaseUpper(), invoice.BillerAddressLine1 ?? string.Empty },
+            { nameof(invoice.BillerAddressLine2).ToSnakeCaseUpper(), invoice.BillerAddressLine2 ?? string.Empty },
+            { nameof(invoice.BillerAddressSuburb).ToSnakeCaseUpper(), invoice.BillerAddressSuburb ?? string.Empty },
+            { nameof(invoice.BillerAddressCity).ToSnakeCaseUpper(), invoice.BillerAddressCity ?? string.Empty },
+            { nameof(invoice.BillerAddressState).ToSnakeCaseUpper(), invoice.BillerAddressState ?? string.Empty },
+            { nameof(invoice.BillerAddressCountry).ToSnakeCaseUpper(), !string.IsNullOrWhiteSpace(invoice.BillerAddressCountry) ? Country.Parse(invoice.BillerAddressCountry).ToString() : string.Empty },
+            { nameof(invoice.BillerAddressZipcode).ToSnakeCaseUpper(), invoice.BillerAddressZipcode ?? string.Empty },
+            { nameof(invoice.BilleeName).ToSnakeCaseUpper(), invoice.BilleeName },
+            { nameof(invoice.BilleeBusinessID).ToSnakeCaseUpper(), invoice.BilleeBusinessID ?? string.Empty },
+            { nameof(invoice.BilleeAddressLine1).ToSnakeCaseUpper(), invoice.BilleeAddressLine1 ?? string.Empty },
+            { nameof(invoice.BilleeAddressLine2).ToSnakeCaseUpper(), invoice.BilleeAddressLine2 ?? string.Empty },
+            { nameof(invoice.BilleeAddressSuburb).ToSnakeCaseUpper(), invoice.BilleeAddressSuburb ?? string.Empty },
+            { nameof(invoice.BilleeAddressCity).ToSnakeCaseUpper(), invoice.BilleeAddressCity ?? string.Empty },
+            { nameof(invoice.BilleeAddressState).ToSnakeCaseUpper(), invoice.BilleeAddressState ?? string.Empty },
+            { nameof(invoice.BilleeAddressCountry).ToSnakeCaseUpper(), !string.IsNullOrWhiteSpace(invoice.BilleeAddressCountry) ? Country.Parse(invoice.BilleeAddressCountry).ToString() : string.Empty },
+            { nameof(invoice.BilleeAddressZipcode).ToSnakeCaseUpper(), invoice.BilleeAddressZipcode ?? string.Empty },
+            { nameof(invoice.ContactName).ToSnakeCaseUpper(), invoice.ContactName ?? string.Empty },
+            { nameof(invoice.PaymentInstructions).ToSnakeCaseUpper(), invoice.PaymentInstructions ?? string.Empty },
+            { nameof(invoice.Particulars).ToSnakeCaseUpper(), invoice.Particulars ?? string.Empty },
+            { nameof(invoice.Reference).ToSnakeCaseUpper(), invoice.Reference ?? string.Empty },
+            { nameof(invoice.ContactPhoneNumber).ToSnakeCaseUpper(), invoice.ContactPhoneNumber ?? string.Empty },
+            { nameof(invoice.ContactEmailAddress).ToSnakeCaseUpper(), invoice.ContactEmailAddress ?? string.Empty },
+            { "SUBTOTAL", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d) },
+            { "TAX_AMOUNT", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d) },
+            { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format(culture, "{0:N2}%", invoice.TaxRatePercentile / 100d) },
+            { "TAX_KIND", invoice.TaxKind.HasValue ? ((TaxKind)(invoice.TaxKind.Value)).ToString() : string.Empty },
+            { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
+            { "SETTLED", new Amount(invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },
+            { nameof(invoice.BillerLogo).ToSnakeCaseUpper(), invoice.BillerLogo ?? string.Empty },
+            { nameof(invoice.Terms).ToSnakeCaseUpper(), invoice.Terms ?? string.Empty },
+        };
 
         string billingPeriod = string.Empty;
         switch ((InvoiceCycle)invoice.InvoiceCycle)

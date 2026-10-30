@@ -21,6 +21,8 @@ The authorized security follow-up on **2026-10-30, Pacific/Auckland** starts fro
 
 Source links are relative and name symbols where useful. They follow the checkout; the central commit identifies the analyzed version. Framework links are commit-pinned. Tests support only what they actually assert.
 
+The research implementation starts from main `e2f7269676359d85cc7e4308d4babfd1f6f0b39c`. Its [acceptance ledger](implementation-progress.md), [billing rules](billing-validation.md), [recovery protocol](invoice-recovery.md) and [local integration guide](integration-tests.md) record current changes and limits. Discovery records above remain historical evidence.
+
 ## Reading map and maintenance
 
 | Page | Use it for | Update when |

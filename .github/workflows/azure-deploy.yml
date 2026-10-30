@@ -3,8 +3,14 @@ name: Azure Deployment
 on:
   push:
     branches: ["*"]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +21,34 @@ env:
   buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+        ports:
+          - 10002:10002
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+      - name: Restore
+        run: dotnet restore Niobium.Invoicing.slnx --nologo
+      - name: Build
+        run: dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo
+      - name: Unit tests
+        run: dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore
+      - name: Local storage and HTTP boundary integration tests
+        env:
+          NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT: 'http://127.0.0.1:10002/devstoreaccount1'
+        run: dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore
   test:
+    needs: verify
     runs-on: ubuntu-latest
     environment: 'test'
     concurrency:
@@ -65,7 +98,9 @@ jobs:
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
   prod:
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    # B04 remains partial: a deployed-environment integration gate still needs isolated resources (B07).
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: 'prod'
     concurrency:

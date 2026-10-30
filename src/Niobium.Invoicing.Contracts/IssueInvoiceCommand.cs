@@ -50,7 +50,7 @@ public class IssueInvoiceCommand : IssueInvoiceRequest, IDomainEvent, IUserInput
     }
 
     /// <summary>
-    /// Embedded customer snapshot used by trusted queue issuance; Sanitize copies its ID to BilleeID.
+    /// Embedded customer snapshot used by trusted queue issuance; Sanitize fills a missing BilleeID.
     /// </summary>
     public required Billee Billee
     {
@@ -58,13 +58,16 @@ public class IssueInvoiceCommand : IssueInvoiceRequest, IDomainEvent, IUserInput
     }
 
     /// <summary>
-    /// Copies the embedded customer identifier into the inherited BilleeID field.
+    /// Fills a missing BilleeID from the embedded customer without hiding conflicting identifiers.
     /// </summary>
     /// <remarks>
     /// This normalization does not validate customer ownership or invoice item relationships.
     /// </remarks>
     public void Sanitize()
     {
-        BilleeID = Billee.ID;
+        if (BilleeID == Guid.Empty && Billee != null)
+        {
+            BilleeID = Billee.ID;
+        }
     }
 }
