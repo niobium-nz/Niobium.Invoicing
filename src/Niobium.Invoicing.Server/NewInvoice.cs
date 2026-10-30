@@ -28,8 +28,8 @@ public class NewInvoice(IssueFlow flow)
     /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
     /// <returns>An empty success result or an entry-check rejection result.</returns>
     /// <remarks>
-    /// Checks only the upper age limit of 30 minutes. NotifyBillee is reset to false. ForbidResult string
-    /// arguments are authentication schemes; final host rejection behavior is not integration-verified.
+    /// Checks only the upper age limit of 30 minutes. NotifyBillee is reset to false. Entry-check
+    /// rejections return explicit HTTP status codes without invoking authentication schemes.
     /// </remarks>
     [Function(nameof(NewInvoice))]
     public async Task<IActionResult> Run(
@@ -49,12 +49,12 @@ public class NewInvoice(IssueFlow flow)
 
         if (request.BillerID != user)
         {
-            return new ForbidResult("Biller does not match the authenticated user.");
+            return new StatusCodeResult(StatusCodes.Status403Forbidden);
         }
 
         if (request.Tenant != tenant)
         {
-            return new ForbidResult("Tenant does not match the authenticated user.");
+            return new StatusCodeResult(StatusCodes.Status403Forbidden);
         }
 
         request.TryValidate(out ValidationState? validationState);
@@ -63,10 +63,18 @@ public class NewInvoice(IssueFlow flow)
             return validationState.MakeResponse();
         }
 
-        DateTimeOffset invoiceCreateTime = DateTimeOffsetExtensions.FromReverseUnixTimeMilliseconds(request.InvoiceID);
+        DateTimeOffset invoiceCreateTime;
+        try
+        {
+            invoiceCreateTime = DateTimeOffsetExtensions.FromReverseUnixTimeMilliseconds(request.InvoiceID);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return new BadRequestObjectResult("Invalid invoice identifier.");
+        }
         if (DateTimeOffset.UtcNow - invoiceCreateTime > InvoiceCreateTimeMaxOffset)
         {
-            return new ForbidResult("Invalid issue invoice request.");
+            return new StatusCodeResult(StatusCodes.Status403Forbidden);
         }
 
         request.NotifyBillee = false;
