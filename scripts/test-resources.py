@@ -37,9 +37,19 @@ def main():
     if sys.argv[1] != "credentials":
         raise ValueError("Expected configure or credentials")
     group = os.environ["AZURE_RESOURCE_GROUP"]
-    hostname = azure("functionapp", "show", "--resource-group", group, "--name", function, "--query", "defaultHostName")
-    if not hostname.endswith(".azurewebsites.net"):
-        raise ValueError("Unexpected test function hostname")
+    # Read the ARM properties explicitly; az functionapp's model projection can omit defaultHostName.
+    resource = ("resource", "show", "--resource-group", group, "--name", function,
+                "--resource-type", "Microsoft.Web/sites", "--api-version", "2024-11-01")
+    hostname = azure(*resource, "--query", "properties.defaultHostName")
+    if not hostname.endswith(".azurewebsites.net") or not hostname.startswith(function + "."):
+        raise ValueError(f"Unexpected test function hostname: {hostname!r}")
+    resource_id = azure(*resource, "--query", "id")
+    if not resource_id.lower().endswith("/providers/microsoft.web/sites/" + function.lower()):
+        raise ValueError("Unexpected test function resource ID")
+    # Provision writes the new key after settings are applied. Refresh the versionless reference
+    # explicitly so authentication checks do not observe the previous deployment's cached key.
+    azure("rest", "--method", "post", "--url",
+          f"https://management.azure.com{resource_id}/config/configreferences/appsettings/refresh?api-version=2022-03-01")
     export("TEST_ENVIRONMENT", "test")
     export("TEST_API_URL", "https://" + hostname)
     export("TEST_STORAGE_ACCOUNT", storage)

@@ -73,6 +73,26 @@ class ResourceBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 resources.export("SETTING", value)
 
+    def test_credentials_resolve_arm_hostname_and_refresh_only_the_test_function(self):
+        with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing", "AZURE_RESOURCE_GROUP": "synthetic-test", "GITHUB_SHA": "a" * 40}), \
+                patch("sys.argv", ["test-resources.py", "credentials"]), patch.object(resources, "export") as export, \
+                patch.object(resources, "azure", side_effect=["niobiuminvoicing-func-test.azurewebsites.net",
+                    "/subscriptions/synthetic/resourceGroups/synthetic-test/providers/Microsoft.Web/sites/niobiuminvoicing-func-test", "", "storage-key", "bus-connection", "signing-key"]) as azure:
+            resources.main()
+            self.assertEqual(azure.call_args_list[0].args[-1], "properties.defaultHostName")
+            refresh = azure.call_args_list[2].args
+            self.assertEqual(refresh[:3], ("rest", "--method", "post"))
+            self.assertIn("/sites/niobiuminvoicing-func-test/config/configreferences/appsettings/refresh", refresh[-1])
+            export.assert_any_call("TEST_EXPECTED_COMMIT", "a" * 40)
+            export.assert_any_call("TEST_SIGNING_KEY", "signing-key", secret=True)
+
+    def test_unexpected_function_hostname_stops_before_credentials_are_read(self):
+        with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing", "AZURE_RESOURCE_GROUP": "synthetic-test"}), \
+                patch("sys.argv", ["test-resources.py", "credentials"]), patch.object(resources, "azure", return_value="unrelated.azurewebsites.net") as azure:
+            with self.assertRaisesRegex(ValueError, "Unexpected test function hostname"):
+                resources.main()
+            self.assertEqual(azure.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

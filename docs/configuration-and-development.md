@@ -16,7 +16,7 @@ No repository `NuGet.Config`, central package/build files or lockfile is tracked
 | `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore` | Verified MTP invocation; 60 isolated cases in the security follow-up, 26 at discovery. Optional `--results-directory <outside-repo-path> --report-trx` was used for recorded evidence. |
 | `git diff --check` | Verified documentation hygiene check. |
 | Functions host startup / live API requests | Not run. Requires explicitly isolated identity/profile/storage/messaging resources and synthetic records. |
-| `azd package`, `azd provision`, `azd deploy` / provisioning scripts | Inspected, not run. Packaging invokes tests; provision/deploy have cloud/file/secret side effects. Require authorization. |
+| `azd package`, `azd provision`, `azd deploy` / provisioning scripts | Feature pushes now run these in the authorized test workflow. Provision/deploy have cloud/file/secret side effects; other environments still require authorization. See [delivery](delivery-and-operations.md). |
 
 In the discovery workspace, a reviewed `/workspace/.niobium-tools/env.sh` supplied PATH/cache/telemetry settings. It is environment-specific and is not a repository prerequisite. See [validation](discovery/validation.md) for exact recorded commands.
 

@@ -19,7 +19,7 @@
 | StorageFlowTests | 4 | Real registration/adapters and local Table HTTP calls, ETags/stale rejection, competing claims, partial checkpoint repair, replay and public HTML | Azurite; synthetic profile and controlled outgoing broker |
 | HttpBoundaryTests | 12 | Installed token parser, ASP.NET status result execution, notify suppression and removed debug route | Does not run Functions middleware or a deployed host |
 
-The [integration guide](integration-tests.md) documents opt-in isolation, cleanup and commands. Storage tests skip without the emulator endpoint; skips are not passing storage evidence. The separate deployed suite uses the test Service Bus queues and host; it does not contact the external profile service or email provider. Ten Node policy tests and five Python tooling tests cover promotion rejection, coverage union and test resource boundaries.
+The [integration guide](integration-tests.md) documents opt-in isolation, cleanup and commands. Storage tests skip without the emulator endpoint; skips are not passing storage evidence. The separate deployed suite uses the test Service Bus queues and host; it does not contact the external profile service or email provider. Ten Node policy tests and seven Python tooling tests cover promotion rejection, coverage union and test resource boundaries.
 
 Seven deployed cases are wired after test deployment; their terminal CI result must be verified for each feature commit. Still outside their coverage: direct-resource authorization in Azure, external profiles, Notification inbox/provider crash recovery, delivery confirmations and backup/restore. No load-test result, recovery SLA or production guarantee is claimed.
 

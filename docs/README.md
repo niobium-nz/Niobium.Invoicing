@@ -6,7 +6,7 @@ These documents describe implementation and owner-confirmed product direction. P
 
 Analyzed baseline: `niobium-nz/Niobium.Invoicing`, commit **`f403f50aa6358e9c56dd5561d9f6073d7a73a1eb`**, branch `work`, working directory `/workspace/Niobium.Invoicing`. The working tree was clean before documentation work. Scope was approved on **2026-10-29, Pacific/Auckland**. This records approval, not original architectural-decision dates.
 
-Framework sources are pinned by consumed package version in [Niobium integration](niobium-integration.md). No live Azure deployment, GitHub environment protection or external service revision was verified.
+Framework sources are pinned by consumed package version in [Niobium integration](niobium-integration.md). The [delivery follow-up](implementation-progress.md#feature-delivery-policy-follow-up-2026-10-30) adds live test deployment verification. GitHub environment protection and external service revisions remain unverified; consult the exact CI run for deployed-test results.
 
 The authorized security follow-up on **2026-10-30, Pacific/Auckland** starts from `910fea08ffd2d608e9d9534c4607a2aeaa9c9822` and updates resource grants, stored-link compatibility and HTML rendering. Current behavior pages include those changes; the original discovery ledger/validation remain historical records. See [Q15-Q18](decisions-and-risks.md#owner-decisions) and the [follow-up validation](discovery/validation.md#security-follow-up-2026-10-30).
 
