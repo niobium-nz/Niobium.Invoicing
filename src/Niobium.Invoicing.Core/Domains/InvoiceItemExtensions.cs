@@ -1,23 +1,23 @@
-﻿using Niobium.Finance;
+using Niobium.Finance;
 
-namespace Niobium.Invoicing.Domains
+namespace Niobium.Invoicing.Domains;
+
+/// <summary>
+/// Formats stored line values for HTML and notification templates.
+/// </summary>
+internal static class InvoiceItemExtensions
 {
     /// <summary>
-    /// Formats stored line values for HTML and notification templates.
+    /// Formats stored subject, description, unit price, quantity and line total.
     /// </summary>
-    internal static class InvoiceItemExtensions
+    /// <param name="invoiceItem">Line whose stored values are formatted.</param>
+    /// <returns>The line template-key dictionary.</returns>
+    /// <remarks>
+    /// Uses stored LineTotalCents rather than recalculating it; unsupported display currencies can fail.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> BuildTemplateParameters(this InvoiceItem invoiceItem)
     {
-        /// <summary>
-        /// Formats stored subject, description, unit price, quantity and line total.
-        /// </summary>
-        /// <param name="invoiceItem">Line whose stored values are formatted.</param>
-        /// <returns>The line template-key dictionary.</returns>
-        /// <remarks>
-        /// Uses stored LineTotalCents rather than recalculating it; unsupported display currencies can fail.
-        /// </remarks>
-        public static IReadOnlyDictionary<string, string> BuildTemplateParameters(this InvoiceItem invoiceItem)
-        {
-            return new Dictionary<string, string>
+        return new Dictionary<string, string>
             {
                 { nameof(invoiceItem.Subject).ToSnakeCaseUpper(), invoiceItem.Subject },
                 { nameof(invoiceItem.Description).ToSnakeCaseUpper(), invoiceItem.Description ?? string.Empty },
@@ -25,6 +25,5 @@ namespace Niobium.Invoicing.Domains
                 { nameof(invoiceItem.Quantity).ToSnakeCaseUpper(), invoiceItem.Quantity.ToString() },
                 { "LINE_TOTAL", Currency.Parse(invoiceItem.LineTotalCurrency).ToDisplayLocal(invoiceItem.LineTotalCents / 100d) },
             };
-        }
     }
 }
