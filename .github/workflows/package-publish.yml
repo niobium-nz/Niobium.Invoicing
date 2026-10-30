@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     concurrency:
       group: prod-release-publish
-      cancel-in-progress: true
+      cancel-in-progress: false
+      queue: max
     env:
       buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
     steps:
@@ -38,7 +39,7 @@ jobs:
           const files = await github.paginate(github.rest.pulls.listFiles, {
             ...context.repo, pull_number: context.payload.pull_request.number, per_page: 100
           });
-          core.setOutput('contracts', files.some(file => file.filename.startsWith('src/Niobium.Invoicing.Contracts/')));
+          core.setOutput('contracts', require('./scripts/package-policy.cjs').contractsChanged(files));
 
     - name: Setup .NET
       if: steps.changes.outputs.contracts == 'true'

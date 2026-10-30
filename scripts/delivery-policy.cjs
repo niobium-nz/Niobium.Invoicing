@@ -1,40 +1,59 @@
-// API-only policy checks. Never check out or execute a pull request's code with privileged credentials.
+// Privileged entry point: only the controller loaded from the default branch may publish status/PRs.
 const WORKFLOW = 'azure-deploy.yml';
+const WORKFLOW_PATH = `.github/workflows/${WORKFLOW}`;
+const PIPELINE_FILES = [WORKFLOW_PATH, 'azure.yaml', 'scripts/check-coverage.py', 'scripts/test-resources.py'];
 const REQUIRED_JOBS = ['Build and local tests', 'Deploy test and run integration'];
 const REQUIRED_STEP = 'Run deployed integration tests';
 
 function eligibleRun(run, sha, repository) {
   return run.head_sha === sha && run.event === 'push' && run.head_branch !== 'main' &&
-    run.conclusion === 'success' && run.head_repository?.full_name === repository;
+    run.conclusion === 'success' && run.head_repository?.full_name === repository && run.path === WORKFLOW_PATH;
 }
 
 function approvedHead(reviews, head) {
   const decisions = new Map();
   for (const review of [...reviews].sort((a, b) => a.id - b.id)) {
-    if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) {
-      decisions.set(review.user.login, review);
-    }
+    if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) decisions.set(review.user.login, review);
   }
   const latest = [...decisions.values()];
   return !latest.some(review => review.state === 'CHANGES_REQUESTED') &&
     latest.some(review => review.state === 'APPROVED' && review.commit_id === head);
 }
 
-async function testedRun(github, owner, repo, sha, before) {
+async function authenticatePipeline(github, owner, repo, featureSha, trustedSha) {
+  if (!/^[0-9a-f]{40}$/.test(trustedSha ?? '')) throw new Error('An immutable trusted main commit is required.');
+  for (const path of PIPELINE_FILES) {
+    // Read Git blob identities through the API. Never download or execute feature policy code.
+    const [feature, trusted] = await Promise.all([
+      github.rest.repos.getContent({ owner, repo, path, ref: featureSha }),
+      github.rest.repos.getContent({ owner, repo, path, ref: trustedSha }),
+    ]);
+    if (feature.data.type !== 'file' || trusted.data.type !== 'file' ||
+        !feature.data.sha || feature.data.sha !== trusted.data.sha) {
+      throw new Error(`Untrusted pipeline definition: ${path}. Pipeline changes require reviewed activation on main before automatic certification.`);
+    }
+  }
+}
+
+async function testedRun(github, owner, repo, sha, trustedSha, runId) {
   const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
     owner, repo, workflow_id: WORKFLOW, event: 'push', head_sha: sha, per_page: 100,
   });
-  for (const run of runs) {
-    if (!eligibleRun(run, sha, `${owner}/${repo}`) || (before && Date.parse(run.updated_at) > Date.parse(before))) continue;
+  // A failed triggering run must not borrow success from an older run of the same SHA.
+  const candidates = runId ? runs.filter(run => run.id === runId) :
+    [...runs].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)).slice(0, 1);
+  for (const run of candidates) {
+    if (!eligibleRun(run, sha, `${owner}/${repo}`)) continue;
+    await authenticatePipeline(github, owner, repo, sha, trustedSha);
     const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
       owner, repo, run_id: run.id, filter: 'latest', per_page: 100,
     });
     if (!REQUIRED_JOBS.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) continue;
     const deployment = jobs.find(job => job.name === REQUIRED_JOBS[1]);
-    if (!deployment.steps.some(step => step.name === REQUIRED_STEP && step.conclusion === 'success')) continue;
+    if (!deployment.steps?.some(step => step.name === REQUIRED_STEP && step.conclusion === 'success')) continue;
     return run;
   }
-  throw new Error('This feature commit has no successful build, test deployment and deployed integration run.');
+  throw new Error('This feature commit has no successful authenticated build, test deployment and deployed integration run.');
 }
 
 // This is a pre-merge agent check, never a gate between a merged PR and production.
@@ -46,59 +65,59 @@ async function mergeEligibility({ github, context, pullNumber }) {
   }
   const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: pullNumber, per_page: 100 });
   if (!approvedHead(reviews, pr.head.sha)) throw new Error('Approval of the current PR head is required.');
-  const run = await testedRun(github, owner, repo, pr.head.sha);
-  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: 'main', head: pr.head.sha });
+  const { data: main } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+  const run = await testedRun(github, owner, repo, pr.head.sha, main.commit.sha);
+  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: main.commit.sha, head: pr.head.sha });
   if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('Update the feature branch from main and repeat deployment/tests.');
   return { pr, run };
 }
 
-// Called only after the feature workflow's build and deployed integration jobs succeed.
-async function openPullRequest({ github, context, core }) {
+// Private: the only caller has already authenticated the completed run against trusted pipeline blobs.
+async function openPullRequest({ github, context, core, run }) {
   const { owner, repo } = context.repo;
-  if (context.eventName !== 'push' || !context.ref.startsWith('refs/heads/') || context.ref === 'refs/heads/main') {
-    throw new Error('Automatic PR creation requires a feature push.');
-  }
-  const branch = context.ref.slice('refs/heads/'.length);
+  const branch = run.head_branch;
   const { data: current } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
-  if (current.object.sha !== context.sha) { core.notice('A newer feature commit is being tested; leave PR creation to that run.'); return; }
-  // The workflow's needs:[verify,test] supplies completed test evidence, including during bootstrap
-  // before the default-branch workflow_run listener exists.
-  await github.rest.repos.createCommitStatus({ owner, repo, sha: context.sha, state: 'success',
-    context: 'Test deployment verified', description: 'Build, test deployment and deployed integration passed.',
-    target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}` });
+  if (current.object.sha !== run.head_sha) { core.notice('A newer feature commit is being tested; leave PR creation to that run.'); return; }
   const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', base: 'main', head: `${owner}:${branch}`, per_page: 100 });
   const existing = pulls.find(pr => pr.head.repo?.full_name === `${owner}/${repo}` && pr.head.ref === branch);
   if (existing) { core.notice(`Continue review on ${existing.html_url}`); return existing; }
-  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: 'main', head: context.sha });
+  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: 'main', head: run.head_sha });
   if (comparison.status === 'identical' || comparison.status === 'behind') { core.notice('No feature changes remain to review.'); return; }
-  const title = (context.payload.head_commit?.message?.split('\n')[0] || `Tested changes from ${branch}`).slice(0,200);
-  const body = `This feature commit passed the build, coverage checks, test deployment and deployed integration jobs.\n\n` +
-    `Commit: \`${context.sha}\`\n\nVerification: https://github.com/${owner}/${repo}/actions/runs/${context.runId}\n\n` +
-    `Review the current head before merging. The agent must address actionable review comments, retest changes, merge only after approval, and monitor production deployment and read-only tests afterward.\n\n` +
-    `Commits:\n` + comparison.commits.map(commit => `- ${commit.commit.message.split('\n')[0]}`).join('\n');
+  const title = (comparison.commits.at(-1)?.commit.message.split('\n')[0] || `Tested changes from ${branch}`).slice(0, 200);
+  const body = `This feature commit passed the authenticated build, coverage, test deployment and deployed integration jobs.\n\n` +
+    `Commit: \`${run.head_sha}\`\n\nVerification: ${run.html_url}\n\n` +
+    `Review the current head before merging. Address actionable review comments, retest changes, merge only after approval, and monitor production deployment and read-only tests afterward.\n`;
   const { data: pr } = await github.rest.pulls.create({ owner, repo, base: 'main', head: branch, title, body, draft: false });
   core.notice(`Ready for review: ${pr.html_url}`);
   return pr;
 }
 
-async function readiness({ github, context, core }) {
+async function readiness({ github, context, core, trustedSha, workflowRef }) {
   const { owner, repo } = context.repo;
+  const mainRef = 'refs/heads/main';
+  if (!['workflow_run', 'pull_request_target'].includes(context.eventName) || context.ref !== mainRef ||
+      context.sha !== trustedSha || !/^[0-9a-f]{40}$/.test(trustedSha ?? '') ||
+      workflowRef !== `${owner}/${repo}/.github/workflows/pr-readiness.yml@${mainRef}`) {
+    throw new Error('Repository writes require the controller defined by the immutable main workflow commit.');
+  }
   const pr = context.payload.pull_request;
   const eventRun = context.payload.workflow_run;
-  if (pr && pr.head.repo?.full_name !== `${owner}/${repo}`) throw new Error('Test deployments require a repository-owned feature branch.');
+  if (pr && pr.head.repo?.full_name !== `${owner}/${repo}`) return;
   if (eventRun && (eventRun.head_repository?.full_name !== `${owner}/${repo}` || eventRun.event !== 'push' || eventRun.head_branch === 'main')) return;
   const sha = pr?.head.sha ?? eventRun?.head_sha;
   if (!sha) throw new Error('Missing feature commit.');
+  let run;
   try {
-    const run = await testedRun(github, owner, repo, sha);
-    await github.rest.repos.createCommitStatus({ owner, repo, sha, state: 'success', context: 'Test deployment verified',
-      description: 'This commit passed deployed integration tests.', target_url: run.html_url });
-    core.notice(`Feature commit is eligible for review: ${run.html_url}`);
+    run = await testedRun(github, owner, repo, sha, trustedSha, eventRun?.id);
   } catch (error) {
     await github.rest.repos.createCommitStatus({ owner, repo, sha, state: 'failure', context: 'Test deployment verified',
-      description: 'Push this commit and pass test deployment/integration before review.' });
+      description: 'A successful run with the trusted main pipeline definition is required.' });
     throw error;
   }
+  await github.rest.repos.createCommitStatus({ owner, repo, sha, state: 'success', context: 'Test deployment verified',
+    description: 'This commit passed the authenticated deployed integration workflow.', target_url: run.html_url });
+  core.notice(`Feature commit is eligible for review: ${run.html_url}`);
+  if (eventRun) await openPullRequest({ github, context, core, run });
 }
 
-module.exports = { mergeEligibility, openPullRequest, readiness, testedRun, eligibleRun, approvedHead };
+module.exports = { mergeEligibility, readiness, testedRun, eligibleRun, approvedHead, authenticatePipeline, PIPELINE_FILES };

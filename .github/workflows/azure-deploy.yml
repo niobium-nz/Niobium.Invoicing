@@ -120,7 +120,8 @@ jobs:
       - name: Prepare deployed integration credentials
         run: python scripts/test-resources.py credentials
       - name: Run deployed integration tests
-        timeout-minutes: 10
+        # The asynchronous/read-only waits alone can consume 15 minutes; leave time for cleanup.
+        timeout-minutes: 30
         env:
           TEST_INVOICE_BILLER: ${{ vars.TEST_INVOICE_BILLER }}
           TEST_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
@@ -147,24 +148,6 @@ jobs:
           name: deployed-test-evidence-${{ github.sha }}
           path: artifacts/deployed/
           if-no-files-found: error
-
-  open-pr:
-    name: Open PR after test success
-    if: github.event_name == 'push'
-    needs: [verify, test]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      statuses: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/github-script@v8
-        with:
-          script: |
-            await require('./scripts/delivery-policy.cjs').openPullRequest({github, context, core});
 
   prod:
     name: Deploy production and run read-only integration

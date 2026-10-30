@@ -1,16 +1,21 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { approvedHead, eligibleRun, testedRun, mergeEligibility, openPullRequest, readiness } = require('./delivery-policy.cjs');
-const run = { id: 42, head_sha: 'head', event: 'push', head_branch: 'feature/test', conclusion: 'success', head_repository: { full_name: 'owner/repo' } };
+const { approvedHead, eligibleRun, testedRun, mergeEligibility, readiness, PIPELINE_FILES } = require('./delivery-policy.cjs');
+const { contractsChanged } = require('./package-policy.cjs');
+const trustedSha = 'a'.repeat(40);
+const run = { id: 42, head_sha: 'head', event: 'push', head_branch: 'feature/test', conclusion: 'success',
+  head_repository: { full_name: 'owner/repo' }, path: '.github/workflows/azure-deploy.yml',
+  updated_at: '2026-10-30T12:00:00Z', html_url: 'https://github.com/owner/repo/actions/runs/42' };
+
 function fixture() {
   const state = {
     pr: { number: 7, state: 'open', draft: false, base: { ref: 'main' }, head: { sha: 'head', ref: 'feature/test', repo: { full_name: 'owner/repo' } }, user: { login: 'author' } },
     reviews: [{ id: 1, state: 'APPROVED', commit_id: 'head', user: { login: 'author' } }],
-    runs: [{ ...run, html_url: 'https://github.com/owner/repo/actions/runs/42' }],
+    runs: [{ ...run }],
     jobs: [{ name: 'Build and local tests', conclusion: 'success' },
       { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion: 'success' }] }],
     comparison: { status: 'ahead', commits: [{ commit: { message: 'Change' } }] },
-    head: 'head', openPulls: [], created: [], statuses: [], notices: [],
+    head: 'head', openPulls: [], created: [], statuses: [], notices: [], contentReads: [], tamperedPath: null, missingTrustedPath: null,
   };
   const github = {
     paginate: async (method, args) => { if (method === 'runs') assert.equal(args.head_sha, 'head'); return state[method]; },
@@ -18,18 +23,45 @@ function fixture() {
       actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' },
       pulls: { get: async () => ({ data: state.pr }), listReviews: 'reviews', list: 'openPulls',
         create: async args => { state.created.push(args); return { data: { ...state.pr, html_url: 'https://github.com/owner/repo/pull/7' } }; } },
-      repos: { compareCommits: async () => ({ data: state.comparison }), createCommitStatus: async status => state.statuses.push(status) },
+      repos: {
+        getBranch: async () => ({ data: { commit: { sha: trustedSha } } }),
+        getContent: async args => {
+          state.contentReads.push(args);
+          assert.ok(['head', trustedSha].includes(args.ref));
+          if (args.ref === trustedSha && args.path === state.missingTrustedPath) throw new Error('Missing trusted file');
+          return { data: { type: 'file', sha: args.ref === 'head' && args.path === state.tamperedPath ? 'no-op-pipeline' : `blob:${args.path}` } };
+        },
+        compareCommits: async () => ({ data: state.comparison }), createCommitStatus: async status => state.statuses.push(status),
+      },
       git: { getRef: async () => ({ data: { object: { sha: state.head } } }) },
     },
   };
-  return { state, github, pullNumber: 7,
-    context: { repo: { owner: 'owner', repo: 'repo' }, sha: 'head', runId: 42, ref: 'refs/heads/feature/test', eventName: 'push', payload: { head_commit: { message: 'Implement delivery changes' } } },
+  return { state, github, pullNumber: 7, trustedSha,
+    workflowRef: 'owner/repo/.github/workflows/pr-readiness.yml@refs/heads/main',
+    context: { repo: { owner: 'owner', repo: 'repo' }, sha: trustedSha, ref: 'refs/heads/main', eventName: 'workflow_run', payload: { workflow_run: { ...run } } },
     core: { notice: message => state.notices.push(message) } };
 }
 
-test('only a successful push of the exact same-repository feature commit qualifies', () => {
+test('package publication includes additions, deletions and renames in either direction', () => {
+  for (const file of [
+    { filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', status: 'added' },
+    { filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', status: 'removed' },
+    { filename: 'src/Niobium.Invoicing.Core/Invoice.cs', previous_filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', status: 'renamed' },
+    { filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', previous_filename: 'src/Niobium.Invoicing.Core/Invoice.cs', status: 'renamed' },
+  ]) assert.equal(contractsChanged([file]), true);
+});
+
+test('unrelated changes do not publish Contracts', () => {
+  assert.equal(contractsChanged([]), false);
+  assert.equal(contractsChanged([{ filename: 'docs/product.md' },
+    { filename: 'src/Niobium.Invoicing.Core/New.cs', previous_filename: 'src/Niobium.Invoicing.Core/Old.cs' },
+    { filename: 'src/Niobium.Invoicing.Contracts.Tests/InvoiceTests.cs' }]), false);
+});
+
+test('only a successful exact-repository feature run of the expected workflow qualifies', () => {
   assert.equal(eligibleRun(run, 'head', 'owner/repo'), true);
-  for (const patch of [{ head_sha: 'old' }, { event: 'pull_request' }, { head_branch: 'main' }, { conclusion: 'skipped' }, { head_repository: { full_name: 'fork/repo' } }]) {
+  for (const patch of [{ head_sha: 'old' }, { event: 'pull_request' }, { head_branch: 'main' }, { conclusion: 'skipped' },
+    { head_repository: { full_name: 'fork/repo' } }, { path: '.github/workflows/forged.yml' }]) {
     assert.equal(eligibleRun({ ...run, ...patch }, 'head', 'owner/repo'), false);
   }
 });
@@ -44,20 +76,60 @@ test('one permitted approval suffices, with no restriction on the PR author', ()
   assert.equal(approvedHead([approval, { ...approval, id: 2, state: 'COMMENTED' }], 'head'), true);
 });
 
-test('skipped deployed tests and failed required jobs cannot qualify', async () => {
-  const skipped = fixture(); skipped.state.jobs[1].steps[0].conclusion = 'skipped';
-  await assert.rejects(testedRun(skipped.github, 'owner', 'repo', 'head'));
-  for (const job of [0, 1]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
-    const input = fixture(); input.state.jobs[job].conclusion = conclusion;
-    await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head'));
+test('green job names cannot authenticate a modified workflow or pipeline helper', async () => {
+  for (const path of PIPELINE_FILES) {
+    const input = fixture(); input.state.tamperedPath = path;
+    await assert.rejects(readiness(input), /Untrusted pipeline definition/);
+    assert.equal(input.state.statuses.at(-1).state, 'failure');
+    assert.equal(input.state.created.length, 0);
   }
 });
 
-test('pre-merge validation accepts an approved, tested current head', async () => {
+test('a missing trusted file fails closed without bootstrapping from feature code', async () => {
+  const input = fixture(); input.state.missingTrustedPath = PIPELINE_FILES[0];
+  await assert.rejects(readiness(input), /Missing trusted file/);
+  assert.deepEqual(input.state.statuses.map(status => status.state), ['failure']);
+  assert.equal(input.state.created.length, 0);
+});
+
+test('pipeline proof pins both API reads to exact immutable commits', async () => {
+  const input = fixture(); await readiness(input);
+  assert.equal(input.state.contentReads.length, PIPELINE_FILES.length * 2);
+  assert.ok(input.state.contentReads.every(read => ['head', trustedSha].includes(read.ref)));
+});
+
+test('feature contexts cannot invoke privileged repository writes', async () => {
+  for (const mutate of [x => { x.context.eventName = 'push'; }, x => { x.context.ref = 'refs/heads/feature/test'; },
+    x => { x.workflowRef = 'owner/repo/.github/workflows/pr-readiness.yml@refs/heads/feature/test'; },
+    x => { x.context.sha = 'head'; }, x => { x.trustedSha = 'main'; }]) {
+    const input = fixture(); mutate(input);
+    await assert.rejects(readiness(input), /Repository writes require/);
+    assert.equal(input.state.statuses.length, 0); assert.equal(input.state.created.length, 0);
+  }
+});
+
+test('skipped deployed tests and failed required jobs cannot qualify', async () => {
+  const skipped = fixture(); skipped.state.jobs[1].steps[0].conclusion = 'skipped';
+  await assert.rejects(testedRun(skipped.github, 'owner', 'repo', 'head', trustedSha));
+  for (const job of [0, 1]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
+    const input = fixture(); input.state.jobs[job].conclusion = conclusion;
+    await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head', trustedSha));
+  }
+});
+
+test('a failed triggering run cannot reuse an older successful run for the same head', async () => {
+  const input = fixture(); input.state.runs[0].conclusion = 'failure';
+  input.state.runs.push({ ...run, id: 41, updated_at: '2026-10-29T12:00:00Z' });
+  await assert.rejects(readiness(input));
+  assert.equal(input.state.statuses.at(-1).state, 'failure');
+  await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head', trustedSha));
+});
+
+test('pre-merge validation accepts an approved, authenticated current head', async () => {
   assert.equal((await mergeEligibility(fixture())).run.id, 42);
 });
 
-test('pre-merge validation rejects stale approval, missing test success, and a newer main', async () => {
+test('pre-merge validation rejects stale approval, missing proof, and a newer main', async () => {
   for (const mutate of [s => { s.reviews[0].commit_id = 'old'; }, s => { s.runs = []; }, s => { s.comparison.status = 'diverged'; }]) {
     const input = fixture(); mutate(input.state); await assert.rejects(mergeEligibility(input));
   }
@@ -69,38 +141,34 @@ test('pre-merge validation rejects closed, draft, foreign, and wrong-base PRs', 
   }
 });
 
-test('post-test job opens a ready PR to main without another instruction', async () => {
-  const input = fixture(); await openPullRequest(input);
+test('the trusted controller creates a ready PR after authenticated test success', async () => {
+  const input = fixture(); await readiness(input);
   assert.equal(input.state.created.length, 1);
-  assert.equal(input.state.created[0].base, 'main');
-  assert.equal(input.state.created[0].head, 'feature/test');
-  assert.equal(input.state.created[0].draft, false);
-  assert.match(input.state.created[0].body, /actions\/runs\/42/);
-  assert.equal(input.state.statuses[0].sha, 'head');
-  assert.equal(input.state.statuses[0].context, 'Test deployment verified');
+  assert.equal(input.state.created[0].base, 'main'); assert.equal(input.state.created[0].head, 'feature/test');
+  assert.equal(input.state.created[0].draft, false); assert.match(input.state.created[0].body, /actions\/runs\/42/);
+  assert.equal(input.state.statuses[0].sha, 'head'); assert.equal(input.state.statuses[0].context, 'Test deployment verified');
 });
 
 test('automatic creation reuses existing PRs and ignores superseded or merged heads', async () => {
   for (const mutate of [s => { s.openPulls = [s.pr]; }, s => { s.head = 'new'; }, s => { s.comparison.status = 'identical'; }, s => { s.comparison.status = 'behind'; }]) {
-    const input = fixture(); mutate(input.state); await openPullRequest(input); assert.equal(input.state.created.length, 0);
+    const input = fixture(); mutate(input.state); await readiness(input); assert.equal(input.state.created.length, 0);
   }
 });
 
-test('automatic creation cannot run for main or a PR event', async () => {
-  for (const change of [{ ref: 'refs/heads/main' }, { eventName: 'pull_request' }]) {
-    const input = fixture(); Object.assign(input.context, change); await assert.rejects(openPullRequest(input)); assert.equal(input.state.created.length, 0);
+test('PR events update readiness without opening another PR', async () => {
+  const input = fixture(); input.context.eventName = 'pull_request_target';
+  input.context.payload = { pull_request: input.state.pr }; await readiness(input);
+  assert.equal(input.state.statuses[0].state, 'success'); assert.equal(input.state.created.length, 0);
+});
+
+test('untrusted repository and non-feature events cannot mint status', async () => {
+  for (const payload of [
+    { workflow_run: { ...run, head_repository: { full_name: 'fork/repo' } } },
+    { workflow_run: { ...run, event: 'pull_request' } },
+    { workflow_run: { ...run, head_branch: 'main' } },
+    { pull_request: { head: { repo: { full_name: 'fork/repo' } } } },
+  ]) {
+    const input = fixture(); input.context.payload = payload; await readiness(input);
+    assert.equal(input.state.statuses.length, 0); assert.equal(input.state.created.length, 0);
   }
-});
-
-test('readiness publishes exact-commit success and fails without deployed evidence', async () => {
-  const input = fixture(); input.context.payload.pull_request = input.state.pr; await readiness(input);
-  assert.equal(input.state.statuses[0].sha, 'head'); assert.equal(input.state.statuses[0].state, 'success');
-  input.state.runs = []; await assert.rejects(readiness(input)); assert.equal(input.state.statuses[1].state, 'failure');
-});
-
-test('readiness handles workflow completion without trusting forks or PR runs', async () => {
-  const input = fixture(); input.context.payload.workflow_run = run; await readiness(input);
-  input.context.payload.workflow_run = { ...run, head_repository: { full_name: 'fork/repo' } }; await readiness(input);
-  input.context.payload.workflow_run = { ...run, event: 'pull_request' }; await readiness(input);
-  assert.equal(input.state.statuses.length, 1);
 });

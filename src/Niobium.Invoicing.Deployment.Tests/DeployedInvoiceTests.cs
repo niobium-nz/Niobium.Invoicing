@@ -85,15 +85,7 @@ public sealed class DeployedInvoiceTests
             {
                 try
                 {
-                    TableEntity owned = await Read(id, owningBiller);
-                    Assert.IsTrue(owned.GetGuid(nameof(Invoice.Billee)) == customer, "Refusing to delete an unrelated invoice.");
-                    TableClient items = tables.GetTableClient(nameof(InvoiceItem));
-                    await foreach (TableEntity item in items.QueryAsync<TableEntity>(TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}")))
-                    {
-                        Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)), "Refusing to delete an unrelated item.");
-                        await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
-                    }
-                    await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
+                    await DeleteOwnedInvoice(owningBiller, id);
                 }
                 catch (Exception error) { failures.Add(error); }
             }
@@ -235,6 +227,43 @@ public sealed class DeployedInvoiceTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Reference_fixture_is_retained_only_after_successful_issuance(bool invalidRequest)
+    {
+        int trackedCount = invoices.Count;
+        long id = await SeedInvoice();
+        IssueInvoiceRequest request = Request(id);
+        if (invalidRequest)
+            request.InvoiceItems[0].UnitPriceCurrency = "AUD";
+        try
+        {
+            if (invalidRequest)
+            {
+                HttpRequestException failure = await Assert.ThrowsAsync<HttpRequestException>(() => IssueReferenceInvoice(request));
+                Assert.AreEqual(HttpStatusCode.BadRequest, failure.StatusCode);
+                NullableResponse<TableEntity> remaining = await tables.GetTableClient(nameof(Invoice))
+                    .GetEntityIfExistsAsync<TableEntity>(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id));
+                Assert.IsFalse(remaining.HasValue, "Failed reference issuance must remove its acknowledged seed.");
+            }
+            else
+            {
+                await IssueReferenceInvoice(request);
+                Assert.AreEqual("ready-v1", (await Read(id)).GetString(nameof(Invoice.IssuanceState)));
+            }
+            Assert.AreEqual(trackedCount, invoices.Count, "Only successfully issued references are retained; failed seeds are already cleaned.");
+        }
+        finally
+        {
+            NullableResponse<TableEntity> remaining = await tables.GetTableClient(nameof(Invoice))
+                .GetEntityIfExistsAsync<TableEntity>(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id));
+            if (remaining.HasValue)
+                await DeleteOwnedInvoice(biller, id);
+            invoices.Remove((biller, id));
+        }
+    }
+
+    [TestMethod]
     public async Task Debug_email_route_is_absent_from_deployment()
     {
         using HttpResponseMessage response = await http.GetAsync($"/email/{Guid.NewGuid()}/invoices/1");
@@ -304,13 +333,12 @@ public sealed class DeployedInvoiceTests
                     }
                 }
                 referenceBiller = owner;
-                referenceInvoice = await SeedInvoice(owner, group, Required("TEST_NOTIFICATION_RECIPIENT"), persistent: true);
+                referenceInvoice = await SeedInvoice(owner, group, Required("TEST_NOTIFICATION_RECIPIENT"));
                 IssueInvoiceRequest request = Request(referenceInvoice);
                 request.BillerID = owner;
                 request.Tenant = group;
                 request.Terms = ReferenceTerms;
-                using HttpResponseMessage response = await Post(request, Token(owner, group));
-                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "The persistent test invoice could not be issued.");
+                await IssueReferenceInvoice(request);
             }
         }
         string path = Path.Combine(Environment.GetEnvironmentVariable("GITHUB_WORKSPACE") ?? Directory.GetCurrentDirectory(), "artifacts", "deployed", "test-invoice-fixture.json");
@@ -324,7 +352,45 @@ public sealed class DeployedInvoiceTests
         Console.WriteLine($"Persistent test fixture: TEST_INVOICE_BILLER={referenceBiller}; TEST_INVOICE_ID={referenceInvoice}");
     }
 
-    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, bool persistent = false, long? invoiceID = null)
+    private static async Task IssueReferenceInvoice(IssueInvoiceRequest request)
+    {
+        try
+        {
+            using HttpResponseMessage response = await Post(request, Token(request.BillerID, request.Tenant));
+            if (response.StatusCode != HttpStatusCode.OK)
+                throw new HttpRequestException("The persistent test invoice could not be issued.", null, response.StatusCode);
+            invoices.Remove((request.BillerID, request.InvoiceID));
+        }
+        catch (Exception issuanceError)
+        {
+            // Initialize can fail before framework ClassCleanup runs. Clean this acknowledged seed here.
+            try
+            {
+                await DeleteOwnedInvoice(request.BillerID, request.InvoiceID);
+                invoices.Remove((request.BillerID, request.InvoiceID));
+            }
+            catch (Exception cleanupError)
+            {
+                throw new AggregateException("Reference issuance and its owned-fixture cleanup failed.", issuanceError, cleanupError);
+            }
+            throw;
+        }
+    }
+
+    private static async Task DeleteOwnedInvoice(Guid owningBiller, long id)
+    {
+        TableEntity owned = await Read(id, owningBiller);
+        Assert.IsTrue(owned.GetGuid(nameof(Invoice.Billee)) == customer, "Refusing to delete an unrelated invoice.");
+        TableClient items = tables.GetTableClient(nameof(InvoiceItem));
+        await foreach (TableEntity item in items.QueryAsync<TableEntity>(TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}")))
+        {
+            Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)), "Refusing to delete an unrelated item.");
+            await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
+        }
+        await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
+    }
+
+    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, long? invoiceID = null)
     {
         long id = invoiceID ?? Invoice.ParseID(DateTimeOffset.UtcNow.AddMilliseconds(invoices.Count));
         await foreach (TableEntity _ in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(
@@ -345,10 +411,7 @@ public sealed class DeployedInvoiceTests
         }, Customer(owningBiller, recipient));
         await services.GetRequiredService<IRepository<Invoice>>().CreateAsync([invoice]);
         // A rejected or uncertain creation must never claim a pre-existing row for cleanup.
-        if (!persistent)
-        {
-            invoices.Add((owningBiller, id));
-        }
+        invoices.Add((owningBiller, id));
         return id;
     }
 
