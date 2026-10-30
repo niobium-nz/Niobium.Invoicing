@@ -22,52 +22,6 @@ namespace Niobium.Invoicing.Domains
         private static string? htmlTemplate;
 
         /// <summary>
-        /// Validates and applies mutable request fields, recalculates totals and saves the loaded entity.
-        /// </summary>
-        /// <param name="update">Requested mutable fields and reported settlement.</param>
-        /// <param name="invoiceItems">Supplied lines whose totals are recalculated in memory.</param>
-        /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
-        /// <returns>A task completing after the invoice save.</returns>
-        /// <remarks>
-        /// The Delivered guard applies to the loaded entity; UpsertFlow initializes that entity from a fresh
-        /// snapshot. Supplied line totals are mutated in memory; line persistence is the caller's
-        /// responsibility. Force-save uses repository create/upsert semantics, without an ETag update
-        /// precondition. Null display overrides inherit snapshot defaults, empty strings clear them, and
-        /// a null DueBy retains the seven-day default. Core billing validation runs before mutation.
-        /// </remarks>
-        /// <exception cref="Niobium.ApplicationException">The loaded entity has a Delivered timestamp.</exception>
-        public async Task UpdateAsync(IssueInvoiceRequest update, IEnumerable<InvoiceItem> invoiceItems, CancellationToken cancellationToken)
-        {
-            Invoice entity = await GetEntityAsync(cancellationToken);
-            if (entity.Delivered.HasValue)
-            {
-                throw new ApplicationException(InternalError.Conflict, "Invoice has been delivered.") { Reference = entity.GetFullID() };
-            }
-
-            InvoiceItem[] items = invoiceItems.ToArray();
-            InvoiceValidation.Totals totals = InvoiceValidation.ValidateAndCalculate(update, entity, items);
-            foreach (InvoiceItem item in items)
-            {
-                item.LineTotalCents = item.FigureLineTotalCents();
-            }
-
-            entity.Terms = update.Terms?.Trim();
-            entity.PaymentInstructions = update.PaymentInstructions?.Trim() ?? entity.PaymentInstructions;
-            entity.Particulars = update.Particulars?.Trim() ?? entity.Particulars;
-            entity.Reference = update.Reference?.Trim() ?? entity.Reference;
-            entity.InvoiceCycle = update.InvoiceCycle;
-            entity.BillingPeriodStartDay = update.BillingPeriodStartDay;
-            entity.BillingPeriodEndDay = update.BillingPeriodEndDay;
-            entity.DueBy = totals.DueBy;
-            entity.SubtotalCents = totals.Subtotal;
-            entity.TaxCents = totals.Tax;
-            entity.GrandTotalCents = totals.GrandTotal;
-            entity.SettledCents = update.Settled.Cents;
-
-            await SaveAsync(force: true, cancellationToken: cancellationToken);
-        }
-
-        /// <summary>
         /// Renders the invoice-level HTML using its stored link-token policy.
         /// </summary>
         /// <param name="token">Supplied invoice-link token.</param>
@@ -148,14 +102,14 @@ namespace Niobium.Invoicing.Domains
             TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(entity.TimeZone);
             CultureInfo culture = CultureInfo.GetCultureInfo(entity.Culture, true);
             var parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
-            parameters.Add("INVOICE_URL", $"{config.Value.GetInvoiceEndpoint}/{entity.Biller}/invoices/{entity.GetID()}?token={Uri.EscapeDataString(token)}");
+            parameters.Add("INVOICE_URL", $"{entity.IssuanceNotificationEndpoint ?? config.Value.GetInvoiceEndpoint}/{entity.Biller}/invoices/{entity.GetID()}?token={Uri.EscapeDataString(token)}");
             return parameters;
         }
 
         /// <summary>
-        /// Stores the link token and current UTC enqueue-related timestamp, then saves the invoice.
+        /// Records the first enqueue completion time for the matching frozen invoice.
         /// </summary>
-        /// <param name="token">Link token to persist on the invoice.</param>
+        /// <param name="token">Link token already persisted before enqueue.</param>
         /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
         /// <returns>A task completing after persistence.</returns>
         /// <remarks>
@@ -165,9 +119,17 @@ namespace Niobium.Invoicing.Domains
         public async Task OnDeliveredAsync(string token, CancellationToken cancellationToken)
         {
             Invoice entity = await GetEntityAsync(cancellationToken);
-            entity.Token = token;
-            entity.Delivered = DateTimeOffset.UtcNow;
-            await SaveAsync(cancellationToken: cancellationToken);
+            if (entity.IssuanceState != InvoiceContent.Frozen || entity.Token != token)
+            {
+                throw Conflict("Notification does not match the frozen invoice.");
+            }
+            if (entity.Delivered.HasValue)
+            {
+                return;
+            }
+            Invoice next = InvoiceContent.Copy(entity);
+            next.Delivered = DateTimeOffset.UtcNow;
+            await PersistInvoiceAsync(next, cancellationToken);
         }
     }
 }

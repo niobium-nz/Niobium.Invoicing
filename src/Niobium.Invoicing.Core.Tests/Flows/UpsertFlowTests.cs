@@ -43,7 +43,11 @@ public class UpsertFlowTests
     [DataRow(false)]
     public async Task Missing_party_fails_without_persistence(bool biller)
     {
-        IssuanceScenario scenario = new() { MissingBiller = biller, MissingBillee = !biller };
+        IssuanceScenario scenario = new()
+        {
+            MissingBiller = biller,
+            MissingBillee = !biller
+        };
         Func<Task> action = () => scenario.RunAsync();
         (await action.Should().ThrowAsync<ApplicationException>()).Which.ErrorCode.Should().Be(404);
         scenario.InvoiceWrites.Should().Be(0);

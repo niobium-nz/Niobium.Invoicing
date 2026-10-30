@@ -10,6 +10,10 @@ internal static class InvoiceValidation
 
     internal static void ValidateRequest(IssueInvoiceRequest request)
     {
+        if (request is IssueInvoiceCommand { Billee: null })
+        {
+            throw Invalid("Queue issuance requires an embedded customer.");
+        }
         if (request == null || request.Tenant == Guid.Empty || request.BillerID == Guid.Empty || request.BilleeID == Guid.Empty)
         {
             throw Invalid("Tenant, biller and billee identifiers are required.");
@@ -89,6 +93,19 @@ internal static class InvoiceValidation
         }
 
         ValidateCountry(biller.Country);
+        ValidateCountry(billee.Country);
+    }
+
+    internal static void ValidateCustomer(IssueInvoiceRequest request, Billee billee, string invoiceCurrency)
+    {
+        if (billee.ID != request.BilleeID || billee.Biller != request.BillerID || string.IsNullOrWhiteSpace(billee.Name))
+        {
+            throw Invalid("Customer identity and ownership must match the request.");
+        }
+        if (SupportedCurrency(billee.Currency) != SupportedCurrency(invoiceCurrency))
+        {
+            throw Invalid("Customer currency must match the invoice currency.");
+        }
         ValidateCountry(billee.Country);
     }
 

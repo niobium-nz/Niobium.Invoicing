@@ -291,6 +291,62 @@ namespace Niobium.Invoicing
         /// </summary>
         public string? Template { get; set; }
 
+        /// <summary>Optional versioned Table Storage preparation state; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceState
+        {
+            get;
+            set;
+        }
+
+        /// <summary>Fingerprint of the prepared or frozen invoice and items; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceFingerprint
+        {
+            get;
+            set;
+        }
+
+        /// <summary>Owner of an in-progress item preparation; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceOperation
+        {
+            get;
+            set;
+        }
+
+        /// <summary>Original particulars default used for null request values; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceDefaultParticulars
+        {
+            get;
+            set;
+        }
+
+        /// <summary>Original reference default used for null request values; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceDefaultReference
+        {
+            get;
+            set;
+        }
+
+        /// <summary>Original payment instructions default used for null request values; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceDefaultPaymentInstructions
+        {
+            get;
+            set;
+        }
+
+        /// <summary>Invoice link endpoint captured before enqueue to keep replays stable; excluded from JSON.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? IssuanceNotificationEndpoint
+        {
+            get;
+            set;
+        }
+
         /// <summary>
         /// Encodes this invoice issue instant as its reverse-millisecond identifier.
         /// </summary>

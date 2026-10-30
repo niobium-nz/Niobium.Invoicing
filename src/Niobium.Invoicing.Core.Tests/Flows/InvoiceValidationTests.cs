@@ -45,37 +45,97 @@ public class InvoiceValidationTests
         InvoiceItem line = scenario.Request.InvoiceItems[0];
         switch (invalid)
         {
-            case "tenant": scenario.Request.Tenant = Guid.Empty; break;
-            case "biller": scenario.Request.BillerID = Guid.Empty; break;
-            case "billee": scenario.Request.BilleeID = Guid.Empty; break;
-            case "invoice-id": scenario.Request.InvoiceID = 0; break;
-            case "invoice-date": scenario.Request.InvoiceID = long.MaxValue; break;
-            case "cycle": scenario.Request.InvoiceCycle = 99; break;
-            case "period": scenario.Request.BillingPeriodStartDay = DateTimeOffset.UtcNow; scenario.Request.BillingPeriodEndDay = DateTimeOffset.UtcNow.AddDays(-1); break;
-            case "null-items": scenario.Request.InvoiceItems = null!; break;
-            case "null-line": scenario.Request.InvoiceItems.Add(null!); break;
-            case "null-subject": line.Subject = null!; break;
-            case "duplicate": scenario.Request.InvoiceItems.Add(IssuanceScenario.Copy(line)); break;
-            case "parent": line.Invoice = line.Invoice.AddMilliseconds(-1); break;
-            case "profile-owner": scenario.Biller.RowKey = Guid.NewGuid(); break;
-            case "profile-group": scenario.Biller.PartitionKey = Guid.NewGuid(); break;
-            case "customer-owner": scenario.Billee.Biller = Guid.NewGuid(); break;
-            case "customer-id": scenario.Billee.ID = Guid.NewGuid(); break;
-            case "biller-currency": scenario.Biller.Currency = "USD"; break;
-            case "customer-currency": scenario.Billee.Currency = "AUD"; break;
-            case "unit-currency": line.UnitPriceCurrency = "AUD"; break;
-            case "line-currency": line.LineTotalCurrency = "AUD"; break;
-            case "country": scenario.Billee.Country = "US"; break;
-            case "due": scenario.Request.DueBy = line.Invoice.AddTicks(-1); break;
-            case "settlement": scenario.Request.Settled = new Amount(1L, "AUD"); break;
-            case "line-overflow": line.UnitPriceCents = long.MaxValue; line.Quantity = 2; break;
+            case "tenant":
+                scenario.Request.Tenant = Guid.Empty;
+                break;
+            case "biller":
+                scenario.Request.BillerID = Guid.Empty;
+                break;
+            case "billee":
+                scenario.Request.BilleeID = Guid.Empty;
+                break;
+            case "invoice-id":
+                scenario.Request.InvoiceID = 0;
+                break;
+            case "invoice-date":
+                scenario.Request.InvoiceID = long.MaxValue;
+                break;
+            case "cycle":
+                scenario.Request.InvoiceCycle = 99;
+                break;
+            case "period":
+                scenario.Request.BillingPeriodStartDay = DateTimeOffset.UtcNow;
+                scenario.Request.BillingPeriodEndDay = DateTimeOffset.UtcNow.AddDays(-1);
+                break;
+            case "null-items":
+                scenario.Request.InvoiceItems = null!;
+                break;
+            case "null-line":
+                scenario.Request.InvoiceItems.Add(null!);
+                break;
+            case "null-subject":
+                line.Subject = null!;
+                break;
+            case "duplicate":
+                scenario.Request.InvoiceItems.Add(IssuanceScenario.Copy(line));
+                break;
+            case "parent":
+                line.Invoice = line.Invoice.AddMilliseconds(-1);
+                break;
+            case "profile-owner":
+                scenario.Biller.RowKey = Guid.NewGuid();
+                break;
+            case "profile-group":
+                scenario.Biller.PartitionKey = Guid.NewGuid();
+                break;
+            case "customer-owner":
+                scenario.Billee.Biller = Guid.NewGuid();
+                break;
+            case "customer-id":
+                scenario.Billee.ID = Guid.NewGuid();
+                break;
+            case "biller-currency":
+                scenario.Biller.Currency = "USD";
+                break;
+            case "customer-currency":
+                scenario.Billee.Currency = "AUD";
+                break;
+            case "unit-currency":
+                line.UnitPriceCurrency = "AUD";
+                break;
+            case "line-currency":
+                line.LineTotalCurrency = "AUD";
+                break;
+            case "country":
+                scenario.Billee.Country = "US";
+                break;
+            case "due":
+                scenario.Request.DueBy = line.Invoice.AddTicks(-1);
+                break;
+            case "settlement":
+                scenario.Request.Settled = new Amount(1L, "AUD");
+                break;
+            case "line-overflow":
+                line.UnitPriceCents = long.MaxValue;
+                line.Quantity = 2;
+                break;
             case "subtotal-overflow":
                 line.UnitPriceCents = long.MaxValue;
-                InvoiceItem extra = IssuanceScenario.Copy(line); extra.ID = 2; extra.UnitPriceCents = 1;
-                scenario.Request.InvoiceItems.Add(extra); break;
-            case "tax-overflow": line.UnitPriceCents = long.MaxValue; scenario.Biller.TaxRatePercentile = 20000; break;
-            case "total-overflow": line.UnitPriceCents = long.MaxValue; break;
-            case "balance-overflow": scenario.Request.Settled = new Amount(long.MinValue, "NZD"); break;
+                InvoiceItem extra = IssuanceScenario.Copy(line);
+                extra.ID = 2;
+                extra.UnitPriceCents = 1;
+                scenario.Request.InvoiceItems.Add(extra);
+                break;
+            case "tax-overflow":
+                line.UnitPriceCents = long.MaxValue;
+                scenario.Biller.TaxRatePercentile = 20000;
+                break;
+            case "total-overflow":
+                line.UnitPriceCents = long.MaxValue;
+                break;
+            case "balance-overflow":
+                scenario.Request.Settled = new Amount(long.MinValue, "NZD");
+                break;
         }
 
         Func<Task> action = () => scenario.RunAsync();
@@ -102,8 +162,12 @@ public class InvoiceValidationTests
         IssuanceScenario scenario = new();
         IssueInvoiceCommand command = new()
         {
-            Tenant = scenario.Request.Tenant, BillerID = scenario.Request.BillerID, BilleeID = Guid.NewGuid(),
-            Billee = scenario.Billee, InvoiceID = scenario.Request.InvoiceID, InvoiceItems = scenario.Request.InvoiceItems
+            Tenant = scenario.Request.Tenant,
+            BillerID = scenario.Request.BillerID,
+            BilleeID = Guid.NewGuid(),
+            Billee = scenario.Billee,
+            InvoiceID = scenario.Request.InvoiceID,
+            InvoiceItems = scenario.Request.InvoiceItems
         };
         Guid supplied = command.BilleeID;
         command.Sanitize();
@@ -113,6 +177,8 @@ public class InvoiceValidationTests
         command.BilleeID.Should().Be(scenario.Billee.ID);
         command.Billee = null!;
         command.Invoking(c => c.Sanitize()).Should().NotThrow();
+        Action validate = () => InvoiceValidation.ValidateRequest(command);
+        validate.Should().Throw<ApplicationException>().Which.ErrorCode.Should().Be(400);
     }
 
     [TestMethod]
@@ -158,12 +224,22 @@ public class InvoiceValidationTests
         scenario.Stored.Token = "synthetic-link-token";
         InvoiceDomain domain = new(Microsoft.Extensions.Options.Options.Create(new BillingOptions
         {
-            GetInvoiceEndpoint = "https://invoice.example.invalid", InvoiceTokenSecretSalt = "synthetic-secret"
+            GetInvoiceEndpoint = "https://invoice.example.invalid",
+            InvoiceTokenSecretSalt = "synthetic-secret"
         }), new Lazy<IRepository<Invoice>>(() => scenario.InvoiceRepo.Object), []);
         domain.Initialize(scenario.Stored);
         string html = await domain.BuildHTMLAsync("synthetic-link-token", CancellationToken.None);
-        if (!string.IsNullOrEmpty(value)) { html.Should().Contain(value.Trim()); }
-        if (value == null) { html.Should().Contain("Bank transfer"); }
-        if (value == "") { html.Should().NotContain("Bank transfer"); }
+        if (!string.IsNullOrEmpty(value))
+        {
+            html.Should().Contain(value.Trim());
+        }
+        if (value == null)
+        {
+            html.Should().Contain("Bank transfer");
+        }
+        if (value == "")
+        {
+            html.Should().NotContain("Bank transfer");
+        }
     }
 }

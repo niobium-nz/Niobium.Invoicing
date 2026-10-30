@@ -48,6 +48,25 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             Mock<IMessagingBroker<NotifyCommand>> broker = new(MockBehavior.Loose);
             Mock<ILogger<EmailFlow>> logger = new();
 
+            // Model a prepared, persisted invoice. Legacy saved-token records remain unversioned.
+            invoice.ETag ??= "fixture-initial";
+            if (invoice.Token == null)
+            {
+                invoice.IssuanceState = InvoiceContent.Ready;
+                invoice.IssuanceFingerprint = InvoiceContent.Fingerprint(invoice, items);
+            }
+            int storageVersion = 0;
+            IEnumerable<Invoice> Persist(IEnumerable<Invoice> models)
+            {
+                Invoice saved = models.Single();
+                foreach (System.Reflection.PropertyInfo property in EntityMappingHelper.GetMapping(typeof(Invoice)).Values)
+                {
+                    property.SetValue(invoice, property.GetValue(saved));
+                }
+                invoice.ETag = $"fixture-{++storageVersion}";
+                return [invoice];
+            }
+
             // Real domain with mocked infra
             InvoiceDomain domain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>());
 
@@ -65,7 +84,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
                 .ReturnsAsync(invoice);
             invoiceRepo
                 .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IEnumerable<Invoice> e, bool _, bool __, CancellationToken ___) => e);
+                .ReturnsAsync((IEnumerable<Invoice> e, bool _, bool __, CancellationToken ___) => Persist(e));
             invoiceRepo
                 .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((IEnumerable<Invoice> e, bool _, DateTimeOffset? __, CancellationToken ___) => e);
@@ -167,7 +186,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
 
             // Then invoice is persisted with token and delivered set (create or update depending on entity state)
-            arranged.invoiceRepo.Verify(r => r.CreateAsync(It.Is<IEnumerable<Invoice>>(e => e.Any(x => x.Token != null && x.Delivered != null)), false, null, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            arranged.invoiceRepo.Verify(r => r.UpdateAsync(It.Is<IEnumerable<Invoice>>(e => e.Any(x => x.Token != null && x.Delivered != null)), true, false, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
         }
 
         [TestMethod]
@@ -272,7 +291,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
         }
 
         [TestMethod]
-        public async Task Resent_after_items_change_preserves_existing_link_token()
+        public async Task Changed_frozen_items_reject_resend_and_preserve_existing_link_token()
         {
             // Given an invoice sent once, then items change
             Guid issuer = Guid.NewGuid();
@@ -291,13 +310,9 @@ namespace Niobium.Invoicing.Core.Tests.Flows
                 .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<IList<string>?>(), It.IsAny<CancellationToken>()))
                 .Returns(YieldAsync(items2.ToArray()));
 
-            // When sending again
-            await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
-
-            // Existing emailed links remain usable even if line data has changed.
-            string secondToken = entity.Token!;
-            secondToken.Should().Be(firstToken);
-            arranged.invoiceRepo.Verify(r => r.CreateAsync(It.Is<IEnumerable<Invoice>>(e => e.Any(x => x.Token == secondToken)), false, null, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            Func<Task> resend = () => arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
+            (await resend.Should().ThrowAsync<ApplicationException>()).Which.ErrorCode.Should().Be(409);
+            entity.Token.Should().Be(firstToken);
         }
 
         [TestMethod]
@@ -339,14 +354,14 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             List<string> steps = [];
             string? savedToken = null;
             arranged.invoiceRepo
-                .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
-                .Callback<IEnumerable<Invoice>, bool, DateTimeOffset?, CancellationToken>((models, _, _, _) =>
+                .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<Invoice>, bool, bool, CancellationToken>((models, _, _, _) =>
                 {
                     Invoice saved = models.Single();
                     savedToken = saved.Token;
                     steps.Add(saved.Delivered == null ? "token saved" : "status saved");
                 })
-                .ReturnsAsync((IEnumerable<Invoice> models, bool _, DateTimeOffset? _, CancellationToken _) => models);
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) => models);
             arranged.broker
                 .Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
                 .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, _) =>
@@ -370,7 +385,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             Invoice entity = MakeInvoice(issuer, Guid.NewGuid(), "customer@example.invalid");
             var arranged = ArrangeEmailFlow(entity, []);
             arranged.invoiceRepo
-                .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
+                .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("Synthetic persistence failure."));
 
             Func<Task> act = () => arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
@@ -380,8 +395,8 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             entity.Delivered.Should().BeNull();
             arranged.broker.Verify(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()), Times.Never);
             arranged.invoiceRepo
-                .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IEnumerable<Invoice> models, bool _, DateTimeOffset? _, CancellationToken _) => models);
+                .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) => models);
 
             await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
 
@@ -402,7 +417,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
                 {
                     Invoice pending = models.Single();
                     versions.Add(pending.ETag);
-                    Invoice saved = JsonSerializer.Deserialize<Invoice>(JsonSerializer.Serialize(pending))!;
+                    Invoice saved = InvoiceContent.Copy(pending);
                     saved.ETag = $"saved-version-{versions.Count}";
                     return new[] { saved };
                 });

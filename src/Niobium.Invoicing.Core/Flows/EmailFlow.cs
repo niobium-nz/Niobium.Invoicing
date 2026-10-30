@@ -8,7 +8,7 @@ using Niobium.Notification;
 namespace Niobium.Invoicing.Flows
 {
     /// <summary>
-    /// Queues an invoice notification, then records its link token and enqueue-related timestamp.
+    /// Freezes persisted invoice content, queues its notification, then records enqueue completion.
     /// </summary>
     /// <param name="repo">Repository for loading invoice domains by biller and invoice keys.</param>
     /// <param name="itemRepo">Repository for reading persisted invoice lines.</param>
@@ -35,7 +35,7 @@ namespace Niobium.Invoicing.Flows
         /// <param name="cancellationToken">Token forwarded to supported asynchronous operations.</param>
         /// <returns>A task completing after token persistence if needed, enqueue and status save, or the missing-recipient skip.</returns>
         /// <remarks>
-        /// Preserves an existing link token or saves a new one before enqueueing. Builds notification
+        /// Freezes verified persisted content with an existing or newly saved token before enqueueing. Builds notification
         /// parameters from persisted data and uses invoiceID@biller for message identity.
         /// It does not suppress replays, confirm recipient delivery or make enqueue/status persistence atomic.
         /// Cancellation or failure can leave earlier side effects completed.
@@ -44,7 +44,7 @@ namespace Niobium.Invoicing.Flows
         {
             InvoiceDomain domain = await repo.GetAsync(
                 Invoice.BuildPartitionKey(issuer),
-                Invoice.BuildRowKey(invoice), cancellationToken: cancellationToken);
+                Invoice.BuildRowKey(invoice), forceLoad: true, cancellationToken: cancellationToken);
             Invoice entity = await domain.GetEntityAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(entity.RecipientEmail))
             {
@@ -53,7 +53,9 @@ namespace Niobium.Invoicing.Flows
             }
 
             InvoiceItem[] items = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(entity.GetID()), cancellationToken: cancellationToken).ToArrayAsync(cancellationToken: cancellationToken);
-            string token = await domain.EnsureAccessTokenAsync(config.Value.InvoiceTokenSecretSalt, cancellationToken);
+            items = InvoiceContent.Order(items);
+            string token = await domain.FreezeAsync(items, config.Value.InvoiceTokenSecretSalt, cancellationToken);
+            entity = await domain.GetEntityAsync(cancellationToken);
             var invoiceParameters = await domain.BuildNotificationParametersAsync(token, cancellationToken);
 
             var parameters = new Dictionary<string, object>();

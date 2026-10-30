@@ -91,7 +91,7 @@ namespace Niobium.Invoicing.Domains
                 { nameof(invoice.ContactEmailAddress).ToSnakeCaseUpper(), invoice.ContactEmailAddress ?? string.Empty },
                 { "SUBTOTAL", Currency.Parse(invoice.SubtotalCurrency).ToDisplayLocal(invoice.SubtotalCents / 100d) },
                 { "TAX_AMOUNT", Currency.Parse(invoice.TaxCurrency).ToDisplayLocal(invoice.TaxCents / 100d) },
-                { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format("{0:N2}%", invoice.TaxRatePercentile / 100d) },
+                { "TAX_RATE", invoice.TaxRatePercentile == invoice.TaxRatePercentile / 100 * 100 ? $"{invoice.TaxRatePercentile / 100}%" : string.Format(culture, "{0:N2}%", invoice.TaxRatePercentile / 100d) },
                 { "TAX_KIND", invoice.TaxKind.HasValue ? ((TaxKind)(invoice.TaxKind.Value)).ToString() : string.Empty },
                 { "GRAND_TOTAL", Currency.Parse(invoice.GrandTotalCurrency).ToDisplayLocal(invoice.GrandTotalCents / 100d) },
                 { "SETTLED", new Amount(invoice.SettledCents, invoice.GrandTotalCurrency).ToString() },

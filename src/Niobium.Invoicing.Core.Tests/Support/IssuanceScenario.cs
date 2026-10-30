@@ -14,10 +14,22 @@ namespace Niobium.Invoicing.Core.Tests.Support;
 
 internal sealed class IssuanceScenario
 {
-    internal IssueInvoiceRequest Request { get; }
-    internal Biller Biller { get; }
-    internal Billee Billee { get; }
-    internal Invoice? Stored { get; set; }
+    internal IssueInvoiceRequest Request
+    {
+        get;
+    }
+    internal Biller Biller
+    {
+        get;
+    }
+    internal Billee Billee
+    {
+        get;
+    }
+    internal Invoice? Stored
+    {
+        get; set;
+    }
     internal List<InvoiceItem> Items { get; } = [];
     internal List<MessagingEntry<NotifyCommand>> Messages { get; } = [];
     internal List<CancellationToken> Tokens { get; } = [];
@@ -25,15 +37,47 @@ internal sealed class IssuanceScenario
     internal Mock<IRepository<InvoiceItem>> ItemRepo { get; } = new(MockBehavior.Strict);
     internal Mock<IRepository<Billee>> BilleeRepo { get; } = new(MockBehavior.Strict);
     internal Mock<IProfileService<Biller>> Profiles { get; } = new(MockBehavior.Strict);
-    internal int InvoiceWrites { get; private set; }
-    internal int ItemWrites { get; private set; }
-    internal bool FailDelete { get; set; }
-    internal bool FailCreate { get; set; }
-    internal bool FailInvoiceWrite { get; set; }
-    internal bool DropWriteEtags { get; set; }
-    internal bool MissingBiller { get; set; }
-    internal bool MissingBillee { get; set; }
-    internal Action? BeforeInvoiceUpdate { get; set; }
+    internal int InvoiceWrites
+    {
+        get; private set;
+    }
+    internal int ItemWrites
+    {
+        get; private set;
+    }
+    internal bool FailEnqueue
+    {
+        get; set;
+    }
+    internal BillingOptions Options { get; } = new() { GetInvoiceEndpoint = "https://invoice.example.invalid", InvoiceTokenSecretSalt = "synthetic-test-secret-not-for-production" };
+    internal bool FailDelete
+    {
+        get; set;
+    }
+    internal bool FailCreate
+    {
+        get; set;
+    }
+    internal bool FailInvoiceWrite
+    {
+        get; set;
+    }
+    internal bool DropWriteEtags
+    {
+        get; set;
+    }
+    internal bool MissingBiller
+    {
+        get; set;
+    }
+    internal bool MissingBillee
+    {
+        get; set;
+    }
+    internal Action? BeforeInvoiceUpdate
+    {
+        get; set;
+    }
     private int version;
 
     internal IssuanceScenario()
@@ -44,7 +88,10 @@ internal sealed class IssuanceScenario
         long id = Invoice.ParseID(DateTimeOffset.UtcNow);
         Request = new IssueInvoiceRequest
         {
-            Tenant = tenant, BillerID = biller, BilleeID = billee, InvoiceID = id,
+            Tenant = tenant,
+            BillerID = biller,
+            BilleeID = billee,
+            InvoiceID = id,
             InvoiceItems = [new InvoiceItem { Invoice = Invoice.ParseID(id), ID = 1, Subject = "Synthetic service", UnitPriceCurrency = "NZD", UnitPriceCents = 10000, Quantity = 1, LineTotalCurrency = "NZD" }]
         };
         Biller = new Biller { PartitionKey = tenant, RowKey = biller, BusinessName = "Synthetic biller", Currency = "NZD", Culture = "en-NZ", TimeZone = "Pacific/Auckland", Country = "NZ", TaxRatePercentile = 1500, PaymentInstructions = "Bank transfer" };
@@ -60,7 +107,10 @@ internal sealed class IssuanceScenario
             .ReturnsAsync((IEnumerable<Invoice> values, bool replace, DateTimeOffset? _, CancellationToken token) =>
             {
                 Seen(token);
-                if (FailInvoiceWrite || (Stored != null && !replace)) { throw new RequestFailedException(409, "Synthetic create conflict"); }
+                if (FailInvoiceWrite || (Stored != null && !replace))
+                {
+                    throw new RequestFailedException(409, "Synthetic create conflict");
+                }
                 return Persist(values.Single());
             });
         InvoiceRepo.Setup(p => p.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
@@ -69,7 +119,10 @@ internal sealed class IssuanceScenario
                 Seen(token);
                 BeforeInvoiceUpdate?.Invoke();
                 Invoice input = values.Single();
-                if (FailInvoiceWrite || Stored == null || input.ETag != Stored.ETag) { throw new RequestFailedException(412, "Synthetic stale ETag"); }
+                if (FailInvoiceWrite || Stored == null || input.ETag != Stored.ETag)
+                {
+                    throw new RequestFailedException(412, "Synthetic stale ETag");
+                }
                 return Persist(input);
             });
         ItemRepo.Setup(p => p.GetAsync(It.IsAny<string>(), It.IsAny<IList<string>?>(), It.IsAny<CancellationToken>()))
@@ -78,9 +131,15 @@ internal sealed class IssuanceScenario
             .Returns((IEnumerable<InvoiceItem> values, bool _, bool __, CancellationToken token) =>
             {
                 Seen(token);
-                if (FailDelete) { throw new IOException("Synthetic item deletion failure"); }
+                if (FailDelete)
+                {
+                    throw new RequestFailedException(400, "Synthetic item deletion rejection");
+                }
                 ItemWrites++;
-                foreach (InvoiceItem item in values) { Items.RemoveAll(i => i.ID == item.ID); }
+                foreach (InvoiceItem item in values)
+                {
+                    Items.RemoveAll(i => i.ID == item.ID);
+                }
                 return Task.CompletedTask;
             });
         ItemRepo.Setup(p => p.CreateAsync(It.IsAny<IEnumerable<InvoiceItem>>(), It.IsAny<bool>(), null, It.IsAny<CancellationToken>()))
@@ -90,10 +149,16 @@ internal sealed class IssuanceScenario
                 ItemWrites++;
                 foreach (InvoiceItem item in values)
                 {
-                    if (!replace && Items.Any(i => i.ID == item.ID)) { throw new RequestFailedException(409, "Synthetic duplicate item"); }
+                    if (!replace && Items.Any(i => i.ID == item.ID))
+                    {
+                        throw new RequestFailedException(409, "Synthetic duplicate item");
+                    }
                     Items.RemoveAll(i => i.ID == item.ID);
                     Items.Add(Copy(item));
-                    if (FailCreate) { throw new IOException("Synthetic partial item creation failure"); }
+                    if (FailCreate)
+                    {
+                        throw new RequestFailedException(400, "Synthetic partial item creation rejection");
+                    }
                 }
                 return values;
             });
@@ -101,20 +166,20 @@ internal sealed class IssuanceScenario
 
     internal IssueFlow CreateFlow()
     {
-        IOptions<BillingOptions> options = Microsoft.Extensions.Options.Options.Create(new BillingOptions { GetInvoiceEndpoint = "https://invoice.example.invalid", InvoiceTokenSecretSalt = "synthetic-test-secret-not-for-production" });
+        IOptions<BillingOptions> options = Microsoft.Extensions.Options.Options.Create(Options);
         GenericDomainRepository<InvoiceDomain, Invoice> domains = new(
             () => new InvoiceDomain(options, new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object), []),
             new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object));
         Mock<IMessagingBroker<NotifyCommand>> broker = new(MockBehavior.Strict);
         broker.Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, token) => { Seen(token); Messages.AddRange(messages); })
+            .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, token) => { Seen(token); Messages.AddRange(messages); if (FailEnqueue) { throw new TimeoutException("Synthetic uncertain enqueue"); } })
             .Returns(Task.CompletedTask);
         return new IssueFlow(new UpsertFlow(domains, ItemRepo.Object, BilleeRepo.Object, Profiles.Object),
             new EmailFlow(domains, ItemRepo.Object, broker.Object, options, NullLogger<EmailFlow>.Instance));
     }
 
     internal Task RunAsync(Billee? embedded = null, CancellationToken cancellationToken = default) => CreateFlow().RunAsync(Request, embedded, cancellationToken);
-    internal static T Copy<T>(T value) => JsonMarshaller.Unmarshall<T>(JsonMarshaller.Marshall(value!));
+    internal static T Copy<T>(T value) => value is Invoice invoice ? (T)(object)InvoiceContent.Copy(invoice) : JsonMarshaller.Unmarshall<T>(JsonMarshaller.Marshall(value!));
 
     private IEnumerable<Invoice> Persist(Invoice input)
     {
@@ -122,14 +187,24 @@ internal sealed class IssuanceScenario
         Stored = Copy(input);
         Stored.ETag = (++version).ToString();
         Invoice result = Copy(Stored);
-        if (DropWriteEtags) { result.ETag = null; }
+        if (DropWriteEtags)
+        {
+            result.ETag = null;
+        }
         return [result];
     }
 
-    private void Seen(CancellationToken token) { token.ThrowIfCancellationRequested(); Tokens.Add(token); }
+    private void Seen(CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        Tokens.Add(token);
+    }
     private static async IAsyncEnumerable<T> Enumerate<T>(IEnumerable<T> values)
     {
-        foreach (T value in values) { yield return value; }
+        foreach (T value in values)
+        {
+            yield return value;
+        }
         await Task.CompletedTask;
     }
 }
