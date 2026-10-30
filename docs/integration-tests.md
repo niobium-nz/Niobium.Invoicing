@@ -50,22 +50,34 @@ resources or reuse application credentials. No local settings file is required.
 
 ## Deployed test-environment suite
 
-`Niobium.Invoicing.Deployment.Tests` is deliberately outside the solution and runs explicitly after test deployment. Missing configuration fails class initialization; it cannot silently skip. It uses the existing MSTest SDK and Server's resolved Azure/Niobium dependencies without upgrades.
+`Niobium.Invoicing.Deployment.Tests` is outside the solution and runs explicitly after test deployment. Missing required configuration fails instead of skipping. It uses the existing MSTest SDK and installed Azure/Niobium versions.
 
-The workflow obtains these settings through its test-environment OIDC identity and [`scripts/test-resources.py`](../scripts/test-resources.py): `TEST_ENVIRONMENT`, `TEST_API_URL`, `TEST_STORAGE_ACCOUNT`, `TEST_STORAGE_KEY`, `TEST_SERVICEBUS_CONNECTION`, `TEST_SIGNING_KEY`, `TEST_EXPECTED_COMMIT`, `TEST_TOKEN_ISSUER`, `TEST_TOKEN_AUDIENCE`. Do not copy values into local settings, logs or documentation. The suite rejects non-test environments, non-HTTPS/non-test Functions hosts, storage accounts and Service Bus namespaces outside the test naming convention. This guard complements the workflow's selected resources; it is not an authorization boundary for arbitrary user-supplied credentials.
+The suite uses the **existing environment's real services and configuration**. It does not create an Azure test stack, tables, a notification sink or a substitute consumer. The workflow reads test resource metadata and credentials with its configured OIDC identity. `TEST_ENVIRONMENT=test` and the actual test host/account/namespace are validated before writes. These tests are never run against production.
 
 ```sh
 dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
 ```
 
-Run this only inside the authorized test deployment job. It first waits for `/health` to report the exact pushed SHA, then exercises seven deployed cases: four authentication/ownership rejection cases; successful HTTP issuance with durable storage, validation, exact replay and saved-token HTML; real Service Bus ingestion with stable notification content/token on retry; and absence of the debug email route. It uses synthetic biller/customer snapshots seeded through the matched Table adapter, so external profile lookup is intentionally outside this suite.
+Eight cases cover four HTTP authentication/ownership rejection cases; successful issuance with persistence, validation, exact replay and saved-token HTML; ingestion and update through the real incoming queue; enqueue through the real Notification service to the approved mailbox; and absence of the debug email route. The health response must first identify the exact feature commit. Notification tests leave the downstream queue to its real consumer; they do not receive/complete unrelated messages or assert provider delivery from an enqueue acknowledgement.
 
-The incoming command uses `issueinvoicecommand`; outgoing messages go to `notifycommand` in Invoicing's **own test namespace**, which has no email consumer. The suite completes only messages matching its own synthetic invoice identity. Unrelated messages are abandoned during cleanup. It deletes only its own synthetic invoice/item records, never shared tables. Deployment plus testing is serialized across branches. Abrupt cancellation or a failed storage cleanup can leave synthetic fixtures; never delete unrelated records to repair a test run.
+Store the approved mailbox in the test environment secret `TEST_NOTIFICATION_RECIPIENT`. `TEST_INVOICE_BILLER` and `TEST_INVOICE_ID` can select the existing reference invoice used to identify the test biller. When both are absent, the owner-authorized fixture setup retains a reference invoice in real test storage and writes its IDs to `artifacts/deployed/test-invoice-fixture.json`. It reuses an existing test biller when available, or a synthetic biller snapshot when the test table is empty. A working downstream Invoice template for that biller is still necessary for actual email delivery; this suite does not invent a Notification template. Tests use synthetic recipient/customer data and snapshot fixtures; external profile provisioning and provider receipt handling are not covered.
 
-The deployed suite covers real Functions middleware/binding, HTTP error translation, storage and Service Bus paths that local component tests cannot establish. It does not test external profile provisioning, direct-resource entitlement issuance, downstream email/provider idempotency, confirmation events, production scale, backup/restore or abandoned-writer recovery. Passing tests are evidence for these scenarios and this exact deployment, not a blanket delivery guarantee.
+Cleanup deletes only the suite's temporary invoice/item records; it verifies item ownership markers. It retains the reference fixture requested by the owner and never deletes shared tables. Abrupt termination may leave temporary test records. Credentials, tokens, notification payloads and fixture response bodies must not be logged.
+
+## Read-only production suite
+
+Every merged PR starts production deployment followed by the separate Python read-only suite. There is no independent production gate. The agent that merged the PR must monitor the terminal result and immediately investigate/fix failures.
+
+Production environment configuration is **required**: variables `TEST_INVOICE_BILLER`, `TEST_INVOICE_ID`, and secret `TEST_INVOICE_TOKEN` identify the existing production test invoice. The test does not generate one, copy a test invoice into production, seed or clean up any data, call a write endpoint, send/receive queue messages, or send notifications.
+
+```sh
+python scripts/read-only-deployment.py --require-fixture --report artifacts/production-read-only.json
+```
+
+The route allowlist permits only GET health and invoice HTML reads on the configured service origin. Redirects, all other routes and all non-GET methods are rejected before network access. Five checks require the exact deployed merge SHA, missing-invoice behavior, missing-token behavior, successful existing test-invoice HTML and wrong-token rejection. Reports omit tokens, response content and customer fields. All five checks from the same client run inside the feature HTTP integration case, while its valid temporary test invoice still exists; local tests exercise write/route/redirect rejection and missing required fixture configuration.
 
 ## Remaining coverage and evidence
 
-The owner authorized test deployment and required post-deployment verification on 2026-10-30. This supersedes the original task's test-deployment prohibition. [Delivery policy](delivery-and-operations.md) describes the gate, required review and external repository protection settings. [Progress](implementation-progress.md) records historical results and current verification; a source declaration alone is not a successful deployed run.
+See [delivery policy](delivery-and-operations.md) for automatic PR creation, one current-head approval, review fixes, merging and production monitoring. The owner clarified these requirements on 2026-10-31 (Pacific/Auckland), superseding the earlier extra production gate, independent-reviewer restriction and separate sink.
 
-Direct-resource grants in Azure, the external profile/Notification services and operational recovery scenarios above remain separate integration work. B07's full research acceptance is not claimed solely from this suite.
+Real direct-resource entitlement grants, external profile provisioning, provider receipt/inbox behavior, delivery confirmation and operational recovery remain separate integration work. B07's full research acceptance is not claimed solely from these cases. [Progress](implementation-progress.md) distinguishes historical verified runs from the current changed code and its pending CI evidence.

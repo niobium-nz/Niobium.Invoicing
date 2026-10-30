@@ -199,3 +199,21 @@ The first feature run [41037648966](https://github.com/niobium-nz/Niobium.Invoic
 Run [41039036249](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41039036249) for commit `1fffc481cf27c22eb31b0ae6b7127829b88a6cac` completed **successfully** on 2026-10-30. Build/local verification and test deployment/integration jobs both succeeded; production jobs were correctly skipped. The deployed command `dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed` passed all seven cases, zero failed/skipped. Local coverage and deployed TRX artifacts were uploaded for that exact SHA. The ARM lookup and explicit test Key Vault refresh passed.
 
 The final evidence/documentation follow-up also changes failed replay comparisons to report only a boolean mismatch, keeping link tokens and notification payloads out of assertion output. It must receive its own successful full feature run; the final delivery response records that latest-head result rather than reusing the older commit's success. No PR, production deployment, package publication or production migration was performed by this feature task. External main-branch protection administration and the remaining B07 integration areas above are still outstanding.
+
+
+## Owner delivery corrections (2026-10-31, Pacific/Auckland)
+
+Q23 replaces the earlier Q22 interpretation: automatically open the PR after successful feature deployment/tests, handle every actionable review comment, obtain current-head approval, then merge and monitor production. Main accepts no direct pushes. A merged PR immediately triggers production deployment and read-only deployed tests, with **no independent production gate**. Deployed tests use the actual environment resources; the separate notification sink and per-run signing-key rotation are removed. Q24 requires **one** approval from any approver GitHub permits, without an application policy excluding the PR owner.
+
+The owner approved a test notification mailbox supplied through the environment secret `TEST_NOTIFICATION_RECIPIENT`. Production uses variables `TEST_INVOICE_BILLER`, `TEST_INVOICE_ID` and secret `TEST_INVOICE_TOKEN`. The owner requested generation of a persistent invoice in the real test environment so its IDs can be configured there; this is distinct from production, where fixture creation is prohibited.
+
+Starting feature head: `a79abe2a2e7061b4e40f3649450aa14a4f8190b3`; main baseline remains `a14aca1de948589e1e47b44e179e8a84a8f0537a`. The prior green run validates the old implementation, not this correction.
+
+| Item | Correction | Acceptance / remaining evidence |
+| --- | --- | --- |
+| B04 / Q23 | Feature push runs tests/deployment, then opens/reuses a ready PR. Agent fixes reviews, waits for one current-head approval and merges without asking again. Main-merge event starts production and read-only tests directly. | Confirm new feature CI, automatic PR creation, real review, merge and the resulting production run. External branch protection remains unverified. |
+| B07 / Q23 | Tests use real test storage/queues/Notification namespace; no sink or table creation. Add persistent test reference fixture and real Notification enqueue case. | Provide generated test IDs from the uploaded artifact. Enqueue acknowledgement is not proof of provider delivery. |
+| Production read-only | Five allowlisted GET checks use the existing configured production fixture; no mutation/setup/cleanup code or write-capable clients. | Local guard tests and feature-environment read-only checks run before review. Production can be verified only after the approved merge deploys. |
+| Q24 | Remove author exclusion; one valid current-head approval suffices. | Tests cover author approval, another approver, stale/dismissed approvals and pending changes requests. GitHub's native permissions remain authoritative. |
+
+Initial local checks: eleven Node policy tests and thirteen Python tests pass. Final build/CI results, generated test fixture identifiers, PR/review state and production outcome must be recorded from actual runs; they are not inferred from workflow declarations.
