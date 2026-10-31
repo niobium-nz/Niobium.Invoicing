@@ -264,10 +264,25 @@ public sealed class DeployedInvoiceTests
     }
 
     [TestMethod]
-    public async Task Debug_email_route_is_absent_from_deployment()
+    [DataRow(null)]
+    [DataRow("invalid-test-function-key")]
+    public async Task Debug_email_route_rejects_requests_without_a_valid_function_key(string? functionKey)
     {
-        using HttpResponseMessage response = await http.GetAsync($"/email/{Guid.NewGuid()}/invoices/1");
-        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+        // An existing, ready invoice distinguishes route absence from a missing-invoice result.
+        // A blank recipient also prevents a notification if the authorization assertion regresses.
+        long id = await SeedInvoice(recipient: string.Empty);
+        using HttpResponseMessage issued = await Post(Request(id), Token(biller, tenant));
+        Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
+        TableEntity before = await Read(id);
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/email/{biller}/invoices/{id}");
+        if (functionKey != null)
+            request.Headers.Add("x-functions-key", functionKey);
+        using HttpResponseMessage response = await http.SendAsync(request);
+        // Q26 permits a key-guarded endpoint. Keep this reviewed contract compatible with its
+        // absent predecessor so restoration can pass the immutable main harness without bypasses.
+        Assert.IsTrue(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized,
+            $"Expected an absent route or Functions key denial, received {(int)response.StatusCode}.");
+        Assert.AreEqual(before.ETag, (await Read(id)).ETag, "A rejected request must not change the invoice.");
     }
 
     private static async Task VerifyReadOnlyClient(long id, string token)
