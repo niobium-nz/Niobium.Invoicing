@@ -316,3 +316,32 @@ Baseline: latest `origin/main`, `9983ebebcc47a6c91c58478fa0ef4f736b35ad76`, in t
 Baseline local verification used the existing SDK environment (`source /workspace/.niobium-tools/env.sh`): `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo --disable-build-servers -m:1` passed with zero warnings/errors; `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore` passed all 121 cases without skips. New CI/CD evidence will be recorded on the author-created PR; baseline success alone does not validate the preparatory change.
 
 Preparatory local checks also passed: the same integration-test command with `NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18482/devstoreaccount1` ran all 23 cases without skips against a disposable Table-only Azurite instance; `dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo --disable-build-servers -m:1` completed with zero warnings/errors. The deployed cases require the real test deployment and were not run against production or locally substituted infrastructure.
+
+### PR #8 prerequisite completion
+
+`5he11` formally approved `ad478d6f7cdb1213810c44e587b9419251cb3968`; native code/security reviews had completed without findings and no unresolved threads remained. Feature [run 41176255273](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41176255273) passed both builds without warnings/errors, 121 unit, 23 local integration, 20 Node and 13 Python tests, 91.51% authored coverage, actual test deployment, twelve candidate cases and eleven trusted-main cases. Both suites passed all five read-only checks against the feature SHA; artifact digests/TRX/reports and the required custom status were verified.
+
+PR #8 was squash-merged through the connector with the expected approved head as `7a44348e7778de6374ef14151a2413681e2f21fa`. Its tree matches the tested prerequisite tree `469ab429ffa925bb794e417f3a3ae2a12b7b1fee`. Production [run 41178564831](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41178564831) passed deployment and all five GET-only checks for that actual merge; the downloaded report's digest and commit were verified. Package [run 41178564856](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41178564856) succeeded with publication skipped because Contracts did not change. The trusted test contract is now installed through ordinary review, with no protection exception.
+
+### Endpoint restoration implementation
+
+Branch `codex/restore-debug-email` is based on the approved PR #8 squash merge `7a44348e7778de6374ef14151a2413681e2f21fa`. Its tree matches the tested prerequisite head, so the prepared implementation was preserved while moving to that current main baseline. `EmailInvoice.cs` is restored byte for byte from `52b5df9^`, preserving the historical Function-key guard, GET route, current EmailFlow delegation and empty 201 result. No framework/Contracts versions or pipeline definitions change.
+
+Local integration now verifies exactly one key-guarded email binding, waiting for flow completion before returning an empty 201, forwarding biller/invoice/cancellation, and propagating send failures or cancellation. New deployed cases strictly require 401 for missing/invalid keys and bearer-only calls, 201 plus persisted freeze/token/enqueue acknowledgement for a valid test key using the approved mailbox, and unchanged storage for the historical missing-recipient skip. They read the existing test app's default function key with the workflow Azure identity, match its ARM hostname to the tested deployment and never print the key or CLI output. The production read-only client remains unchanged and never invokes this side-effecting route.
+
+Local validation on this implementation:
+
+| Command (after loading the existing SDK environment) | Result |
+| --- | --- |
+| `dotnet restore Niobium.Invoicing.slnx --nologo` | Passed with the existing package versions. |
+| `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo --disable-build-servers -m:1` | Passed, zero warnings/errors. |
+| `dotnet restore src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --nologo` | Passed. |
+| `dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo --disable-build-servers -m:1` | Passed, zero warnings/errors. |
+| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/restore-debug-coverage/unit` | 121 passed, no skips. |
+| `NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18482/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/restore-debug-coverage/integration` | 26 passed, no skips, against disposable Table-only Azurite; emulator stopped afterward. |
+| `python scripts/check-coverage.py /workspace/scratch/restore-debug-coverage/unit/coverage.cobertura.xml /workspace/scratch/restore-debug-coverage/integration/coverage.cobertura.xml` | Passed: Contracts 100.00%, Core 90.72%, Server 86.21%, combined 91.56%. |
+| `git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check` | Passed. |
+
+The policy/tooling commands `node --test scripts/delivery-policy.test.cjs` and `python -m unittest discover -s scripts -p 'test_*.py'` also passed all 20 and 13 cases on the restoration worktree.
+
+The generated Functions metadata contains `EmailInvoice` at `email/{issuer}/invoices/{invoice}`, GET, `authLevel: Function`. This and local tests are not live-host authorization evidence: candidate/trusted deployment tests and automatic review remain required for the pushed restoration head.

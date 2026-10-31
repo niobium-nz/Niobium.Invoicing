@@ -49,6 +49,7 @@
 - InvoiceItem uses ownership-based resource grants; do not add a blanket table entitlement. Its identifier/key risk remains explicitly deferred (Q15/Q16).
 - `SaveAsync(force: true)` follows framework upsert behavior, not an ETag-checked update. Do not infer atomicity across invoice/items/notification.
 - `AuthorizationLevel.Anonymous` does not remove middleware or handler checks. Inspect effective routes and application checks.
+- Q26 restores the owner's manual debug email function as `EmailInvoice`, `GET /email/{issuer}/invoices/{invoice}`, guarded by a Functions key. Reuse EmailFlow and preserve saved tokens. This GET sends notifications and must never enter the read-only production test allowlist.
 - `required` members and `TryValidate` do not establish complete business validation.
 
 ## Safe validation
