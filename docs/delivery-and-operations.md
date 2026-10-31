@@ -31,7 +31,17 @@ The package workflow fetches the merge commit and its first parent, then compare
 
 The owner requires review activity to stay separate from this implementation conversation. Prefer [native Codex background reviews](https://learn.chatgpt.com/docs/third-party/github), posting findings directly on GitHub. An authorized `5he11` connection may request that review with `@codex review`; the native service publishes as the Codex bot. The implementation agent addresses those findings and must not submit its own reviewer decision as `5he11`. Native review comments and thumbs-up reactions do not replace GitHub's required formal approval of the current head.
 
-Native automatic-review scope and trigger settings live in [Code review settings](https://chatgpt.com/settings/code-review), outside the repository workflows. Confirm them and observe an actual automatic trigger before claiming future reviews are enabled. A review request assigned to `5he11` or a successful manual mention alone does not establish that behavior. The available connector cannot inspect or change those settings; do not silently substitute a polling task or create a duplicate review conversation.
+Native automatic-review scope and trigger settings live in [Code review settings](https://chatgpt.com/settings/code-review), outside the repository workflows. The owner confirmed the following repository settings were saved on 2026-10-31 (Pacific/Auckland):
+
+| Setting | Code review | Security review |
+| --- | --- | --- |
+| Automatic review | Enabled | Enabled |
+| Review | All PRs | All PRs |
+| Trigger | On every push | Whenever code review runs |
+
+Explicit repository settings avoid depending on each author's personal preferences. The code trigger reviews subsequent pushes to an open PR so fixes receive review at their new head. Requesting `5he11` remains the designated reviewer assignment; it is not a native trigger filter. Reviews execute in the background and publish as the Codex bot, without a separate implementation conversation.
+
+Observe an automatic review on the exact pushed head before claiming the trigger works. Inspect the native review summary's commit and trigger, then read all findings and completion receipts. Configuration confirmation, a reviewer request and a successful manual mention are different evidence; none is a formal approval. The available connector cannot inspect or change native settings. Do not silently substitute a polling task or create a duplicate review conversation. If a manual request is needed for recovery, record it as manual rather than using it as proof of automatic invocation.
 
 The listener becomes active only when installed on the default branch. The initial installation and changes to the protected pipeline definitions therefore require an explicit reviewed activation decision; they cannot certify themselves using branch code. Before main contains the deployed-test project, the candidate suite still runs, but the trusted runner reports the missing baseline and skips its tests. That skipped step cannot produce the required custom status: readiness explicitly requires a successful trusted step at the controller's immutable main SHA. Do not report the initial candidate run as a successful trusted-harness run. An administrator must decide how to install the reviewed controller/harness while retaining actual candidate test evidence and required approval. Do not silently weaken rules, bypass review or post a synthetic success status. This concerns pre-merge verification, not an independent production gate.
 
