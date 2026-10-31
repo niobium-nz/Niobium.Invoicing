@@ -115,6 +115,39 @@ public sealed class StorageFlowTests
     }
 
     [TestMethod]
+    public async Task Debug_view_reads_real_draft_storage_without_writes_and_draft_remains_editable()
+    {
+        IssueInvoiceRequest request = await NewRequest();
+        await host!.Services.GetRequiredService<IssueFlow>().RunAsync(request, null, CancellationToken.None);
+        IRepository<Invoice> repo = host.Services.GetRequiredService<IRepository<Invoice>>();
+        IRepository<InvoiceItem> itemRepo = host.Services.GetRequiredService<IRepository<InvoiceItem>>();
+        Invoice before = (await repo.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        InvoiceItem[] itemsBefore = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(request.InvoiceID)).ToArrayAsync();
+        HTMLFlow flow = host.Services.GetRequiredService<HTMLFlow>();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        Microsoft.AspNetCore.Mvc.ContentResult response = (Microsoft.AspNetCore.Mvc.ContentResult)await new DebugInvoice(flow)
+            .Run(context.Request, request.BillerID, request.InvoiceID, CancellationToken.None);
+        Assert.AreEqual(200, response.StatusCode);
+        StringAssert.Contains(response.Content!, "Synthetic customer");
+        StringAssert.Contains(response.Content!, "Synthetic service");
+        Invoice after = (await repo.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        InvoiceItem[] itemsAfter = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(request.InvoiceID)).ToArrayAsync();
+        Assert.AreEqual(before.ETag, after.ETag);
+        CollectionAssert.AreEqual(itemsBefore.Select(i => i.ETag).ToArray(), itemsAfter.Select(i => i.ETag).ToArray());
+        Assert.IsNull(after.Token);
+        Assert.IsNull(after.Delivered);
+        Assert.AreEqual(InvoiceContent.Ready, after.IssuanceState);
+        Assert.HasCount(0, messages);
+        ApplicationException denied = await Assert.ThrowsAsync<ApplicationException>(() =>
+            flow.RunAsync(request.BillerID, request.InvoiceID, "synthetic-token", CancellationToken.None));
+        Assert.AreEqual(403, denied.ErrorCode);
+        request.InvoiceItems[0].Quantity = 2;
+        await host.Services.GetRequiredService<IssueFlow>().RunAsync(request, null, CancellationToken.None);
+        Assert.AreEqual(23000, (await repo.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!.GrandTotalCents);
+        Assert.HasCount(0, messages);
+    }
+
+    [TestMethod]
     public async Task Frozen_replay_reuses_real_stored_token_and_message_and_renders_public_invoice()
     {
         IssueInvoiceRequest request = await NewRequest();

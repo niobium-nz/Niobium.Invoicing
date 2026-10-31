@@ -155,6 +155,42 @@ namespace Niobium.Invoicing.Core.Tests.Flows
         }
 
         [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Debug_rendering_preserves_draft_or_frozen_state_and_public_authorization(bool frozen)
+        {
+            Guid issuer = Guid.NewGuid();
+            Invoice invoice = MakeInvoice(issuer, Guid.NewGuid());
+            invoice.Token = frozen ? "synthetic-saved-link-token" : null;
+            invoice.IssuanceState = frozen ? InvoiceContent.Frozen : InvoiceContent.Ready;
+            invoice.Delivered = frozen ? DateTimeOffset.UtcNow : null;
+            invoice.Terms = "<script>literal</script>";
+            Invoice before = InvoiceContent.Copy(invoice);
+            InvoiceItem item = MakeItem(invoice.GetID(), 1, "Service <b>literal</b>", "USD", 100, 2, 200);
+            Arranged arranged = ArrangeHtmlFlow(invoice, [item], new BillingOptions { InvoiceTokenSecretSalt = string.Empty, GetInvoiceEndpoint = string.Empty });
+            using CancellationTokenSource cancellation = new();
+
+            string html = await arranged.Flow.RunForDebugAsync(issuer, invoice.GetID(), cancellation.Token);
+
+            html.Should().Contain("&lt;script&gt;literal&lt;/script&gt;").And.Contain("Service &lt;b&gt;literal&lt;/b&gt;");
+            html.Should().NotContain("synthetic-saved-link-token");
+            InvoiceContent.SamePersistedContent(before, invoice).Should().BeTrue();
+            arranged.InvoiceRepo.Verify(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), It.IsAny<bool>(),
+                It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()), Times.Never);
+            arranged.InvoiceRepo.Verify(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), It.IsAny<bool>(),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+            arranged.InvoiceDomainRepo.Verify(r => r.GetAsync(Invoice.BuildPartitionKey(issuer), Invoice.BuildRowKey(invoice.GetID()),
+                false, cancellation.Token), Times.Once);
+            arranged.ItemDomainRepo.Verify(r => r.GetAsync(InvoiceItem.BuildPartitionKey(invoice.GetID()), false, cancellation.Token), Times.Once);
+            if (frozen)
+            {
+                (await arranged.Flow.RunAsync(issuer, invoice.GetID(), invoice.Token!, cancellation.Token)).Should().Be(html);
+            }
+            Func<Task> unauthorized = () => arranged.Flow.RunAsync(issuer, invoice.GetID(), "wrong-token", cancellation.Token);
+            (await unauthorized.Should().ThrowAsync<ApplicationException>()).Which.ErrorCode.Should().Be(403);
+        }
+
+        [TestMethod]
         public async Task Invoice_with_items_renders_fully()
         {
             // Given a normal invoice with two line items
