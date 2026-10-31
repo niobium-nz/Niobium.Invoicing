@@ -1,5 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { approvedHead, eligibleRun, testedRun, mergeEligibility, readiness, PIPELINE_FILES } = require('./delivery-policy.cjs');
 const { contractsChanged } = require('./package-policy.cjs');
 const trustedSha = 'a'.repeat(40);
@@ -13,7 +17,9 @@ function fixture() {
     reviews: [{ id: 1, state: 'APPROVED', commit_id: 'head', user: { login: 'author' } }],
     runs: [{ ...run }],
     jobs: [{ name: 'Build and local tests', conclusion: 'success' },
-      { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion: 'success' }] }],
+      { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion: 'success' }] },
+      { name: 'Verify trusted deployed integration', conclusion: 'success',
+        steps: [{ name: `Run trusted deployed integration tests at ${trustedSha}`, conclusion: 'success' }] }],
     comparison: { status: 'ahead', commits: [{ commit: { message: 'Change' } }] },
     head: 'head', openPulls: [], created: [], statuses: [], notices: [], contentReads: [], tamperedPath: null, missingTrustedPath: null,
   };
@@ -42,20 +48,47 @@ function fixture() {
     core: { notice: message => state.notices.push(message) } };
 }
 
-test('package publication includes additions, deletions and renames in either direction', () => {
-  for (const file of [
-    { filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', status: 'added' },
-    { filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', status: 'removed' },
-    { filename: 'src/Niobium.Invoicing.Core/Invoice.cs', previous_filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', status: 'renamed' },
-    { filename: 'src/Niobium.Invoicing.Contracts/Invoice.cs', previous_filename: 'src/Niobium.Invoicing.Core/Invoice.cs', status: 'renamed' },
-  ]) assert.equal(contractsChanged([file]), true);
+function packageRepository(t) {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'invoicing-package-'));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('init', '--quiet'); git('config', 'user.name', 'Package test'); git('config', 'user.email', 'test@example.invalid');
+  const write = (file, content = 'example\n') => {
+    fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
+    fs.writeFileSync(path.join(cwd, file), content);
+  };
+  const commit = () => { git('add', '.'); git('-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '--no-gpg-sign', '-m', 'Test tree'); return git('rev-parse', 'HEAD'); };
+  write('README.md'); commit();
+  return { cwd, git, write, commit };
+}
+
+test('package tree comparison includes additions, deletions and renames in either direction', t => {
+  const repo = packageRepository(t);
+  const contract = 'src/Niobium.Invoicing.Contracts/Invoice.cs';
+  repo.write(contract); assert.equal(contractsChanged(repo.commit(), repo.cwd), true);
+  repo.git('mv', contract, 'Invoice.cs'); assert.equal(contractsChanged(repo.commit(), repo.cwd), true);
+  repo.git('mv', 'Invoice.cs', contract); assert.equal(contractsChanged(repo.commit(), repo.cwd), true);
+  repo.git('rm', contract); assert.equal(contractsChanged(repo.commit(), repo.cwd), true);
 });
 
-test('unrelated changes do not publish Contracts', () => {
-  assert.equal(contractsChanged([]), false);
-  assert.equal(contractsChanged([{ filename: 'docs/product.md' },
-    { filename: 'src/Niobium.Invoicing.Core/New.cs', previous_filename: 'src/Niobium.Invoicing.Core/Old.cs' },
-    { filename: 'src/Niobium.Invoicing.Contracts.Tests/InvoiceTests.cs' }]), false);
+test('unrelated tree changes do not publish Contracts', t => {
+  const repo = packageRepository(t);
+  repo.write('docs/product.md'); repo.write('src/Niobium.Invoicing.Contracts.Tests/InvoiceTests.cs');
+  assert.equal(contractsChanged(repo.commit(), repo.cwd), false);
+});
+
+test('Contracts detection is complete beyond the 3000-file REST cap', t => {
+  const repo = packageRepository(t);
+  for (let i = 0; i < 3001; i++) repo.write(`docs/change-${i}.md`);
+  repo.write('src/Niobium.Invoicing.Contracts/Invoice.cs');
+  assert.equal(contractsChanged(repo.commit(), repo.cwd), true);
+});
+
+test('missing merge history and invalid revisions fail instead of skipping publication', t => {
+  const repo = packageRepository(t);
+  assert.throws(() => contractsChanged(repo.git('rev-parse', 'HEAD'), repo.cwd), /Cannot compare/);
+  assert.throws(() => contractsChanged('b'.repeat(40), repo.cwd), /Cannot compare/);
+  for (const value of [undefined, 'main', '--quiet']) assert.throws(() => contractsChanged(value, repo.cwd), /immutable merged commit/);
 });
 
 test('only a successful exact-repository feature run of the expected workflow qualifies', () => {
@@ -111,9 +144,21 @@ test('feature contexts cannot invoke privileged repository writes', async () => 
 test('skipped deployed tests and failed required jobs cannot qualify', async () => {
   const skipped = fixture(); skipped.state.jobs[1].steps[0].conclusion = 'skipped';
   await assert.rejects(testedRun(skipped.github, 'owner', 'repo', 'head', trustedSha));
-  for (const job of [0, 1]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
+  for (const job of [0, 1, 2]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
     const input = fixture(); input.state.jobs[job].conclusion = conclusion;
     await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head', trustedSha));
+  }
+});
+
+test('green candidate tests cannot substitute for the trusted main harness', async () => {
+  for (const mutate of [s => { s.jobs.pop(); }, s => { s.jobs[2].steps = []; },
+    s => { s.jobs[2].steps[0].conclusion = 'skipped'; },
+    s => { s.jobs[2].steps[0].name = 'Run trusted deployed integration tests at feature'; },
+    s => { s.jobs[2].steps[0].name = `Run trusted deployed integration tests at ${'b'.repeat(40)}`; }]) {
+    const input = fixture(); mutate(input.state);
+    await assert.rejects(readiness(input), /no successful authenticated/);
+    assert.deepEqual(input.state.statuses.map(status => status.state), ['failure']);
+    assert.equal(input.state.created.length, 0);
   }
 });
 

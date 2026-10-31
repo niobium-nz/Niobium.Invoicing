@@ -8,7 +8,6 @@ on:
 permissions:
   id-token: write
   contents: read
-  pull-requests: read
   
 env:  
   nugetFeedUrl: "https://api.nuget.org/v3/index.json"
@@ -30,16 +29,15 @@ jobs:
       uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.merge_commit_sha }}
+        fetch-depth: 2
 
     - name: Identify changed package projects
       id: changes
       uses: actions/github-script@v8
       with:
         script: |
-          const files = await github.paginate(github.rest.pulls.listFiles, {
-            ...context.repo, pull_number: context.payload.pull_request.number, per_page: 100
-          });
-          core.setOutput('contracts', require('./scripts/package-policy.cjs').contractsChanged(files));
+          core.setOutput('contracts', require('./scripts/package-policy.cjs')
+            .contractsChanged(context.payload.pull_request.merge_commit_sha));
 
     - name: Setup .NET
       if: steps.changes.outputs.contracts == 'true'

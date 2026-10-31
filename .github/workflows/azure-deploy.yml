@@ -10,6 +10,13 @@ on:
 permissions:
   contents: read
 
+# Hold the environment lock across deployment and both independent test runners.
+# Keep every pending run so each merged commit receives its own verification.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'test-deploy' || 'production-deploy' }}
+  cancel-in-progress: false
+  queue: max
+
 env:
   buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
   SourceRevisionId: '${{ github.event.pull_request.merge_commit_sha || github.sha }}'
@@ -68,10 +75,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    concurrency:
-      # Keep deployment and its tests under the SAME lock, including across feature branches.
-      group: test-deploy
-      cancel-in-progress: false
     env:
       AZURE_ENV_NAME: test
       APP_SHORT_NAME: niobiuminvoicing
@@ -149,6 +152,75 @@ jobs:
           path: artifacts/deployed/
           if-no-files-found: error
 
+  trusted-test:
+    name: Verify trusted deployed integration
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_ENV_NAME: test
+      APP_SHORT_NAME: niobiuminvoicing
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    steps:
+      - name: Resolve reviewed test harness
+        id: source
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: main } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            const sha = main.commit.sha;
+            core.setOutput('sha', sha);
+            try {
+              await github.rest.repos.getContent({ ...context.repo, ref: sha,
+                path: 'src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj' });
+              core.setOutput('available', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              // First installation cannot certify itself. Readiness rejects the missing trusted step.
+              core.warning('Main has no reviewed harness yet. Candidate tests are evidence only; administrative activation is still required.');
+              core.setOutput('available', 'false');
+            }
+      - uses: actions/checkout@v4
+        if: steps.source.outputs.available == 'true'
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        if: steps.source.outputs.available == 'true'
+        with:
+          dotnet-version: '10.x.x'
+      - name: Azure login
+        if: steps.source.outputs.available == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Prepare trusted integration credentials
+        if: steps.source.outputs.available == 'true'
+        run: python scripts/test-resources.py credentials
+      - name: Run trusted deployed integration tests at ${{ steps.source.outputs.sha }}
+        if: steps.source.outputs.available == 'true'
+        timeout-minutes: 30
+        env:
+          TEST_INVOICE_BILLER: ${{ vars.TEST_INVOICE_BILLER }}
+          TEST_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
+          TEST_NOTIFICATION_RECIPIENT: ${{ secrets.TEST_NOTIFICATION_RECIPIENT }}
+          TEST_TOKEN_ISSUER: Niobium.Invoicing.Server.Test
+          TEST_TOKEN_AUDIENCE: Niobium.Invoicing.Client.Test
+        run: dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
+      - name: Upload trusted deployed test results
+        if: always() && steps.source.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-deployed-test-evidence-${{ github.sha }}-${{ steps.source.outputs.sha }}
+          path: artifacts/deployed/
+          if-no-files-found: error
+
   prod:
     name: Deploy production and run read-only integration
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
@@ -157,10 +229,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4

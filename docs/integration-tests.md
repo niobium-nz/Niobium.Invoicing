@@ -52,6 +52,8 @@ resources or reuse application credentials. No local settings file is required.
 
 `Niobium.Invoicing.Deployment.Tests` is outside the solution and runs explicitly after test deployment. Missing required configuration fails instead of skipping. It uses the existing MSTest SDK and installed Azure/Niobium versions.
 
+Feature CI runs the candidate suite, then a second copy from immutable main on a fresh runner. The trusted runner compiles only main's harness and its project references and uses main's credential helper and read-only client. It never executes candidate source or downloads candidate artifacts, but targets the same deployed feature SHA and real test resources. Both runs share the workflow-wide environment lock. This lets new candidate tests evolve while certification still requires previously reviewed checks. Initial installation has no main harness yet; that trusted step is explicitly skipped and cannot certify the feature. Its administrative activation dependency is recorded in the delivery guide.
+
 The suite uses the **existing environment's real services and configuration**. It does not create an Azure test stack, tables, a notification sink or a substitute consumer. The workflow reads test resource metadata and credentials with its configured OIDC identity. `TEST_ENVIRONMENT=test` and the actual test host/account/namespace are validated before writes. These tests are never run against production.
 
 ```sh
