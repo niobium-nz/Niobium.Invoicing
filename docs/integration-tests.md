@@ -84,6 +84,6 @@ The route allowlist permits only GET health and invoice HTML reads on the config
 
 ## Remaining coverage and evidence
 
-See [delivery policy](delivery-and-operations.md) for automatic PR creation, one current-head approval, review fixes, merging and production monitoring. The owner clarified these requirements on 2026-10-31 (Pacific/Auckland), superseding the earlier extra production gate, independent-reviewer restriction and separate sink.
+See [delivery policy](delivery-and-operations.md) for author-created PRs after successful verification, the designated reviewer request, one current-head approval, review fixes, merging and production monitoring. Q25 assigns PR creation to the human or Codex branch author; the workflow only publishes readiness. Earlier owner corrections removed the extra production gate, independent-reviewer restriction and separate sink.
 
 Real direct-resource entitlement grants, external profile provisioning, provider receipt/inbox behavior, delivery confirmation and operational recovery remain separate integration work. B07's full research acceptance is not claimed solely from these cases. [Progress](implementation-progress.md) distinguishes historical verified runs from the current changed code and its pending CI evidence.

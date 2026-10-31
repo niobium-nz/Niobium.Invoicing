@@ -2,7 +2,7 @@
 
 ## Owner decisions
 
-These entries preserve owner answers during discovery and approval. They are retrospective where they explain existing choices; no original decision dates are asserted. Approval on 2026-10-29 (Pacific/Auckland) authorized documentation and XML comments, including the exclusions and unknowns below. The subsequent research implementation task authorizes feature/workflow changes, tests and draft PRs; deployment, publication and production migrations remain forbidden.
+These entries preserve owner answers during discovery and approval. They are retrospective where they explain existing choices; no original decision dates are asserted. Approval on 2026-10-29 (Pacific/Auckland) authorized documentation and XML comments. Later implementation and delivery instructions superseded the original deployment prohibition; Q22-Q25 below and the [delivery guide](delivery-and-operations.md) define current authority. Production test-data mutations and production migrations remain prohibited.
 
 | ID | Owner-confirmed decision | Implication |
 | --- | --- | --- |
@@ -30,6 +30,10 @@ Q19/Q20 were confirmed during implementation on 2026-10-30 (Pacific/Auckland): z
 Q15-Q18 were confirmed on 2026-10-30 (Pacific/Auckland), separately authorizing these implementation changes after the documentation bootstrap. S02 remains deferred. The later research implementation adds conditional persistence and validation; its item-by-item status is in the [acceptance ledger](implementation-progress.md).
 
 Q21 was confirmed during implementation: persist preparation/freeze checkpoints, keep content frozen after uncertain enqueue outcomes, allow exact retries only, and treat legacy saved-token invoices as frozen even after failed sends. See [recovery](invoice-recovery.md) for the conservative abandoned-writer policy and compatibility limits.
+
+Q22/Q23 replaced the original delivery scope: push feature work, verify terminal build/test deployment and deployed integration, obtain current-head approval, merge the reviewed PR without another permission request, and monitor the resulting production deployment and read-only tests. Production has no independent approval gate. Tests use the real environment resources; production tests perform only allowed reads. Q24 requires one approval from any approver GitHub permits, without an additional repository-policy author exclusion.
+
+Q25 was confirmed on 2026-10-31 (Pacific/Auckland): the branch author, whether human or Codex, creates the PR after successful verification; workflows must not create it. Codex must create/reuse the PR through its own tools when a completed step is ready to sync, request `niobium-nz` as reviewer (the owner subsequently authorized `5he11` for PRs authored by `niobium-nz`), and actively monitor automatic Codex and human review comments through fixes, approval, merge and production verification. The owner further clarified that review runs separately from the implementation conversation, preferably in the native background service with results on GitHub; a separate review conversation is only a fallback when needed. The implementation agent fixes findings and monitors delivery without issuing its own reviewer decision through `5he11`. `AGENTS.md` records this standing project memory. GitHub's native author/reviewer restrictions still apply; an unavailable author identity or reviewer request must be reported rather than silently bypassed.
 
 Q11 was further clarified at approval: broker duplicate detection is disabled for cost reasons. Enabling it as usage grows is an option. The short-term planned downstream solution records message IDs in a table and uses partition/row-key uniqueness and concurrency checks. This is a planned mechanism, not an implemented exactly-once guarantee. The claim/send/failure-recovery protocol still needs design, especially a crash between recording an ID and provider acceptance.
 
