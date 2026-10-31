@@ -41,6 +41,8 @@ Q26 was confirmed after PR #7 merged on 2026-10-31: restore the historical funct
 
 Restoration uses two reviewed steps because the original immutable-main suite required that route to return 404. PR #8 installed a test contract accepting route absence (404) or Functions key denial (401), using missing/invalid keys against an existing invoice and verifying no invoice change. The route remained absent in that preparatory change. The restoration then adds the function and strict candidate tests for its binding, key enforcement and authorized sending through the real test services. Both steps use ordinary feature CI, review and approval, with no protection exception or fabricated status.
 
+Q27 was confirmed on 2026-10-31 (Pacific/Auckland): keep public viewing dependent on a saved matching token and preserve token-based freeze semantics. Instead of moving token generation to create/update, the owner requested a separate Function-key-guarded endpoint to debug invoice viewing. The implementation is `DebugInvoice`, `GET /debug/{issuer}/invoices/{invoice}`, rendering saved invoice/items without writes, token generation, freeze or notification. Its key grants operational access across billers, like the manual email function. Public tokenless access remains forbidden. No package/schema changes or production test allowlist expansion are required.
+
 ## Current discrepancies and proposed backlog
 
 Priority below is **Proposed review order**, not a committed delivery schedule. Evidence is linked to implementation; security-sensitive details are kept in private findings, not reproduced here.

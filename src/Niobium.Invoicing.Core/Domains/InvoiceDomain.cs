@@ -42,6 +42,18 @@ public partial class InvoiceDomain(
             throw new ApplicationException(InternalError.Forbidden, "Invalid token.") { Reference = entity.GetFullID() };
         }
 
+        return await RenderHTMLAsync(entity, cancellationToken);
+    }
+
+    /// <summary>Renders stored data for the key-authorized debug flow without creating a token or saving.</summary>
+    internal async Task<string> BuildDebugHTMLAsync(CancellationToken cancellationToken)
+    {
+        Invoice entity = await GetEntityAsync(cancellationToken);
+        return await RenderHTMLAsync(entity, cancellationToken);
+    }
+
+    private static async Task<string> RenderHTMLAsync(Invoice entity, CancellationToken cancellationToken)
+    {
         TimeZoneInfo timezone = TimeZoneInfoHelper.ParseTimeZoneFromIANA(entity.TimeZone);
         CultureInfo culture = CultureInfo.GetCultureInfo(entity.Culture, true);
         htmlTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.InvoiceTemplateResourceName, cancellationToken)

@@ -337,6 +337,101 @@ public sealed class DeployedInvoiceTests
         Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Token)));
     }
 
+    [TestMethod]
+    [DataRow(null, false)]
+    [DataRow("invalid-test-function-key", false)]
+    [DataRow(null, true)]
+    public async Task Debug_view_rejects_missing_invalid_and_bearer_only_credentials(string? functionKey, bool bearer)
+    {
+        long id = await SeedInvoice(recipient: string.Empty);
+        using HttpResponseMessage issued = await Post(Request(id), Token(biller, tenant));
+        Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
+        TableEntity before = await Read(id);
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/debug/{biller}/invoices/{id}");
+        if (functionKey != null)
+            request.Headers.Add("x-functions-key", functionKey);
+        if (bearer)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token(biller, tenant));
+        using HttpResponseMessage response = await http.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.AreEqual(before.ETag, (await Read(id)).ETag, "A rejected debug request must not change storage.");
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Function_key_debug_view_preserves_storage_and_public_link_policy(bool frozen)
+    {
+        long id = await SeedInvoice(recipient: string.Empty);
+        IssueInvoiceRequest invoice = Request(id);
+        using HttpResponseMessage issued = await Post(invoice, Token(biller, tenant));
+        Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
+        TableEntity before = await Read(id);
+        string? linkToken = null;
+        if (frozen)
+        {
+            // Owned synthetic fixture: exercise a frozen invoice without sending another notification.
+            linkToken = Guid.NewGuid().ToString("N");
+            before[nameof(Invoice.Token)] = linkToken;
+            before[nameof(Invoice.IssuanceState)] = "frozen-v1";
+            await tables.GetTableClient(nameof(Invoice)).UpdateEntityAsync(before, before.ETag, TableUpdateMode.Merge);
+            before = await Read(id);
+        }
+        string itemFilter = TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}");
+        List<string> itemVersions = [];
+        await foreach (TableEntity item in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(itemFilter))
+            itemVersions.Add(item.RowKey + ":" + item.ETag);
+
+        string functionKey = await ReadExistingTestFunctionKey();
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/debug/{biller}/invoices/{id}");
+        request.Headers.Add("x-functions-key", functionKey);
+        using HttpResponseMessage response = await http.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.IsTrue(response.Headers.CacheControl?.NoStore == true, "Debug HTML must not be cached.");
+        string html = await response.Content.ReadAsStringAsync();
+        Assert.IsTrue(html.Contains("Synthetic CI customer", StringComparison.Ordinal));
+        Assert.IsTrue(html.Contains(itemSubject, StringComparison.Ordinal));
+        Assert.IsTrue(html.Contains("&lt;script&gt;literal&lt;/script&gt;", StringComparison.Ordinal), "Debug rendering must preserve HTML encoding.");
+        Assert.IsTrue(linkToken == null || !html.Contains(linkToken, StringComparison.Ordinal), "Debug HTML must not disclose the saved link token.");
+        TableEntity after = await Read(id);
+        Assert.AreEqual(before.ETag, after.ETag);
+        Assert.AreEqual(frozen ? "frozen-v1" : "ready-v1", after.GetString(nameof(Invoice.IssuanceState)));
+        Assert.IsTrue(after.GetString(nameof(Invoice.Token)) == linkToken, "Debug viewing must not create or rotate a token.");
+        Assert.IsFalse(after.ContainsKey(nameof(Invoice.Delivered)));
+        List<string> itemsAfter = [];
+        await foreach (TableEntity item in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(itemFilter))
+            itemsAfter.Add(item.RowKey + ":" + item.ETag);
+        CollectionAssert.AreEquivalent(itemVersions, itemsAfter);
+
+        // A Functions key must not turn the separate public route into another tokenless debug path.
+        using HttpRequestMessage publicMissing = new(HttpMethod.Get, $"/{biller}/invoices/{id}");
+        publicMissing.Headers.Add("x-functions-key", functionKey);
+        using HttpResponseMessage missing = await http.SendAsync(publicMissing);
+        Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+        using HttpResponseMessage wrong = await http.GetAsync($"/{biller}/invoices/{id}?token=wrong-test-token");
+        Assert.AreEqual(HttpStatusCode.Forbidden, wrong.StatusCode);
+        if (frozen)
+        {
+            using HttpResponseMessage valid = await http.GetAsync($"/{biller}/invoices/{id}?token={linkToken}");
+            Assert.AreEqual(HttpStatusCode.OK, valid.StatusCode);
+            Assert.IsTrue(await valid.Content.ReadAsStringAsync() == html, "Debug and public viewing must share rendering.");
+        }
+        invoice.InvoiceItems[0].Quantity = 2;
+        using HttpResponseMessage edit = await Post(invoice, Token(biller, tenant));
+        Assert.AreEqual(frozen ? HttpStatusCode.Conflict : HttpStatusCode.OK, edit.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Function_key_debug_view_returns_404_for_a_missing_invoice()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/debug/{Guid.NewGuid()}/invoices/{Invoice.ParseID(DateTimeOffset.UtcNow)}");
+        request.Headers.Add("x-functions-key", await ReadExistingTestFunctionKey());
+        using HttpResponseMessage response = await http.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.IsTrue(response.Headers.CacheControl?.NoStore == true);
+    }
+
     private static async Task<string> ReadExistingTestFunctionKey()
     {
         Assert.AreEqual("test", Required("TEST_ENVIRONMENT"));

@@ -345,3 +345,34 @@ Local validation on this implementation:
 The policy/tooling commands `node --test scripts/delivery-policy.test.cjs` and `python -m unittest discover -s scripts -p 'test_*.py'` also passed all 20 and 13 cases on the restoration worktree.
 
 The generated Functions metadata contains `EmailInvoice` at `email/{issuer}/invoices/{invoice}`, GET, `authLevel: Function`. This and local tests are not live-host authorization evidence: candidate/trusted deployment tests and automatic review remain required for the pushed restoration head.
+
+
+## Read-only debug invoice view (Q27)
+
+Baseline: current `origin/main` at `788313e5c51f1d41dd96d54fe5806d37a6142d00`, tree `ebafa2e974cf8334db0ca3a7b6d32942a2abce76`, verified in the Niobium.Invoicing cloud environment. The baseline solution build had zero warnings/errors and all 121 unit tests passed during the preceding token-lifecycle investigation. Work is isolated on `codex/debug-invoice-view`; completed PR #8/#9 worktrees are preserved.
+
+The owner retained the saved-token/freeze rule and requested privileged debug viewing instead of creating tokens during invoice upsert. `DebugInvoice` adds `GET /debug/{issuer}/invoices/{invoice}` with Functions key authorization. An explicit debug flow shares the encoded invoice/line renderer, avoiding optional authentication-bypass flags on the public endpoint. Responses use `Cache-Control: no-store`. No Contracts, package versions, workflow definitions, infrastructure or production read-only client changes are included.
+
+| Acceptance item | Implementation and local evidence | Live delivery requirement |
+| --- | --- | --- |
+| Function-key authorization | Binding test plus generated Functions metadata require named DebugInvoice, GET and authLevel Function. Six added deployed cases cover missing/invalid keys, bearer-only denial, draft/frozen views and missing invoice. | Real candidate test deployment and authorization checks, plus unchanged trusted-main suite. |
+| View saved data without side effects | Shared renderer covers encoded text/lines, no token disclosure, no save/token/freeze/enqueue; actual Table adapter test verifies unchanged invoice/item ETags, no broker calls and subsequent draft edit. | Candidate suite checks unchanged real invoice/item ETags and draft/frozen editing rules. |
+| Preserve public access policy and legacy links | Unit/component checks retain saved-token authorization. Candidate cases require missing/wrong-token rejection even when a Functions key is present, and identical HTML for a valid frozen link. | Existing trusted tests and all five read-only checks must pass against the feature SHA. |
+| Deliver through normal review | Author creates PR after terminal feature CI, requests 5he11 and handles native/human feedback. | One current-head approval, expected-head squash merge, production GET-only report and package workflow; no independent production gate. |
+
+Local verification after `source /workspace/.niobium-tools/env.sh`:
+
+```sh
+dotnet restore Niobium.Invoicing.slnx --nologo
+dotnet restore src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --nologo
+dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo --disable-build-servers -m:1
+dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo --disable-build-servers -m:1
+dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/debug-invoice-coverage/unit
+NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18482/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/debug-invoice-coverage/integration
+python scripts/check-coverage.py /workspace/scratch/debug-invoice-coverage/unit/coverage.cobertura.xml /workspace/scratch/debug-invoice-coverage/integration/coverage.cobertura.xml
+node --test scripts/delivery-policy.test.cjs
+python -m unittest discover -s scripts -p 'test_*.py'
+git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check
+```
+
+Both final Release builds passed with zero warnings/errors. All 123 unit, 34 opted-in local integration, 20 Node policy and 13 Python tooling cases passed; no local test was skipped. Disposable Table-only Azurite ran on port 18482 and was stopped afterward. Combined authored line coverage passed at 91.82% (Contracts 100.00%, Core 90.92%, Server 87.88%). An initial test fixture omitted a required configuration initializer and an HTTP assertion expected an added charset; both test-only errors were corrected before these final results. Deployed authorization is not established by local metadata or these tests: terminal candidate/trusted CI, native reviews, formal approval and production evidence will be recorded on the author-created PR for the exact head/merge.

@@ -50,6 +50,7 @@
 - `SaveAsync(force: true)` follows framework upsert behavior, not an ETag-checked update. Do not infer atomicity across invoice/items/notification.
 - `AuthorizationLevel.Anonymous` does not remove middleware or handler checks. Inspect effective routes and application checks.
 - Q26 restores the owner's manual debug email function as `EmailInvoice`, `GET /email/{issuer}/invoices/{invoice}`, guarded by a Functions key. Reuse EmailFlow and preserve saved tokens. This GET sends notifications and must never enter the read-only production test allowlist.
+- Q27 adds read-only `DebugInvoice`, `GET /debug/{issuer}/invoices/{invoice}`, guarded by a Functions key. It may render tokenless drafts through the shared encoded renderer but must never generate tokens, save, freeze, or notify. Public token validation stays mandatory. Keep keys in headers and debug responses non-cacheable; production tests retain their existing allowlist.
 - `required` members and `TryValidate` do not establish complete business validation.
 
 ## Safe validation

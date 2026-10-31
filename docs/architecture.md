@@ -79,6 +79,8 @@ Failure boundaries matter: profile lookup may fail before writes; invoice save c
 
 `HTMLFlow.RunAsync` retrieves an invoice domain, requires a matching saved link token, renders encoded invoice parameters, enumerates item domains, renders each encoded line and replaces the marked line block in the embedded template. `HtmlTemplate` performs single-pass substitution; URL attributes are prepared separately. Formatting uses stored invoice culture/timezone and selected currency formatters. Rendering has no storage write. Saved `Template` does not select the HTML resource.
 
+`DebugInvoice` (Q27) calls the explicit `HTMLFlow.RunForDebugAsync` entry point behind host Functions-key authorization. It shares the public renderer and line assembly but does not run public link-token authorization. This read-only diagnostic path never creates a token, freezes or sends; the public flow keeps saved-token validation. Invoice/items remain separate reads, so this is not a transactional snapshot.
+
 `EmailFlow.RunAsync` reads persisted data and returns early for a blank recipient email. `InvoiceDomain.FreezeAsync` verifies items and persists content freeze, token and endpoint before enqueue. The flow builds unencoded invoice/line parameters and `NotifyCommand`, enqueues, then calls `OnDeliveredAsync`. Existing emailed links retain their token on resend (Q17). Provider delivery is outside this application. `Delivered` is an observed enqueue-related timestamp, despite its name.
 
 There is no lifecycle enum or persistent Delivering/Cancelled state. Intended transitions (Q04/Q10) are editable invoice -> queued/Delivering with content frozen -> confirmed Delivered. Cancellation before any payment is planned. These transitions depend on downstream changes and are deferred.

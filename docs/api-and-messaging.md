@@ -2,13 +2,14 @@
 
 ## Effective HTTP surface
 
-The test-deployment suite now verifies invoice issuance, saved-token HTML, health identity and the manual email function's key boundary through the real Functions host. Token/resource-grant endpoints remain outside that deployed suite; see [integration evidence](integration-tests.md). [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
+The test-deployment suite now verifies invoice issuance, saved-token HTML, health identity and the manual email/debug-view key boundaries through the real Functions host. Token/resource-grant endpoints remain outside that deployed suite; see [integration evidence](integration-tests.md). [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
 
 | Method / path | Handler and input | Controls | Success / side effects |
 | --- | --- | --- | --- |
 | `POST /invoices` | [NewInvoice.Run](../src/Niobium.Invoicing.Server/NewInvoice.cs); JSON `IssueInvoiceRequest` | Access-token principal needs GUID Sid/GroupSid matching BillerID/Tenant; validation helper; decoded invoice age check | `OkResult` (200), no response invoice body. Persists invoice/items; forces NotifyBillee=false. |
 | `GET /{issuer}/invoices/{invoice}?token=...` | [GetHTMLInvoice.Run](../src/Niobium.Invoicing.Server/GetHtmlInvoice.cs) | Anonymous; rejects blank token, nonpositive ID or empty issuer with 404; domain requires a matching saved link token | 200 `text/html`; reads invoice/items, no write. No billee account required. |
 | `GET /email/{issuer}/invoices/{invoice}` | [EmailInvoice.Run](../src/Niobium.Invoicing.Server/EmailInvoice.cs); no body | Functions host requires a valid function key; no application biller/JWT check | Empty 201 after EmailFlow completes, including its missing-recipient skip. May freeze/save the invoice, enqueue notification and persist Delivered. |
+| `GET /debug/{issuer}/invoices/{invoice}` | [DebugInvoice.Run](../src/Niobium.Invoicing.Server/DebugInvoice.cs); no body or link token | Functions host requires a valid function key; no application biller/JWT check | 200 `text/html` with `Cache-Control: no-store`; reads saved invoice/items without creating a token, freezing, saving or notifying. |
 | `GET /health` | [DeploymentInfo.Run](../src/Niobium.Invoicing.Server/DeploymentInfo.cs) | Anonymous, no credentials or runtime settings returned | 200 JSON `status` and build `commit`; deployed tests require the exact pushed SHA. Not a dependency health probe. |
 | `GET /token` | [Placeholder.Auth](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by AccessTokenMiddleware | ID-token verification and Sid/GroupSid; roles/entitlements lookup | 200 with access token in Authorization response header; fallback placeholder returns empty 200. |
 | `GET /rsas` | [Placeholder.RSAS](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by ResourceTokenMiddleware | Access principal, requested resource entitlement/control | 200 JSON StorageSignature; fallback placeholder returns empty 200. |
@@ -68,6 +69,14 @@ Q26 restores the historical `EmailInvoice` function, which the owner referred to
 The handler delegates to the current `EmailFlow`: load the saved invoice/items, skip a blank recipient, preserve or create the saved link token, freeze verified content, enqueue to the existing Notification service, then save the enqueue acknowledgement. It returns an empty 201 only after that flow completes; exceptions and cancellation propagate. A 201 also covers the historical missing-recipient skip and does not prove recipient delivery. Repeat calls may enqueue again under Q11; they do not rotate an existing saved token. A function key is privileged operational access and is not scoped to a biller's JWT claims.
 
 This historical GET has side effects. Invoke it deliberately for authorized debugging; never use it as a health check, preview link or read-only production integration target. The restoration introduces no new key, Azure resource, package version or alternate sending implementation.
+
+## Read-only debug invoice view
+
+Q27 adds `DebugInvoice`, `GET /debug/<BILLER_GUID>/invoices/<INVOICE_ID>`, with the existing Functions authorization model. Supply a valid key for this function (or an existing host key) in `x-functions-key`; no `/api` prefix, body, bearer token or invoice-link token is required. Use the reverse-timestamp invoice ID. A bearer token alone does not grant access. Keys are privileged operational credentials across billers, not customer-facing links; keep them out of URLs and logs.
+
+The endpoint renders saved draft or frozen invoice data using the same HTML encoding and template as public viewing. It returns 200 `text/html` with `Cache-Control: no-store`. Empty biller/nonpositive ID and missing invoices return 404; other domain/rendering errors propagate through the existing middleware. It never generates or exposes a saved link token, freezes an invoice, changes storage, or sends a notification. A draft remains editable after debug viewing.
+
+The public `GET /{issuer}/invoices/{invoice}` still requires its matching saved token, even if a Functions key is supplied. Tokenless public viewing remains denied. Separate invoice/item reads are a diagnostic view of persisted data, not a transaction or a finalized snapshot; an in-progress update may be observed. Production verification keeps its existing GET-only health/designated-invoice allowlist and does not call this privileged debug route.
 
 ## Resource-token and direct-table contract
 
