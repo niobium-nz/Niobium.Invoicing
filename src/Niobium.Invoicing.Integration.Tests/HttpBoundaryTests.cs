@@ -111,12 +111,19 @@ public sealed class HttpBoundaryTests
     }
 
     [TestMethod]
-    public void Compiled_server_has_no_debug_email_function_or_route()
+    public void Manual_email_function_preserves_its_route_and_requires_a_Functions_key()
     {
-        MethodInfo[] methods = typeof(NewInvoice).Assembly.GetTypes().SelectMany(t => t.GetMethods()).ToArray();
-        Assert.IsFalse(methods.Any(m => m.GetCustomAttribute<FunctionAttribute>()?.Name == "EmailInvoice"));
-        Assert.IsFalse(methods.SelectMany(m => m.GetParameters())
-            .Select(p => p.GetCustomAttribute<HttpTriggerAttribute>()).Any(a => a?.Route?.StartsWith("email/", StringComparison.Ordinal) == true));
+        MethodInfo method = typeof(EmailInvoice).GetMethod(nameof(EmailInvoice.Run))!;
+        Assert.AreEqual("EmailInvoice", method.GetCustomAttribute<FunctionAttribute>()?.Name);
+        HttpTriggerAttribute trigger = method.GetParameters()[0].GetCustomAttribute<HttpTriggerAttribute>()!;
+        Assert.IsNotNull(trigger);
+        Assert.AreEqual(AuthorizationLevel.Function, trigger.AuthLevel);
+        Assert.AreEqual("email/{issuer}/invoices/{invoice}", trigger.Route);
+        CollectionAssert.AreEqual(new[] { "get" }, trigger.Methods);
+        int emailRoutes = typeof(EmailInvoice).Assembly.GetTypes().SelectMany(t => t.GetMethods())
+            .SelectMany(m => m.GetParameters()).Select(p => p.GetCustomAttribute<HttpTriggerAttribute>())
+            .Count(a => a?.Route?.StartsWith("email/", StringComparison.Ordinal) == true);
+        Assert.AreEqual(1, emailRoutes, "No additional email route may bypass the key-protected trigger.");
     }
 
     private static IssueInvoiceRequest Request() => new()

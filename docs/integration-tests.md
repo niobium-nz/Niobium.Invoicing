@@ -6,8 +6,9 @@ All data, identities, signing keys and destinations are synthetic.
 
 `HttpBoundaryTests` parses signed tokens with the installed Niobium PrincipalParser,
 executes NewInvoice results through ASP.NET, tests claim mismatches and invalid
-invoice dates, confirms HTTP notifications are disabled, and inspects the compiled
-server for the removed debug function. These are component integration tests;
+invoice dates, confirms issuance notifications are disabled, and inspects the compiled
+manual email route for Function-level key authorization. `EmailInvoiceTests`
+checks flow completion, empty 201 responses, propagated failures and cancellation. These are component integration tests;
 they do not run the Functions HTTP host or its middleware pipeline.
 
 `StorageFlowTests` opts in through `NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT`. Only an
@@ -60,9 +61,9 @@ The suite uses the **existing environment's real services and configuration**. I
 dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
 ```
 
-Twelve cases cover four HTTP authentication/ownership rejection cases; successful issuance with persistence, validation, exact replay and saved-token HTML; ingestion and update through the real incoming queue; enqueue through the real Notification service to the approved mailbox; safe fixture-ID collision rejection; reference retention after successful issuance and cleanup after rejected issuance; and rejection of debug email requests with missing or invalid function keys. The health response must first identify the exact feature commit. Notification tests leave the downstream queue to its real consumer; they do not receive/complete unrelated messages or assert provider delivery from an enqueue acknowledgement.
+Fifteen cases cover four HTTP authentication/ownership rejection cases; successful issuance with persistence, validation, exact replay and saved-token HTML; ingestion and update through the real incoming queue; enqueue through the real Notification service to the approved mailbox; safe fixture-ID collision rejection; reference retention after successful issuance and cleanup after rejected issuance; and manual email behavior: missing/invalid keys and bearer-only calls rejected, valid-key notification enqueue, and a valid-key missing-recipient skip. The health response must first identify the exact feature commit. Notification tests leave the downstream queue to its real consumer; they do not receive/complete unrelated messages or assert provider delivery from an enqueue acknowledgement.
 
-Q26 authorizes restoring the historical key-guarded debug endpoint. Its preparatory deployed test accepts either 404 (route still absent) or 401 (Functions rejects the key), using an existing ready invoice with a blank recipient and checking an unchanged ETag. This allows the reviewed main harness to validate the later restoration without weakening branch protection. It does not prove that the endpoint exists or that a valid key works. The restoration step must add strict candidate presence/key and real notification tests. Production's GET allowlist remains limited to health and invoice viewing; the manual email route is never part of read-only production tests.
+Q26 restores the historical key-guarded debug endpoint. The separately reviewed preparatory harness permits 404 or 401 so the absent route can transition to host authorization without changing protection settings. The restoration candidate strictly requires 401 for missing/invalid keys and bearer-only requests to an existing ready invoice, an unchanged invoice ETag on rejection, and 201 for valid-key calls. It uses the workflow's existing Azure CLI identity to read the test app's default host function key after matching its ARM hostname to the verified test endpoint. It does not create/rotate keys or use a master key. Credentials and CLI output are captured without logging; requests carry the key only in a header. The authorized-send case uses the approved mailbox and checks freeze, token, enqueue acknowledgement and public HTML; the empty-recipient case checks the historical skip without a write. Production's GET allowlist remains limited to health and invoice viewing; the manual email route is never part of read-only production tests.
 
 Cleanup tracks an invoice only after its creation succeeds, checks its run-specific customer identity before deletion, and uses its current ETag. A rejected or uncertain creation never schedules an existing row for deletion. The collision case verifies HTTP 409 from real Table storage, an unchanged invoice ETag and no additional cleanup claim.
 

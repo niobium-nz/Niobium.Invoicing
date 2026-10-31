@@ -264,9 +264,10 @@ public sealed class DeployedInvoiceTests
     }
 
     [TestMethod]
-    [DataRow(null)]
-    [DataRow("invalid-test-function-key")]
-    public async Task Debug_email_route_rejects_requests_without_a_valid_function_key(string? functionKey)
+    [DataRow(null, false)]
+    [DataRow("invalid-test-function-key", false)]
+    [DataRow(null, true)]
+    public async Task Debug_email_route_rejects_requests_without_a_valid_function_key(string? functionKey, bool bearer)
     {
         // An existing, ready invoice distinguishes route absence from a missing-invoice result.
         // A blank recipient also prevents a notification if the authorization assertion regresses.
@@ -277,12 +278,115 @@ public sealed class DeployedInvoiceTests
         using HttpRequestMessage request = new(HttpMethod.Get, $"/email/{biller}/invoices/{id}");
         if (functionKey != null)
             request.Headers.Add("x-functions-key", functionKey);
+        if (bearer)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token(biller, tenant));
         using HttpResponseMessage response = await http.SendAsync(request);
-        // Q26 permits a key-guarded endpoint. Keep this reviewed contract compatible with its
-        // absent predecessor so restoration can pass the immutable main harness without bypasses.
-        Assert.IsTrue(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized,
-            $"Expected an absent route or Functions key denial, received {(int)response.StatusCode}.");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.AreEqual(before.ETag, (await Read(id)).ETag, "A rejected request must not change the invoice.");
+    }
+
+    [TestMethod]
+    public async Task Function_key_authorizes_manual_email_through_the_real_test_notification_service()
+    {
+        string recipient = Required("TEST_NOTIFICATION_RECIPIENT");
+        Assert.IsTrue(System.Net.Mail.MailAddress.TryCreate(recipient, out _), "A valid approved test mailbox is required.");
+        TableEntity reference = await Read(referenceInvoice, referenceBiller);
+        Guid group = reference.GetGuid(nameof(Invoice.Tenant)) ?? throw new InvalidOperationException("The existing test invoice has no tenant.");
+        long id = await SeedInvoice(referenceBiller, group, recipient);
+        IssueInvoiceRequest invoice = Request(id);
+        invoice.BillerID = referenceBiller;
+        invoice.Tenant = group;
+        using HttpResponseMessage issued = await Post(invoice, Token(referenceBiller, group));
+        Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
+        TableEntity before = await Read(id, referenceBiller);
+        Assert.AreEqual("ready-v1", before.GetString(nameof(Invoice.IssuanceState)));
+        Assert.IsFalse(before.ContainsKey(nameof(Invoice.Delivered)));
+        Assert.IsFalse(before.ContainsKey(nameof(Invoice.Token)));
+
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/email/{referenceBiller}/invoices/{id}");
+        request.Headers.Add("x-functions-key", await ReadExistingTestFunctionKey());
+        using HttpResponseMessage response = await http.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
+        Assert.AreEqual(0, (await response.Content.ReadAsByteArrayAsync()).Length);
+
+        TableEntity saved = await Read(id, referenceBiller);
+        Assert.AreEqual("frozen-v1", saved.GetString(nameof(Invoice.IssuanceState)));
+        Assert.IsTrue(saved.ContainsKey(nameof(Invoice.Delivered)), "Manual sending must persist its enqueue acknowledgement.");
+        Assert.IsTrue(saved.GetString(nameof(Invoice.RecipientEmail)) == recipient, "Only the approved test mailbox may receive this notification.");
+        string? token = saved.GetString(nameof(Invoice.Token));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(token));
+        using HttpResponseMessage html = await http.GetAsync($"/{referenceBiller}/invoices/{id}?token={token}");
+        Assert.AreEqual(HttpStatusCode.OK, html.StatusCode);
+        // This is an enqueue acknowledgement, not proof of downstream provider delivery.
+    }
+
+    [TestMethod]
+    public async Task Function_key_manual_email_preserves_the_missing_recipient_skip()
+    {
+        long id = await SeedInvoice(recipient: string.Empty);
+        using HttpResponseMessage issued = await Post(Request(id), Token(biller, tenant));
+        Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
+        TableEntity before = await Read(id);
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/email/{biller}/invoices/{id}");
+        request.Headers.Add("x-functions-key", await ReadExistingTestFunctionKey());
+        using HttpResponseMessage response = await http.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
+        TableEntity saved = await Read(id);
+        Assert.AreEqual(before.ETag, saved.ETag);
+        Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Delivered)));
+        Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Token)));
+    }
+
+    private static async Task<string> ReadExistingTestFunctionKey()
+    {
+        Assert.AreEqual("test", Required("TEST_ENVIRONMENT"));
+        Assert.AreEqual("test", Required("AZURE_ENV_NAME"));
+        Uri endpoint = http.BaseAddress!;
+        string app = endpoint.Host.Split('.')[0];
+        Assert.IsTrue(app.EndsWith("test", StringComparison.Ordinal) && endpoint.Scheme == "https"
+            && endpoint.Host.EndsWith(".azurewebsites.net", StringComparison.Ordinal), "Only the existing test Functions app is allowed.");
+        string group = Required("AZURE_RESOURCE_GROUP");
+        string hostname = await ReadAzureValue("resource", "show", "--resource-group", group, "--name", app,
+            "--resource-type", "Microsoft.Web/sites", "--api-version", "2024-11-01", "--query", "properties.defaultHostName");
+        Assert.IsTrue(string.Equals(endpoint.Host, hostname, StringComparison.OrdinalIgnoreCase), "The test app must match the verified deployment host.");
+        // Read its existing default host function key through the workflow's Azure identity.
+        // Do not use a master key, create/rotate keys or print credentials in assertions/logs.
+        string key = await ReadAzureValue("functionapp", "keys", "list", "--resource-group", group, "--name", app,
+            "--query", "functionKeys.default");
+        Assert.IsTrue(!string.IsNullOrWhiteSpace(key) && !key.Any(char.IsWhiteSpace), "An existing test function key is required.");
+        return key;
+    }
+
+    private static async Task<string> ReadAzureValue(params string[] arguments)
+    {
+        ProcessStartInfo start = new("az")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (string argument in arguments)
+            start.ArgumentList.Add(argument);
+        foreach (string argument in new[] { "--only-show-errors", "--output", "tsv" })
+            start.ArgumentList.Add(argument);
+        using Process process = Process.Start(start) ?? throw new InvalidOperationException("Azure CLI could not start.");
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
+        Task<string> output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        Task<string> error = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            string value = await output;
+            _ = await error; // Never include CLI responses, which can contain keys, in test output.
+            Assert.AreEqual(0, process.ExitCode, "Unable to read the existing test app through the workflow Azure identity.");
+            return value.Trim();
+        }
+        catch
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+            throw;
+        }
     }
 
     private static async Task VerifyReadOnlyClient(long id, string token)
