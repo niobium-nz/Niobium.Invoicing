@@ -253,3 +253,36 @@ Run [41147127986](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/4
 | 4429546450 / B04, B07 | Add a fresh trusted test runner that checks out immutable main, including all harness/project/build/helper inputs, and never feature code/artifacts. | Policy cases reject missing/skipped trusted tests, candidate-only success and a different main SHA. Initial main lacks the harness; that step is explicitly skipped and cannot certify itself. Reviewed administrative activation remains required. |
 
 Local policy validation: `node --test scripts/delivery-policy.test.cjs` passes all 20 cases and `python -m unittest discover -s scripts -p 'test_*.py'` passes all 13 cases. The two workflows using `queue: max` each report actionlint 1.7.12's unsupported-property error; their other syntax is checked with temporary projections omitting only that property. The latest push must receive its own complete feature CI result; the previous green run above does not validate these changes. No package or framework upgrade is included. Package publication and trusted-main deployed execution cannot be claimed from local tests or the initial-installation candidate run.
+
+### PR #6 completion
+
+The final feature run [41149938107](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41149938107) passed for `bbce7f103275a24255adae2153aec8426fa8aa3e`: 121 unit, 23 local integration, 20 Node, 13 Python and 11 candidate deployed cases; five read-only checks against test; 91.51% authored line coverage. Both builds had zero warnings/errors. The trusted-main harness was absent before installation, so its skipped step is not a passing trusted-suite result.
+
+After the owner's explicit temporary protection change, current-head approval and resolution of all eleven review threads, PR #6 was squash-merged as `18323085062ad49abb62f85c6529e0b857037c9d`. The merge and tested feature trees were identical at `21317ba8cab2727d6795f2f07f18238eaaafe002`. Production run [41157164240](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41157164240) passed deployment and all five read-only checks for that merge. Package run [41157164182](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41157164182) succeeded with publication correctly skipped because Contracts did not change. The owner restored the normal `Test deployment verified` protection; required test deployment, one approval, stale-review dismissal, resolved threads, current main, squash-only merges and no bypass actors were verified. Signed commits remain intentionally disabled by owner decision. PR #6 monitoring is complete.
+
+## Author-created PRs (B04 / Q25, 2026-10-31, Pacific/Auckland)
+
+Baseline: latest `origin/main` at task start, `18323085062ad49abb62f85c6529e0b857037c9d`. Branch: `codex/author-managed-prs`, in the existing Niobium.Invoicing cloud workspace. The worktree was clean before this follow-up. Q25 supersedes historical workflow-created PR instructions above; it does not change deployment, review or production verification requirements.
+
+| Acceptance item | Implementation and evidence | Remaining evidence |
+| --- | --- | --- |
+| Workflows must not create PRs | Remove `openPullRequest` and its caller from the trusted controller; remove its `pull-requests: write` permission. Regression cases require successful exact-SHA readiness with zero PR creation, including when no PR API is available. | Activate the reviewed change on main through the normal PR process. |
+| Authors create PRs after verification | `AGENTS.md`, delivery/integration guides and Q25 assign creation to the human or Codex branch author after exact-head build, test deployment and both deployed suites succeed. | New feature CI and an author-created PR. |
+| Request review and finish delivery | Project memory requires requesting `niobium-nz`, verifying the request, handling automatic Codex and human comments, current-head approval, expected-head merge and terminal production verification. | Authorized author identity, recorded reviewer request, review and resulting production evidence. |
+| Preserve protection and package compatibility | Pipeline authentication, candidate/trusted integration, coverage thresholds, approval logic and production read-only boundaries are unchanged. Niobium 4.0.60/4.0.61 and Notification.Contracts 2.0.7 remain unchanged. | Verify live checks and rules again before merge. |
+
+Local checks from the repository root, with the existing SDK environment loaded:
+
+| Exact command | Result |
+| --- | --- |
+| `node --test scripts/delivery-policy.test.cjs` | 20 passed. |
+| `python -m unittest discover -s scripts -p 'test_*.py'` | 13 passed. |
+| `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo` | Passed, zero warnings/errors. |
+| `dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo --disable-build-servers -m:1` | Passed, zero warnings/errors. |
+| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore` | 121 passed, zero failed/skipped. |
+| `actionlint .github/workflows/pr-readiness.yml` | Passed with actionlint 1.7.12. |
+| `git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check` | Passed. |
+
+An initial overlapping build of the two projects failed in the shared WorkerExtensions output; the next default build reported prematurely exited MSBuild child nodes. A sequential deployed-project build with build-server reuse disabled and one node passed. These local execution failures did not require source changes. Local build/test logs are under `/workspace/scratch/author-managed-*`; they are not live CI evidence.
+
+Transition dependencies are explicit: the old controller on main still creates PRs until this change merges. The owner has been asked to disable Actions PR creation before the feature push; after successful test deployment, an author-created PR allows the old controller to reuse it on rerun. The current GitHub connection acts as `niobium-nz`, which GitHub cannot request as reviewer of its own PR. An authorized different author connection or an explicit reviewer exception is needed. No ruleset weakening or synthetic status is part of this transition. This follow-up has not yet been pushed, so no new CI/CD, deployed-suite or production success is claimed.

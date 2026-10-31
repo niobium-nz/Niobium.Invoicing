@@ -20,15 +20,15 @@ function fixture() {
       { name: 'Deploy test and run integration', conclusion: 'success', steps: [{ name: 'Run deployed integration tests', conclusion: 'success' }] },
       { name: 'Verify trusted deployed integration', conclusion: 'success',
         steps: [{ name: `Run trusted deployed integration tests at ${trustedSha}`, conclusion: 'success' }] }],
-    comparison: { status: 'ahead', commits: [{ commit: { message: 'Change' } }] },
-    head: 'head', openPulls: [], created: [], statuses: [], notices: [], contentReads: [], tamperedPath: null, missingTrustedPath: null,
+    comparison: { status: 'ahead' },
+    created: [], statuses: [], notices: [], contentReads: [], tamperedPath: null, missingTrustedPath: null,
   };
   const github = {
     paginate: async (method, args) => { if (method === 'runs') assert.equal(args.head_sha, 'head'); return state[method]; },
     rest: {
       actions: { listWorkflowRuns: 'runs', listJobsForWorkflowRun: 'jobs' },
-      pulls: { get: async () => ({ data: state.pr }), listReviews: 'reviews', list: 'openPulls',
-        create: async args => { state.created.push(args); return { data: { ...state.pr, html_url: 'https://github.com/owner/repo/pull/7' } }; } },
+      pulls: { get: async () => ({ data: state.pr }), listReviews: 'reviews',
+        create: async args => { state.created.push(args); throw new Error('Readiness must never create a PR.'); } },
       repos: {
         getBranch: async () => ({ data: { commit: { sha: trustedSha } } }),
         getContent: async args => {
@@ -39,7 +39,6 @@ function fixture() {
         },
         compareCommits: async () => ({ data: state.comparison }), createCommitStatus: async status => state.statuses.push(status),
       },
-      git: { getRef: async () => ({ data: { object: { sha: state.head } } }) },
     },
   };
   return { state, github, pullNumber: 7, trustedSha,
@@ -186,18 +185,20 @@ test('pre-merge validation rejects closed, draft, foreign, and wrong-base PRs', 
   }
 });
 
-test('the trusted controller creates a ready PR after authenticated test success', async () => {
+test('successful workflow completion publishes verification without creating a PR', async () => {
   const input = fixture(); await readiness(input);
-  assert.equal(input.state.created.length, 1);
-  assert.equal(input.state.created[0].base, 'main'); assert.equal(input.state.created[0].head, 'feature/test');
-  assert.equal(input.state.created[0].draft, false); assert.match(input.state.created[0].body, /actions\/runs\/42/);
+  assert.equal(input.state.created.length, 0);
+  assert.equal(input.state.statuses.length, 1);
+  assert.equal(input.state.statuses[0].state, 'success');
+  assert.equal(input.state.statuses[0].target_url, run.html_url);
   assert.equal(input.state.statuses[0].sha, 'head'); assert.equal(input.state.statuses[0].context, 'Test deployment verified');
 });
 
-test('automatic creation reuses existing PRs and ignores superseded or merged heads', async () => {
-  for (const mutate of [s => { s.openPulls = [s.pr]; }, s => { s.head = 'new'; }, s => { s.comparison.status = 'identical'; }, s => { s.comparison.status = 'behind'; }]) {
-    const input = fixture(); mutate(input.state); await readiness(input); assert.equal(input.state.created.length, 0);
-  }
+test('workflow verification works with no pull-request or branch-management API access', async () => {
+  const input = fixture(); delete input.github.rest.pulls;
+  await readiness(input);
+  assert.equal(input.state.statuses[0].state, 'success');
+  assert.equal(input.state.created.length, 0);
 });
 
 test('PR events update readiness without opening another PR', async () => {

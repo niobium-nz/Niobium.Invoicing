@@ -1,4 +1,4 @@
-// Privileged entry point: only the controller loaded from the default branch may publish status/PRs.
+// Privileged entry point: only the controller loaded from the default branch may publish readiness status.
 const WORKFLOW = 'azure-deploy.yml';
 const WORKFLOW_PATH = `.github/workflows/${WORKFLOW}`;
 const PIPELINE_FILES = [WORKFLOW_PATH, 'azure.yaml', 'scripts/check-coverage.py', 'scripts/test-resources.py'];
@@ -78,26 +78,6 @@ async function mergeEligibility({ github, context, pullNumber }) {
   return { pr, run };
 }
 
-// Private: the only caller has already authenticated the completed run against trusted pipeline blobs.
-async function openPullRequest({ github, context, core, run }) {
-  const { owner, repo } = context.repo;
-  const branch = run.head_branch;
-  const { data: current } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
-  if (current.object.sha !== run.head_sha) { core.notice('A newer feature commit is being tested; leave PR creation to that run.'); return; }
-  const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', base: 'main', head: `${owner}:${branch}`, per_page: 100 });
-  const existing = pulls.find(pr => pr.head.repo?.full_name === `${owner}/${repo}` && pr.head.ref === branch);
-  if (existing) { core.notice(`Continue review on ${existing.html_url}`); return existing; }
-  const { data: comparison } = await github.rest.repos.compareCommits({ owner, repo, base: 'main', head: run.head_sha });
-  if (comparison.status === 'identical' || comparison.status === 'behind') { core.notice('No feature changes remain to review.'); return; }
-  const title = (comparison.commits.at(-1)?.commit.message.split('\n')[0] || `Tested changes from ${branch}`).slice(0, 200);
-  const body = `This feature commit passed the authenticated build, coverage, test deployment and deployed integration jobs.\n\n` +
-    `Commit: \`${run.head_sha}\`\n\nVerification: ${run.html_url}\n\n` +
-    `Review the current head before merging. Address actionable review comments, retest changes, merge only after approval, and monitor production deployment and read-only tests afterward.\n`;
-  const { data: pr } = await github.rest.pulls.create({ owner, repo, base: 'main', head: branch, title, body, draft: false });
-  core.notice(`Ready for review: ${pr.html_url}`);
-  return pr;
-}
-
 async function readiness({ github, context, core, trustedSha, workflowRef }) {
   const { owner, repo } = context.repo;
   const mainRef = 'refs/heads/main';
@@ -123,7 +103,6 @@ async function readiness({ github, context, core, trustedSha, workflowRef }) {
   await github.rest.repos.createCommitStatus({ owner, repo, sha, state: 'success', context: 'Test deployment verified',
     description: 'This commit passed the authenticated deployed integration workflow.', target_url: run.html_url });
   core.notice(`Feature commit is eligible for review: ${run.html_url}`);
-  if (eventRun) await openPullRequest({ github, context, core, run });
 }
 
 module.exports = { mergeEligibility, readiness, testedRun, eligibleRun, approvedHead, authenticatePipeline, PIPELINE_FILES };
