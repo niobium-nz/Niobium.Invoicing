@@ -123,7 +123,7 @@ in-memory Azurite process is stopped after verification.
 | Item | Specific work or decision still required |
 | --- | --- |
 | B02 | Implement the concurrency-safe inbox in Niobium.Notification, with provider acceptance/timeout/crash recovery rules and tests. That repository is outside the target scope. Repeated publication remains intentional. |
-| B07 / final B04 | Supply a reviewed isolated Azure test stack and controlled queue sink; authorize its deployment/verification in a separate task. Add real Functions middleware/binding, Service Bus ingestion/emission and post-deployment checks before claiming production promotion is fully gated. The present task forbids deployment. |
+| B07 / final B04 | The follow-up below authorizes and implements test deployment/host/queue verification and reviewed promotion. Confirm its exact pushed CI result; direct-resource entitlement and external-service/recovery integration remain outside this suite. |
 | B06 / U05 | Approve confirmation event identity, authentication, provider outcome mapping, duplicate/out-of-order rules, cancellation while Delivering, and legacy delivery-state interpretation. No confirmation or cancellation contract invented. |
 | B08 / U04 | Decide audit/version schema and consumer compatibility, retention start/exception/purge policy, backup/restore ownership and RPO/RTO. No append-only version store, soft-delete migration, automated deletion or restore claim implemented. |
 | B05 / Q16 | Explicitly deferred. Reopen key migration/dual-read/backfill/rollback compatibility before changing InvoiceItem partitions. Existing cross-biller collision risk remains. |
@@ -165,3 +165,91 @@ Logs and the temporary syntax checker are in
 and the local emulator is stopped after verification. The merge commit uses
 `[skip ci]` to avoid deployment/publication side effects on submission. Remaining
 roadmap decisions and deployed integration gaps above are unchanged.
+
+
+## Feature delivery policy follow-up (2026-10-30)
+
+Owner instruction Q22 supersedes the earlier prohibition on test deployment and skip-CI submission: push feature changes directly, confirm the latest commit's complete CI/CD result after every change, deploy and integration-test test before creating a requested PR, and require review before production. No PR is created automatically. Production deployment, production data and migrations remain outside this feature task.
+
+The branch `codex/test-deployment-gates` starts at conflict-resolution commit `0bdf34b894a8109285001ea28d22c8838d830ddd`, which already contains main `9ea7280b2ef1271313555f6bee6425ccd4352421`. The original implementation baseline remains `e2f7269676359d85cc7e4308d4babfd1f6f0b39c`. The owner subsequently merged PR #4 as `a14aca1de948589e1e47b44e179e8a84a8f0537a`; this feature is based on that current main commit. The agent did not merge it.
+
+| Plan / policy item | Change and acceptance evidence | Remaining limits |
+| --- | --- | --- |
+| B04 / Q22 | All feature pushes, including docs and slash branches, run local checks, deploy test and run deployed integration under one environment lock. Main production and package publication require the reviewed PR head's prior successful deployment and identical source tree. Manual/PR deployment and feature package publication are removed. | Required status/review branch protection needs repository administration. Workflows cannot prevent PR object creation. Listener activates when merged to the default branch. |
+| B07 / Q22 | Standalone deployed suite checks exact binary SHA, middleware/HTTP status, saved records, replay/HTML/token freeze, real incoming/outgoing Service Bus and missing debug route. Notifications use a controlled test sink. | Actual deployed outcome must be read from the pushed commit's workflow; external profile, direct-resource entitlement, Notification provider and operational recovery remain separate. |
+| B03 / test quality | Seven added public calculation/construction cases, seven transport boundary cases and stronger real-storage HTML verification. Coverage gate is 90% combined / 80% per module. Ten Node and seven Python tests exercise the delivery policy/tooling. | Coverage is authored line coverage, not proof of every branch or deployed behavior. |
+| Documentation | AGENTS, delivery, integration, API and testing pages record the standing policy, exact gates, safe fixture boundaries and external settings. | No production review/merge authority is granted to the agent. |
+
+Local verification from the repository root after the reviewed SDK setup:
+
+| Exact command | Result |
+| --- | --- |
+| `dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo` | Passed with zero warnings/errors. |
+| `dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo` | Compiles separately; no Azure deployment is inferred from compilation. |
+| `dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/invoicing-delivery-evidence/unit` | 121 passed, zero skipped. |
+| `NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18484/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory /workspace/scratch/invoicing-delivery-evidence/local-integration` | 23 passed, zero skipped. |
+| `python scripts/check-coverage.py /workspace/scratch/invoicing-delivery-evidence/unit/coverage.cobertura.xml /workspace/scratch/invoicing-delivery-evidence/local-integration/coverage.cobertura.xml` | 697/762 authored lines, 91.47%; Contracts 100%, Core 90.72%, Server 84.81%; gate passed. |
+| `node --test scripts/delivery-policy.test.cjs` | 10 passed. |
+| `python -m unittest discover -s scripts -p 'test_*.py'` | 7 passed. |
+
+Live evidence must be attached to the final delivery response with the exact commit and workflow URL. Local logs are under `/workspace/scratch/invoicing-delivery-evidence/`; uploaded CI reports are the durable per-commit evidence. Never label a pending, failed or skipped deployment run successful.
+
+The first feature run [41037648966](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41037648966) built cleanly, passed 121 unit and 23 local integration cases with zero skips, and measured 701/766 authored lines (91.51%; Server 85.54%). Azure package/provision/deploy succeeded. Credential preparation then rejected an empty/unusable `az functionapp show` hostname; deployed tests did not run and the overall workflow failed. The follow-up reads the explicit ARM hostname, refreshes the test signing-key reference, and adds regression coverage for test-resource selection. Production jobs were skipped. A subsequent run must pass before this branch is eligible for PR creation.
+
+Run [41039036249](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41039036249) for commit `1fffc481cf27c22eb31b0ae6b7127829b88a6cac` completed **successfully** on 2026-10-30. Build/local verification and test deployment/integration jobs both succeeded; production jobs were correctly skipped. The deployed command `dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed` passed all seven cases, zero failed/skipped. Local coverage and deployed TRX artifacts were uploaded for that exact SHA. The ARM lookup and explicit test Key Vault refresh passed.
+
+The final evidence/documentation follow-up also changes failed replay comparisons to report only a boolean mismatch, keeping link tokens and notification payloads out of assertion output. It must receive its own successful full feature run; the final delivery response records that latest-head result rather than reusing the older commit's success. No PR, production deployment, package publication or production migration was performed by this feature task. External main-branch protection administration and the remaining B07 integration areas above are still outstanding.
+
+
+## Owner delivery corrections (2026-10-31, Pacific/Auckland)
+
+Q23 replaces the earlier Q22 interpretation: automatically open the PR after successful feature deployment/tests, handle every actionable review comment, obtain current-head approval, then merge and monitor production. Main accepts no direct pushes. A merged PR immediately triggers production deployment and read-only deployed tests, with **no independent production gate**. Deployed tests use the actual environment resources; the separate notification sink and per-run signing-key rotation are removed. Q24 requires **one** approval from any approver GitHub permits, without an application policy excluding the PR owner.
+
+The owner approved a test notification mailbox supplied through the environment secret `TEST_NOTIFICATION_RECIPIENT`. Production uses variables `TEST_INVOICE_BILLER`, `TEST_INVOICE_ID` and secret `TEST_INVOICE_TOKEN`. The owner requested generation of a persistent invoice in the real test environment so its IDs can be configured there; this is distinct from production, where fixture creation is prohibited.
+
+Starting feature head: `a79abe2a2e7061b4e40f3649450aa14a4f8190b3`; main baseline remains `a14aca1de948589e1e47b44e179e8a84a8f0537a`. The prior green run validates the old implementation, not this correction.
+
+| Item | Correction | Acceptance / remaining evidence |
+| --- | --- | --- |
+| B04 / Q23 | Feature push runs tests/deployment, then opens/reuses a ready PR. Agent fixes reviews, waits for one current-head approval and merges without asking again. Main-merge event starts production and read-only tests directly. | Confirm new feature CI, automatic PR creation, real review, merge and the resulting production run. External branch protection remains unverified. |
+| B07 / Q23 | Tests use real test storage/queues/Notification namespace; no sink or table creation. Add persistent test reference fixture and real Notification enqueue case. | Provide generated test IDs from the uploaded artifact. Enqueue acknowledgement is not proof of provider delivery. |
+| Production read-only | Five allowlisted GET checks use the existing configured production fixture; no mutation/setup/cleanup code or write-capable clients. | Local guard tests and feature-environment read-only checks run before review. Production can be verified only after the approved merge deploys. |
+| Q24 | Remove author exclusion; one valid current-head approval suffices. | Tests cover author approval, another approver, stale/dismissed approvals and pending changes requests. GitHub's native permissions remain authoritative. |
+
+Initial local checks: eleven Node policy tests and thirteen Python tests pass. Final build/CI results, generated test fixture identifiers, PR/review state and production outcome must be recorded from actual runs; they are not inferred from workflow declarations.
+
+Run [41053195543](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41053195543), commit `030b805daa50647bd72118fc725ed5c72745ef1c`, passed 121 unit tests, 23 local integration tests, eleven Node tests, thirteen Python tests, all eight deployed cases and all five read-only checks against test. Application coverage was 701/766 lines (91.51%), with no authored-source exclusions. Both builds had zero warnings/errors. The persistent invoice was created and its non-secret IDs were supplied to the owner from `test-invoice-fixture.json`; recipient and tokens remain secret. The run **failed overall** because GitHub rejected automatic PR creation with HTTP 403: Actions was not permitted to create PRs.
+
+The main ruleset audit confirmed one approval, stale-review dismissal, resolved threads and no bypass actors. It also identified the incorrect pre-merge `prod` deployment requirement and missing required status. The owner was asked to use `test`, require `Test deployment verified`, and enable Actions PR creation because the available connection cannot administer those settings. These are external configuration blockers, not reasons to bypass review or deploy production before merge.
+
+Final source review found a cleanup edge case: fixture creation was registered for cleanup before Table storage acknowledged it. The follow-up registers only successful creations, checks the run-specific customer before deletion and uses the invoice ETag. A ninth deployed case exercises a real duplicate-key rejection and verifies that the existing row remains unchanged and is not additionally claimed for cleanup. This follow-up requires its own complete feature CI result before review and merge.
+
+## PR #6 review follow-up (2026-10-31, Pacific/Auckland)
+
+Run [41054903186 attempt 2](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41054903186/attempts/2) succeeded for `b4cc04816679eb338e1124120f9cf1d169f5cd22`, including nine deployed cases and five read-only checks against test. It used the configured reference-invoice variables and masked recipient secret and automatically created [PR #6](https://github.com/niobium-nz/Niobium.Invoicing/pull/6). Main remained `a14aca1de948589e1e47b44e179e8a84a8f0537a`. The owner clarified that the agent must remain actively watching reviews rather than end work when the PR is ready; AGENTS and the delivery guide now state this explicitly.
+
+| Review thread / plan item | Change | Acceptance evidence / remaining dependency |
+| --- | --- | --- |
+| 4429287868 / B04 | Remove feature-side status/PR write job; only `pr-readiness.yml` checks out its immutable main workflow commit and performs repository writes. | Node guards reject feature contexts before any write. Trusted listener must first be installed on main. |
+| 4429287874 / B04 | Authenticate pipeline Git blobs against trusted main before accepting job/step success; bind workflow completion to its actual run ID. | Regression cases reject no-op/mismatched workflow/helpers, missing trusted files and reuse of an older green run. Pipeline changes deliberately need reviewed activation, not self-certification. |
+| 4429288013 / delivery | Serialize package release jobs with `queue: max` and cancellation disabled. | Official GitHub syntax supports up to 100 pending jobs; unrelated merges cannot replace/cancel an existing publication within that queue. |
+| 4429288017 / delivery | Inspect `filename` and `previous_filename` for Contracts changes. | Node cases cover additions, deletions, renames into/out of Contracts and unrelated paths. |
+| 4429288020 / B07 | Keep reference seeds temporary until successful HTTP issuance; clean an acknowledged seed immediately on issuance failure. | Two deployed cases verify success retention and failed-issuance deletion through actual test resources. |
+| 4429288023 / B07 | Increase deployed-test timeout from 10 to 30 minutes. | Accommodates the roughly 15-minute cumulative asynchronous/read-only wait budget and additional request/cleanup time. Abrupt process/runner termination remains an operational limit. |
+
+The initial trusted-controller installation is an explicit unresolved administrative dependency: main currently lacks the listener, and GitHub only runs `workflow_run` listeners already on the default branch. This branch can run its real tests but must not issue its own required status to unlock itself. No protection bypass, direct-main push or fabricated verification status is authorized or performed. The exact reviewed head, new CI evidence and an owner decision about initial activation are required before merge. Production retains the requested merged-PR trigger and has no new independent gate.
+
+Local review validation: both Release builds pass with zero warnings/errors; seventeen Node and thirteen Python cases pass; changed documentation links and CRLF-aware whitespace checks pass. Actionlint 1.7.12 validates the deployment and trusted-controller workflows. It does not yet recognise the officially documented `concurrency.queue` property, so the package workflow reports that single validator error; its remaining syntax passes on a temporary projection excluding only that property. The real workflow retains `queue: max`. This is a recorded validator limitation, not a claim that the full package workflow passed actionlint. No package publication was run to test the concurrency change.
+
+### Second review of PR #6
+
+Run [41147127986](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41147127986) passed for `ab0ac9514bb6b1ee992d48c2cca7d120a1e04d24`: 121 unit, 23 local integration, 17 Node, 13 Python and 11 deployed cases; five read-only checks against test; 91.51% authored application line coverage. Both Release builds had zero warnings/errors. The six first-review threads were answered and resolved after this evidence. The agent continued watching and received four further findings on that head.
+
+| Review thread / plan item | Change | Acceptance evidence / remaining dependency |
+| --- | --- | --- |
+| 4429543060 / B04 | Preserve pending production runs with workflow-level `queue: max` and cancellation disabled. | Each queued merge retains its deployment/read-only run within GitHub's 100-pending limit. No production run is claimed before merge. |
+| 4429543070 / B04 | Preserve pending test runs under the same workflow-wide queue, covering candidate and trusted integration. | Different feature branches cannot replace one another's pending runs or interleave deployment with either suite. |
+| 4429543077 / delivery | Compare the merge commit's Contracts tree with its first parent using local Git, without the REST file-list cap. | Real temporary-repository tests cover over 3,000 changed files, add/delete/rename boundaries, unrelated files and missing-history failure. |
+| 4429546450 / B04, B07 | Add a fresh trusted test runner that checks out immutable main, including all harness/project/build/helper inputs, and never feature code/artifacts. | Policy cases reject missing/skipped trusted tests, candidate-only success and a different main SHA. Initial main lacks the harness; that step is explicitly skipped and cannot certify itself. Reviewed administrative activation remains required. |
+
+Local policy validation: `node --test scripts/delivery-policy.test.cjs` passes all 20 cases and `python -m unittest discover -s scripts -p 'test_*.py'` passes all 13 cases. The two workflows using `queue: max` each report actionlint 1.7.12's unsupported-property error; their other syntax is checked with temporary projections omitting only that property. The latest push must receive its own complete feature CI result; the previous green run above does not validate these changes. No package or framework upgrade is included. Package publication and trusted-main deployed execution cannot be claimed from local tests or the initial-installation candidate run.

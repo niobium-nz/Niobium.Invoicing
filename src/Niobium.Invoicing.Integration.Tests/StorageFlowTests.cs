@@ -130,6 +130,12 @@ public sealed class StorageFlowTests
         Assert.IsNotNull(stored.Delivered);
         string html = await host.Services.GetRequiredService<HTMLFlow>().RunAsync(request.BillerID, request.InvoiceID, stored.Token!, CancellationToken.None);
         StringAssert.Contains(html, "Synthetic customer");
+        Microsoft.AspNetCore.Mvc.ContentResult response = (Microsoft.AspNetCore.Mvc.ContentResult)await new GetHTMLInvoice(
+            host.Services.GetRequiredService<HTMLFlow>()).Run(new Microsoft.AspNetCore.Http.DefaultHttpContext().Request,
+                request.BillerID, request.InvoiceID, stored.Token!, CancellationToken.None);
+        Assert.AreEqual(200, response.StatusCode);
+        Assert.AreEqual("text/html", response.ContentType);
+        Assert.AreEqual(html, response.Content);
         ApplicationException denied = await Assert.ThrowsAsync<ApplicationException>(() => host.Services.GetRequiredService<HTMLFlow>()
             .RunAsync(request.BillerID, request.InvoiceID, "wrong-synthetic-token", CancellationToken.None));
         Assert.AreEqual(403, denied.ErrorCode);

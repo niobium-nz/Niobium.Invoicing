@@ -2,76 +2,100 @@ name: Azure Deployment
 
 on:
   push:
-    branches: ["*"]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
+    branches-ignore: [main]
   pull_request:
-    branches: ["main"]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-  workflow_dispatch:
+    branches: [main]
+    types: [closed]
 
 permissions:
-  id-token: write
   contents: read
+
+# Hold the environment lock across deployment and both independent test runners.
+# Keep every pending run so each merged commit receives its own verification.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'test-deploy' || 'production-deploy' }}
+  cancel-in-progress: false
+  queue: max
 
 env:
   buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
+  SourceRevisionId: '${{ github.event.pull_request.merge_commit_sha || github.sha }}'
 
 jobs:
   verify:
+    name: Build and local tests
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     services:
       azurite:
         image: mcr.microsoft.com/azure-storage/azurite:3.35.0
         ports:
           - 10002:10002
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.x.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Restore
-        run: dotnet restore Niobium.Invoicing.slnx --nologo
+        run: |
+          dotnet restore Niobium.Invoicing.slnx --nologo
+          dotnet restore src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --nologo
       - name: Build
-        run: dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo
-      - name: Unit tests
-        run: dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore
-      - name: Local storage and HTTP boundary integration tests
+        run: |
+          dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo
+          dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo
+      - name: Delivery policy tests
+        run: |
+          node --test scripts/delivery-policy.test.cjs
+          python -m unittest discover -s scripts -p "test_*.py"
+      - name: Unit tests with coverage
+        run: dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/unit
+      - name: Local integration tests with coverage
         env:
           NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT: 'http://127.0.0.1:10002/devstoreaccount1'
-        run: dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore
+        run: dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/local-integration
+      - name: Check application coverage
+        run: python scripts/check-coverage.py artifacts/unit/coverage.cobertura.xml artifacts/local-integration/coverage.cobertura.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-test-evidence-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+
   test:
+    name: Deploy test and run integration
+    if: github.event_name == 'push'
     needs: verify
     runs-on: ubuntu-latest
-    environment: 'test'
-    concurrency:
-      group: test-deploy
-      cancel-in-progress: false
-
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_ENV_NAME: test
+      APP_SHORT_NAME: niobiuminvoicing
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      SERVICE_BUS_QUEUE_NAMES: 'issueinvoicecommand'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Install azd
-        uses: Azure/setup-azd@v2
-        
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+      - uses: Azure/setup-azd@v2
       - name: Azure login
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: azd login
         run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
-
+      - name: Load existing test signing configuration
+        run: python scripts/test-resources.py configure
       - name: Publish
         env:
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
@@ -92,25 +116,129 @@ jobs:
           APPSETTING_PROFILEOPTIONS__PROFILESERVICEHOST: 'https://api.identity.niobium.co.nz'
           APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE: 'niobiumnotify-sb-test.servicebus.windows.net'
           APPSETTING_BILLINGOPTIONS__INVOICETOKENSECRETSALT: '1234567890'
-          APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET: '012345678901234567890123456789AB'
         run: |
           azd package --no-prompt
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
-  prod:
-    # B04 remains partial: a deployed-environment integration gate still needs isolated resources (B07).
-    needs: test
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    environment: 'prod'
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false
+      - name: Prepare deployed integration credentials
+        run: python scripts/test-resources.py credentials
+      - name: Run deployed integration tests
+        # The asynchronous/read-only waits alone can consume 15 minutes; leave time for cleanup.
+        timeout-minutes: 30
+        env:
+          TEST_INVOICE_BILLER: ${{ vars.TEST_INVOICE_BILLER }}
+          TEST_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
+          TEST_NOTIFICATION_RECIPIENT: ${{ secrets.TEST_NOTIFICATION_RECIPIENT }}
+          TEST_TOKEN_ISSUER: Niobium.Invoicing.Server.Test
+          TEST_TOKEN_AUDIENCE: Niobium.Invoicing.Client.Test
+        run: dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
+      - name: Report generated test fixture identifiers
+        if: always()
+        run: |
+          python - <<'PYREPORT'
+          import json
+          from pathlib import Path
+          path = Path('artifacts/deployed/test-invoice-fixture.json')
+          if path.exists():
+              fixture = json.loads(path.read_text())
+              print('TEST_INVOICE_BILLER=' + fixture['biller'])
+              print('TEST_INVOICE_ID=' + str(fixture['invoice']))
+          PYREPORT
+      - name: Upload deployed test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-test-evidence-${{ github.sha }}
+          path: artifacts/deployed/
+          if-no-files-found: error
 
+  trusted-test:
+    name: Verify trusted deployed integration
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_ENV_NAME: test
+      APP_SHORT_NAME: niobiuminvoicing
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    steps:
+      - name: Resolve reviewed test harness
+        id: source
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: main } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            const sha = main.commit.sha;
+            core.setOutput('sha', sha);
+            try {
+              await github.rest.repos.getContent({ ...context.repo, ref: sha,
+                path: 'src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj' });
+              core.setOutput('available', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              // First installation cannot certify itself. Readiness rejects the missing trusted step.
+              core.warning('Main has no reviewed harness yet. Candidate tests are evidence only; administrative activation is still required.');
+              core.setOutput('available', 'false');
+            }
+      - uses: actions/checkout@v4
+        if: steps.source.outputs.available == 'true'
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        if: steps.source.outputs.available == 'true'
+        with:
+          dotnet-version: '10.x.x'
+      - name: Azure login
+        if: steps.source.outputs.available == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Prepare trusted integration credentials
+        if: steps.source.outputs.available == 'true'
+        run: python scripts/test-resources.py credentials
+      - name: Run trusted deployed integration tests at ${{ steps.source.outputs.sha }}
+        if: steps.source.outputs.available == 'true'
+        timeout-minutes: 30
+        env:
+          TEST_INVOICE_BILLER: ${{ vars.TEST_INVOICE_BILLER }}
+          TEST_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
+          TEST_NOTIFICATION_RECIPIENT: ${{ secrets.TEST_NOTIFICATION_RECIPIENT }}
+          TEST_TOKEN_ISSUER: Niobium.Invoicing.Server.Test
+          TEST_TOKEN_AUDIENCE: Niobium.Invoicing.Client.Test
+        run: dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
+      - name: Upload trusted deployed test results
+        if: always() && steps.source.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-deployed-test-evidence-${{ github.sha }}-${{ steps.source.outputs.sha }}
+          path: artifacts/deployed/
+          if-no-files-found: error
+
+  prod:
+    name: Deploy production and run read-only integration
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
         
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+
       - name: Install azd
         uses: Azure/setup-azd@v2
 
@@ -151,3 +279,19 @@ jobs:
           azd package --no-prompt
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
+      - name: Run production read-only integration tests
+        timeout-minutes: 5
+        env:
+          READONLY_API_URL: https://api.invoicing.niobium.co.nz
+          READONLY_EXPECTED_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+          READONLY_INVOICE_BILLER_ID: ${{ vars.TEST_INVOICE_BILLER }}
+          READONLY_INVOICE_ID: ${{ vars.TEST_INVOICE_ID }}
+          READONLY_INVOICE_TOKEN: ${{ secrets.TEST_INVOICE_TOKEN }}
+        run: python scripts/read-only-deployment.py --require-fixture --report artifacts/production-read-only.json
+      - name: Upload production read-only results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-read-only-evidence-${{ github.event.pull_request.merge_commit_sha }}
+          path: artifacts/production-read-only.json
+          if-no-files-found: error

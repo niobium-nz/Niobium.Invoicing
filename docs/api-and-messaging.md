@@ -2,18 +2,19 @@
 
 ## Effective HTTP surface
 
-Observed source contract with local result-execution tests, not a deployed Functions HTTP verification. [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
+The test-deployment suite now verifies invoice issuance, saved-token HTML, health identity and absence of the debug route through the real Functions host. Token/resource-grant endpoints remain outside that deployed suite; see [integration evidence](integration-tests.md). [host.json](../src/Niobium.Invoicing.Server/host.json) sets `routePrefix` to empty, so there is no `/api` prefix. [Program.cs](../src/Niobium.Invoicing.Server/Program.cs) installs Niobium identity middleware. Anonymous Functions triggers can still have application checks.
 
 | Method / path | Handler and input | Controls | Success / side effects |
 | --- | --- | --- | --- |
 | `POST /invoices` | [NewInvoice.Run](../src/Niobium.Invoicing.Server/NewInvoice.cs); JSON `IssueInvoiceRequest` | Access-token principal needs GUID Sid/GroupSid matching BillerID/Tenant; validation helper; decoded invoice age check | `OkResult` (200), no response invoice body. Persists invoice/items; forces NotifyBillee=false. |
 | `GET /{issuer}/invoices/{invoice}?token=...` | [GetHTMLInvoice.Run](../src/Niobium.Invoicing.Server/GetHtmlInvoice.cs) | Anonymous; rejects blank token, nonpositive ID or empty issuer with 404; domain requires a matching saved link token | 200 `text/html`; reads invoice/items, no write. No billee account required. |
+| `GET /health` | [DeploymentInfo.Run](../src/Niobium.Invoicing.Server/DeploymentInfo.cs) | Anonymous, no credentials or runtime settings returned | 200 JSON `status` and build `commit`; deployed tests require the exact pushed SHA. Not a dependency health probe. |
 | `GET /token` | [Placeholder.Auth](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by AccessTokenMiddleware | ID-token verification and Sid/GroupSid; roles/entitlements lookup | 200 with access token in Authorization response header; fallback placeholder returns empty 200. |
 | `GET /rsas` | [Placeholder.RSAS](../src/Niobium.Invoicing.Server/Placeholder.cs), intercepted by ResourceTokenMiddleware | Access principal, requested resource entitlement/control | 200 JSON StorageSignature; fallback placeholder returns empty 200. |
 
-Middleware endpoint names are configurable, but placeholder trigger routes are compiled from default constants. Changing options alone does not create a new Functions route. No `/auth`, health, payment, settlement, cancellation, invoice-list HTTP endpoint or MCP route is declared. Listing historically used direct table access.
+Middleware endpoint names are configurable, but placeholder trigger routes are compiled from default constants. Changing options alone does not create a new Functions route. No `/auth`, `/alive`, payment, settlement, cancellation, invoice-list HTTP endpoint or MCP route is declared. Listing historically used direct table access.
 
-`NewInvoice.Run` rejects an issue time more than 30 minutes old; it does not implement a symmetric clock-skew window. It returns 401 for missing claims and explicit 403 for identity/age mismatches. Invalid date encoding returns 400. Local tests parse signed synthetic access tokens through the installed PrincipalParser and execute ASP.NET results. Full Functions middleware/binding and deployed behavior still need integration evidence.
+`NewInvoice.Run` rejects an issue time more than 30 minutes old; it does not implement a symmetric clock-skew window. It returns 401 for missing claims and explicit 403 for identity/age mismatches. Invalid date encoding returns 400. Local tests parse signed synthetic access tokens through the installed PrincipalParser and execute ASP.NET results. The deployed suite exercises missing/invalid credentials, identity mismatches, successful issuance, validation errors and frozen-update rejection through the real middleware/binding pipeline.
 
 ## Requests, serialization and errors
 
