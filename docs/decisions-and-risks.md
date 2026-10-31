@@ -37,6 +37,10 @@ Q25 was confirmed on 2026-10-31 (Pacific/Auckland): the branch author, whether h
 
 Q11 was further clarified at approval: broker duplicate detection is disabled for cost reasons. Enabling it as usage grows is an option. The short-term planned downstream solution records message IDs in a table and uses partition/row-key uniqueness and concurrency checks. This is a planned mechanism, not an implemented exactly-once guarantee. The claim/send/failure-recovery protocol still needs design, especially a crash between recording an ID and provider acceptance.
 
+Q26 was confirmed after PR #7 merged on 2026-10-31: restore the historical function-key-guarded manual email endpoint for the owner's debug activity. The historical function is `EmailInvoice`, using `GET /email/{issuer}/invoices/{invoice}` and `AuthorizationLevel.Function`; no `SendEmail` function was found in history. This supersedes Q05's removal decision for that endpoint. Preserve the route and use the current `EmailFlow`, including persisted-token reuse and freeze/retry behavior. A successful enqueue is not confirmed email delivery. Function keys grant privileged notification access; this is not biller JWT authorization. Production verification must still never call this side-effecting GET route.
+
+Restoration has a reviewed-test dependency: immutable main currently requires that route to return 404. First install a test contract that accepts either route absence (404) or Functions key denial (401), rejects missing/invalid-key access to an existing invoice and verifies no invoice change. The route remains absent in that preparatory change. Then restore the function and add strict candidate tests for its presence, key enforcement and authorized sending through the real test services. Both steps use ordinary feature CI, review and approval; no protection exception or fabricated status is needed.
+
 ## Current discrepancies and proposed backlog
 
 Priority below is **Proposed review order**, not a committed delivery schedule. Evidence is linked to implementation; security-sensitive details are kept in private findings, not reproduced here.
