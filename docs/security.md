@@ -24,6 +24,8 @@ Changing registration does not revoke existing access tokens or already-issued S
 
 Server table access uses `DefaultAzureCredential` when an endpoint is configured. Table SAS signing separately needs `StorageTableOptions.Key`. Read/write cloud permissions, direct SAS access and service-principal profile retrieval are distinct trust paths. Infrastructure declarations alone do not prove deployed isolation.
 
+B07 adds local ownership-control cases and deployed resource-token/SAS cases using synthetic invoices and principals. They check missing/invalid bearer credentials, unowned or unbounded requests, an owned partition's query-only grant, and rejection of cross-partition reads and writes by actual test storage. See [integration verification](integration-tests.md#invoice-item-resource-token-verification-b07) for the exact boundary and live-run evidence requirement. These tests do not inventory external grants or resolve the deferred same-ID collision risk.
+
 ## Inputs and rendered output
 
 `required` members, type conversion and the framework DataAnnotations helper do not provide comprehensive business validation. Core enforces the decided currency, ownership, item, date and overflow invariants described in [billing validation](billing-validation.md). Negative/credit/rounding policy remains undecided under U01. Stored profile/customer data is still external input, even when submitted through a trusted path.

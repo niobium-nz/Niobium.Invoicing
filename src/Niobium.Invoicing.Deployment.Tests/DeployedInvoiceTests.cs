@@ -17,7 +17,7 @@ namespace Niobium.Invoicing.Deployment.Tests;
 // This separately invoked project NEVER skips missing deployment configuration.
 [TestClass]
 [DoNotParallelize]
-public sealed class DeployedInvoiceTests
+public sealed partial class DeployedInvoiceTests
 {
     private static HttpClient http = null!;
     private static TableServiceClient tables = null!;

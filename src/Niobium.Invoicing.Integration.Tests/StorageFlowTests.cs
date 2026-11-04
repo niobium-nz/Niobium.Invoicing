@@ -17,7 +17,7 @@ namespace Niobium.Invoicing.Integration.Tests;
 
 [TestClass]
 [DoNotParallelize]
-public sealed class StorageFlowTests
+public sealed partial class StorageFlowTests
 {
     private static IHost? host;
     private static TableServiceClient? tableService;

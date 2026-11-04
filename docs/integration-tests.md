@@ -75,6 +75,16 @@ Store the approved mailbox in the test environment secret `TEST_NOTIFICATION_REC
 
 Cleanup deletes only the suite's temporary invoice/item records; it verifies item ownership markers. It retains the reference fixture requested by the owner and never deletes shared tables. Abrupt termination may leave temporary test records. Credentials, tokens, notification payloads and fixture response bodies must not be logged.
 
+## Invoice-item resource-token verification (B07)
+
+Four local cases use the real Server resource-control registration and the pinned Table adapter to check an owned invoice partition, another biller, an omitted partition and a missing invoice. Every applicable control is checked, so an alternative registered grant cannot silently bypass a rejection. The granted permission must be Query with equal start/end partition keys.
+
+Six deployed cases exercise `GET /rsas` through the real test host: missing/invalid bearer credentials, another biller, an omitted partition and a missing invoice are denied. An owning biller receives a signed read-only credential for its invoice-item partition. The suite uses that credential against real test Table storage to read its own line, reject a read from another existing synthetic invoice partition, and reject an insert. The original line's ETag remains unchanged. The fixture's normal ownership-checked cleanup also covers the marked insert probe if a regression unexpectedly allows it.
+
+The complete resource-token response is a credential. These tests never log it or the SAS, and storage-probe failures report only status codes. They reuse existing signing/storage configuration and synthetic invoices; they create no Azure resources or external entitlements and never call this route in production. Q16's same-ID cross-biller key collision remains deferred: the tests establish the existing ownership boundary for distinct invoice IDs, not a migrated key schema or an audit of historical tokens/external role grants.
+
+The candidate deployed suite now contains 27 cases. Local component/storage integration contains 38 cases. A successful local build/test run does not establish the deployed SAS result; the exact feature run must pass both candidate and trusted suites before PR creation.
+
 ## Read-only production suite
 
 Every merged PR starts production deployment followed by the separate Python read-only suite. There is no independent production gate. The agent that merged the PR must monitor the terminal result and immediately investigate/fix failures.
@@ -91,4 +101,4 @@ The route allowlist permits only GET health and invoice HTML reads on the config
 
 See [delivery policy](delivery-and-operations.md) for author-created PRs after successful verification, the designated reviewer request, one current-head approval, review fixes, merging and production monitoring. Q25 assigns PR creation to the human or Codex branch author; the workflow only publishes readiness. Earlier owner corrections removed the extra production gate, independent-reviewer restriction and separate sink.
 
-Real direct-resource entitlement grants, external profile provisioning, provider receipt/inbox behavior, delivery confirmation and operational recovery remain separate integration work. B07's full research acceptance is not claimed solely from these cases. [Progress](implementation-progress.md) distinguishes historical verified runs from the current changed code and its pending CI evidence.
+The resource-token cases above cover the application's invoice-item ownership grant for synthetic principals. External entitlement administration and profile provisioning, provider receipt/inbox behavior, delivery confirmation and operational recovery remain separate integration work. B07's full research acceptance is not claimed solely from these cases. [Progress](implementation-progress.md) distinguishes historical verified runs from the current changed code and its pending CI evidence.
