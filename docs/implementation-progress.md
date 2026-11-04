@@ -376,3 +376,34 @@ git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff
 ```
 
 Both final Release builds passed with zero warnings/errors. All 123 unit, 34 opted-in local integration, 20 Node policy and 13 Python tooling cases passed; no local test was skipped. Disposable Table-only Azurite ran on port 18482 and was stopped afterward. Combined authored line coverage passed at 91.82% (Contracts 100.00%, Core 90.92%, Server 87.88%). An initial test fixture omitted a required configuration initializer and an HTTP assertion expected an added charset; both test-only errors were corrected before these final results. Deployed authorization is not established by local metadata or these tests: terminal candidate/trusted CI, native reviews, formal approval and production evidence will be recorded on the author-created PR for the exact head/merge.
+
+## B07 invoice-item resource-token coverage
+
+The owner requested work to resolve the remaining research blockers on 2026-11-04 (Pacific/Auckland). Baseline is current `main` at `31b11ebbd73117f7f8bb08c207ca4de0c5dae74f`, tree `209d38634af1cf974a73f1791e60aa851fa0c7bd`. Work is isolated on `codex/resource-token-integration`; completed worktrees and deliveries remain intact. The complete report is still readable and its SHA-256 remains `1321b7712c4c9e10b477d03b230e12fce5485fbde3375d94c374fc96290313eb`.
+
+This B07 subset reuses the existing real test storage, bearer signing configuration and temporary invoice fixtures. Inspection matched OwnershipControl and AzureTableSignatureIssuer to Niobium 4.0.60 source `1fa0449`, and ResourceTokenMiddleware/SignatureService to 4.0.61 source `c246274`. The deployed positive case exposed missing test-host SAS signing configuration, which this change supplies through the existing test Key Vault. Application code, key schema, framework packages, workflows and the production verification allowlist are unchanged.
+
+| Acceptance item | Change and evidence | Limit |
+| --- | --- | --- |
+| Real resource-control registration and storage ownership | Four local cases load the actual Server controls and real adapter; owned partitions receive only Query, while another biller, no partition and missing invoice receive no grant from any applicable control. | Synthetic principals have no external entitlement overrides. |
+| Deployed authentication and scope | Five deployed rejection cases call the actual `/rsas` middleware with missing/invalid bearer credentials, another biller, no partition and a missing invoice. | Current-head deployment results are required; compilation alone is not live evidence. |
+| Usable restricted SAS | One deployed case obtains a credential, reads its existing synthetic line through real test Table storage, rejects a second synthetic partition and an insert, and checks the original ETag. | SAS/credential bodies are never logged. Q16's shared invoice-ID collision risk and externally managed grants remain separate. |
+| Test signing configuration | Bicep reads the existing test data-account key, passes it as a secure module parameter and stores it in the existing vault before applying the host's Key Vault reference. | No account/key creation or rotation; production retains its existing externally supplied setting. |
+| Delivery and review | Preserve normal candidate/trusted test gates; author creates the PR after success, then rereads `/workspace/AGENTS.md` and delegates independent approval to `pr_approver`. | Merge only with current-head approval and repository checks, then verify production and package completion. |
+
+Local commands ran after `source /workspace/.niobium-tools/env.sh` from the feature worktree:
+
+```sh
+dotnet restore Niobium.Invoicing.slnx --nologo
+dotnet restore src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --nologo
+dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo --disable-build-servers -m:1
+dotnet build src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.Deployment.Tests.csproj --configuration Release --no-restore --nologo --disable-build-servers -m:1
+dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore
+NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18482/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore
+```
+
+The baseline build and 123 unit cases passed. Both Release builds passed with zero warnings/errors; all 38 local integration cases passed without skips. Initial feature run [41808753569](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41808753569) passed local checks but failed deployed integration: 26/27 cases passed and the owning biller's resource-token request returned 503. The pinned issuer requires `StorageTableOptions:Key`; the test workflow did not supply it, although ordinary managed-identity Table access succeeded. The trusted job skipped after that failure and is not pass evidence. The configuration correction requires a fresh successful deployment. Exact feature SHA, CI artifacts, review and production results will be recorded on the author-created PR after verification. B02/B06 business contracts, B08 compatibility/retention, B09 Template, B05 key migration and B10 product contracts remain separate decisions; this change does not silently resolve them.
+
+For the configuration correction, `bicep build infra/main.bicep --outfile /workspace/scratch/resource-token-infra.json` (CLI 0.48.1) could not complete locally: the managed network proxy rejected registry-module downloads with HTTP 403. This is not a successful template validation. The normal feature workflow must compile/provision the template and pass both deployed suites before PR creation. `git diff --check` passed.
+
+Follow-up run [41810676341](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/41810676341) compiled/provisioned the signing correction and the issued SAS successfully read its own item. It failed on an incorrect test expectation: Azure filtered the out-of-range point read to 404, rather than the expected 403. The corrected assertion follows the documented Table SAS range filtering and additionally verifies the other item still exists unchanged through the fixture credential. The write-permission assertion remains 403. Both failed runs are retained as diagnostic evidence; neither validates the final head.
