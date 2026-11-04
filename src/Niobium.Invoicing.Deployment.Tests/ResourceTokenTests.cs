@@ -40,7 +40,7 @@ public sealed partial class DeployedInvoiceTests
         string row = InvoiceItem.BuildRowKey(1);
         TableClient privileged = tables.GetTableClient(nameof(InvoiceItem));
         TableEntity before = (await privileged.GetEntityAsync<TableEntity>(partition, row)).Value;
-        _ = await privileged.GetEntityAsync<TableEntity>(otherPartition, row);
+        TableEntity otherBefore = (await privileged.GetEntityAsync<TableEntity>(otherPartition, row)).Value;
 
         using HttpResponseMessage response = await ItemResourceToken(partition, Token(biller, tenant));
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
@@ -69,8 +69,12 @@ public sealed partial class DeployedInvoiceTests
         Assert.AreEqual(200, readStatus, "The signed credential must read its owned item from real test storage.");
         Assert.IsNotNull(item);
         Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)));
-        Assert.AreEqual(403, (await SasRead(scoped, otherPartition, row)).Status,
-            "The credential must not read another existing invoice partition.");
+        // Azure filters Table queries to the SAS range, so an out-of-range point read appears missing.
+        (int otherStatus, TableEntity? otherItem) = await SasRead(scoped, otherPartition, row);
+        Assert.AreEqual(404, otherStatus, "The credential must not expose another existing invoice partition.");
+        Assert.IsNull(otherItem);
+        Assert.AreEqual(otherBefore.ETag, (await privileged.GetEntityAsync<TableEntity>(otherPartition, row)).Value.ETag,
+            "The denied item must still exist unchanged; missing fixture data is not proof of SAS isolation.");
 
         // Any unexpected successful insert is still this run's marked data and is removed by existing cleanup.
         TableEntity attempted = new(partition, "readonly-probe-" + Guid.NewGuid().ToString("N"))

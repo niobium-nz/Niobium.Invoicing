@@ -77,6 +77,8 @@ Cleanup deletes only the suite's temporary invoice/item records; it verifies ite
 
 ## Invoice-item resource-token verification (B07)
 
+Azure [Table SAS access ranges](https://learn.microsoft.com/en-us/rest/api/storageservices/create-service-sas#specify-table-access-ranges) filter queries to the authorized range. The deployed point-read assertion therefore expects 404 for the second, out-of-range invoice and independently checks with the fixture credential that its item still exists with the same ETag. A query-only credential must reject an insert with 403.
+
 Four local cases use the real Server resource-control registration and the pinned Table adapter to check an owned invoice partition, another biller, an omitted partition and a missing invoice. Every applicable control is checked, so an alternative registered grant cannot silently bypass a rejection. The granted permission must be Query with equal start/end partition keys.
 
 Six deployed cases exercise `GET /rsas` through the real test host: missing/invalid bearer credentials, another biller, an omitted partition and a missing invoice are denied. An owning biller receives a signed read-only credential for its invoice-item partition. The suite uses that credential against real test Table storage to read its own line, reject a read from another existing synthetic invoice partition, and reject an insert. The original line's ETag remains unchanged. The fixture's normal ownership-checked cleanup also covers the marked insert probe if a regression unexpectedly allows it.
