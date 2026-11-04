@@ -12,6 +12,10 @@ param userAssignedManagedIdentityName string
 @description('App settings to project into the container app environment.')
 param appSettings array = []
 
+@secure()
+@description('Existing test data-account key for Table SAS signing. Production retains its externally supplied key.')
+param testTableSasSigningKey string = ''
+
 @description('Custom domain name bind to the container app.')
 param customDomainName string = ''
 
@@ -51,6 +55,9 @@ var allAppSettings = union(
         ? '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}.vault.azure.net/secrets/${replace(substring(nextItem.name, 3), '_', '-')}/)'
         : nextItem.value
     })),
+    environmentName == 'test' ? {
+      StorageTableOptions__Key: '@Microsoft.KeyVault(SecretUri=https://${keyVaultName}.vault.azure.net/secrets/STORAGETABLEOPTIONS--KEY/)'
+    } : {},
     {
       AZURE_FUNCTIONS_ENVIRONMENT: environmentName
       APPLICATIONINSIGHTS_AUTHENTICATION_STRING: 'ClientId=${sharedManagedIdentity.properties.clientId};Authorization=AAD'
@@ -101,6 +108,9 @@ module appServicePlan 'br/public:avm/res/web/serverfarm:0.7.0' = {
 
 // Create a Flex Consumption Function App to host the API
 module functionApp 'br/public:avm/res/web/site:0.24.0' = {
+  dependsOn: [
+    testTableSasSigningSecret
+  ]
   params: {
     kind: 'functionapp,linux'
     name: functionAppName
@@ -220,6 +230,15 @@ resource keyVaultResource 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
     keyVault
   ]
 }
+// Keep this signing credential in the existing vault; never put the account key in app settings or outputs.
+resource testTableSasSigningSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (environmentName == 'test') {
+  parent: keyVaultResource
+  name: 'STORAGETABLEOPTIONS--KEY'
+  properties: {
+    value: testTableSasSigningKey
+  }
+}
+
 resource keyVaultSecretRoleAssignment_Deployer 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(keyVaultResource.id, deployerPrincipalId, keyVaultSecretRoleDefinitionId)
   scope: keyVaultResource

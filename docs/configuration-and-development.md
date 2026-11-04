@@ -31,6 +31,8 @@ Known precedence within inspected code:
 - Notification broker binds its own `NotificationQueueOptions`; the generic messaging path binds `ServiceBusOptions`. Their namespace fallback is `AzureWebJobsServiceBus:fullyQualifiedNamespace`. Managed-identity selection in the matched broker reads `AzureWebJobsStorage:clientId`.
 - Deployment scripts collect `APPSETTING_` variables, then Bicep strips that prefix before creating settings. `KV_` becomes a Key Vault reference. See [delivery](delivery-and-operations.md) before invoking these scripts.
 
+For `test`, Bicep supplies `StorageTableOptions:Key` through the existing vault's `STORAGETABLEOPTIONS--KEY` secret, populated from the existing data account through a secure module parameter. The host setting contains only the Key Vault reference. This is needed for the pinned framework's SAS issuer; managed identity still handles ordinary Table I/O. Production retains its existing `APPSETTING_STORAGETABLEOPTIONS__KEY` environment secret and workflow projection. Do not print either signing key or issued SAS credentials.
+
 No `local.settings.json` is tracked. The project copies one to output when supplied and excludes it from publish. A UserSecretsId is declared, but no application-specific secret-loading code or local secret contents were inspected. The tracked `.azure/dev/.env` contains owner-confirmed examples and mixed assignment styles; it is not a validated runnable setup recipe.
 
 ## Runtime configuration catalog
