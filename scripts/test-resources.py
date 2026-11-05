@@ -32,6 +32,11 @@ def main():
         # Preserve the real test environment's signing configuration; do not rotate it for tests.
         export("APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET", azure("keyvault", "secret", "show", "--vault-name", vault,
                "--name", "IDENTITYSERVICEOPTIONS--ACCESSTOKENSECRET", "--query", "value"), secret=True)
+        # Runtime SAS signing uses the existing data-account key. Feed the generic settings/vault
+        # hooks rather than teaching the reusable Function App module about this application.
+        export("APPSETTING_KV_STORAGETABLEOPTIONS__KEY", azure("storage", "account", "keys", "list",
+               "--resource-group", os.environ["AZURE_RESOURCE_GROUP"], "--account-name", storage,
+               "--query", "[0].value"), secret=True)
         return
     if sys.argv[1] != "credentials":
         raise ValueError("Expected configure or credentials")
