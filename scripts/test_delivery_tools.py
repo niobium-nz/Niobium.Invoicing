@@ -55,19 +55,37 @@ class ResourceBoundaryTests(unittest.TestCase):
                     resources.main()
                 azure.assert_not_called()
 
-    def test_configuration_preserves_existing_key_without_redirecting_notifications(self):
+    def test_configuration_preserves_existing_keys_through_generic_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "env"
-            with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing", "GITHUB_ENV": str(target)}), \
-                    patch("sys.argv", ["test-resources.py", "configure"]), patch.object(resources, "azure", return_value="existing-test-key") as azure, contextlib.redirect_stdout(io.StringIO()) as log:
+            with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing",
+                                        "AZURE_RESOURCE_GROUP": "synthetic-test", "GITHUB_ENV": str(target)}), \
+                    patch("sys.argv", ["test-resources.py", "configure"]), \
+                    patch.object(resources, "azure", side_effect=["existing-test-signing-key", "existing-test-storage-key"]) as azure, \
+                    contextlib.redirect_stdout(io.StringIO()) as log:
                 resources.main()
                 values = dict(line.split("=", 1) for line in target.read_text().splitlines())
-                self.assertNotIn("APPSETTING_NOTIFICATIONQUEUEOPTIONS__FULLYQUALIFIEDNAMESPACE", values)
-                key = values["APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET"]
-                self.assertEqual(key, "existing-test-key")
-                self.assertEqual(log.getvalue().strip(), "::add-mask::" + key)
-                self.assertEqual(azure.call_count, 1)
-                self.assertEqual(azure.call_args.args[:3], ("keyvault", "secret", "show"))
+                self.assertEqual(values, {
+                    "APPSETTING_KV_IDENTITYSERVICEOPTIONS__ACCESSTOKENSECRET": "existing-test-signing-key",
+                    "APPSETTING_KV_STORAGETABLEOPTIONS__KEY": "existing-test-storage-key",
+                })
+                self.assertEqual(log.getvalue().splitlines(), [
+                    "::add-mask::existing-test-signing-key", "::add-mask::existing-test-storage-key"])
+                self.assertEqual(azure.call_count, 2)
+                self.assertEqual(azure.call_args_list[0].args[:3], ("keyvault", "secret", "show"))
+                self.assertEqual(azure.call_args_list[1].args, (
+                    "storage", "account", "keys", "list", "--resource-group", "synthetic-test",
+                    "--account-name", "niobiuminvoicingstdtest", "--query", "[0].value"))
+
+    def test_configuration_rejects_missing_runtime_storage_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "APP_SHORT_NAME": "niobiuminvoicing",
+                                        "AZURE_RESOURCE_GROUP": "synthetic-test", "GITHUB_ENV": str(Path(directory) / "env")}), \
+                    patch("sys.argv", ["test-resources.py", "configure"]), \
+                    patch.object(resources, "azure", side_effect=["existing-test-signing-key", ""]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, "APPSETTING_KV_STORAGETABLEOPTIONS__KEY"):
+                    resources.main()
 
     def test_exports_reject_missing_values_and_newline_injection(self):
         for value in ["", "a\nb", "a\rb"]:

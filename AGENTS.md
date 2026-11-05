@@ -24,16 +24,16 @@
 
 ## Infrastructure composition
 
-The owner clarified these module boundaries on 2026-11-05 (Pacific/Auckland). They describe the intended reusable design; the PR #11 exception discussed below has not yet been corrected.
+The owner clarified these module boundaries on 2026-11-05 (Pacific/Auckland). They govern application settings and the reusable host module.
 
 - Keep Bicep environment agnostic. Environment names select resource-name suffixes and supplied values; do not add a test-only application-configuration path to a reusable host module because an integration test exposed missing runtime configuration.
 - `infra/function-app.bicep` owns Function App-bound resources and host settings. It must remain application agnostic. Combine its internal host settings with the caller's generic `appSettings` input.
 - `infra/main.bicep` owns application-specific resources, such as the data account and messaging resources, and passes their derived settings through `appSettings`. Do not add application-specific credential parameters or secret resources to the Function App module.
 - GitHub workflow/environment variables and secrets become runner environment variables only when the workflow projects them into `env` (or a reviewed step exports them). Inspect that projection and the `infra/scripts` hooks before adding another configuration mechanism.
-- `APPSETTING_` values enter the generated Bicep `appSettings` parameter. `APPSETTING_KV_` values use the existing generic Key Vault reference and secret-population convention. Preserve this path for environment-specific application secrets.
+- Ordinary `APPSETTING_` values enter the generated Bicep `appSettings` parameter. `APPSETTING_KV_` settings pass only their names and an empty placeholder to Bicep; the generic postprovision hook reads their values directly from the runner into Key Vault. Preserve this reference-only path for environment-specific application secrets.
 - Trace every credential to its actual consumer. A Function App's runtime SAS signing key and an integration runner's fixture credentials have different purposes, even when both use the same underlying test storage-account key.
 
-See [infrastructure composition and settings flow](docs/delivery-and-operations.md#provisioning-and-settings-flow) for the exact transformations, ownership boundary and current PR #11 discrepancy.
+See [infrastructure composition and settings flow](docs/delivery-and-operations.md#provisioning-and-settings-flow) for the exact transformations, ownership boundary and Table SAS configuration.
 
 ## Read according to the task
 

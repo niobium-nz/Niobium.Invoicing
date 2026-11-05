@@ -114,21 +114,12 @@ var storageSettings = [
     }
 ]
 
-// Table SAS signing requires the existing account key even though ordinary I/O uses managed identity.
-resource dataStorageAccountResource 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
-  name: dataStorageAccountName
-  dependsOn: [
-    dataStorageAccount
-  ]
-}
-
 module app 'function-app.bicep' = {
   params: {
     appShortName: appShortName
     userAssignedManagedIdentityName: sharedManagedIdentityName
     environmentName: environmentName
     appSettings: concat(appSettings, serviceBusSettings, storageSettings)
-    testTableSasSigningKey: environmentName == 'test' ? dataStorageAccountResource.listKeys().keys[0].value : ''
     customDomainName: customDomainName
     userIdentityPrincipalId: userIdentityPrincipalId
     isInteractiveDeployer: isInteractiveDeployer
