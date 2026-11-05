@@ -75,14 +75,41 @@ No package or Niobium dependency upgrade is part of this change. Contracts publi
 
 ## Provisioning and settings flow
 
-Evidence: [main.bicep](../infra/main.bicep), [function-app.bicep](../infra/function-app.bicep), [service-bus.bicep](../infra/service-bus.bicep), [rbac.bicep](../infra/rbac.bicep), [main.bicepparam](../infra/main.bicepparam), and [scripts](../infra/scripts).
+The owner confirmed the following design on 2026-11-05 (Pacific/Auckland). Environment selection changes resource names and configuration values through the same composition path. It must not require application-specific test branches in the reusable Function App module.
 
-1. Preprovision `SetAppSettings.ps1` reads APPSETTING_ variable names, backs up the parameter file and appends a generated appSettings block with environment references. It modifies the working tree temporarily.
-2. Bicep creates settings; names prefixed KV_ become Key Vault references with underscores converted to dashes in secret names. Runtime environment/logging/identity settings are added by the template.
-3. Postprovision `SetKeyVaultSecrets.ps1` resolves output `keyVaultName` and calls `az keyvault secret set` for APPSETTING_KV_ variables. This is a cloud write, not a harmless configuration check.
-4. `ClearAppSettings.ps1` restores the backed-up parameter file. No rollback/finally guarantee across failed hooks is established; inspect leftover generated content/backup after a failed authorized provision.
+| Layer | Responsibility |
+| --- | --- |
+| `infra/function-app.bicep` | Function App-bound resources, including its plan, deployment storage, monitoring and vault, plus internal host settings. Accept generic `appSettings` and combine them with host settings; remain reusable across applications. |
+| `infra/main.bicep` | Application-specific resources, including the data account and messaging resources. Derive their environment-specific settings and pass them through the generic module input. |
+| GitHub workflow and environment configuration | Supply external settings and secrets for the selected environment through explicit runner `env` projection or reviewed exports. Merely creating a GitHub variable or secret does not automatically export it to the runner. |
+| `infra/scripts` and `azure.yaml` hooks | Convert runner settings into the Bicep parameter and populate Key Vault through the existing generic convention. |
 
-Do not run these scripts to validate documentation. Settings and precedence are catalogued in [development](configuration-and-development.md).
+Evidence: [main.bicep](../infra/main.bicep), [function-app.bicep](../infra/function-app.bicep), [azure.yaml](../azure.yaml), [main.bicepparam](../infra/main.bicepparam), and [scripts](../infra/scripts).
+
+1. The workflow chooses the GitHub environment and projects its inputs into runner variables. Application settings use `APPSETTING_`; settings whose values belong in Key Vault use `APPSETTING_KV_`.
+2. The preprovision hook `SetAppSettings.ps1` discovers `APPSETTING_` variables, strips that prefix, backs up the parameter file and writes a generated `appSettings` array. Values are `readEnvironmentVariable(...)` expressions rather than embedded secret literals. The parameter file is temporary deployment input, not a file to commit after provisioning.
+3. `main.bicep` concatenates supplied settings with settings derived from its application resources and passes the result to `function-app.bicep`.
+4. The Function App module reduces the settings into an object. A `KV_` setting becomes a Key Vault reference: remove `KV_` from the app-setting name and replace underscores with hyphens in the vault secret name. It then unions the result with internal host settings. Azure resolves these references for the running Function App; the process receives the effective secret value through configuration.
+5. The postprovision hook `SetKeyVaultSecrets.ps1` reads the Bicep output `keyVaultName`, finds the runner's `APPSETTING_KV_` variables, applies the same secret-name transformation and writes their values to that environment's vault. It suppresses secret values in normal output.
+6. `ClearAppSettings.ps1` restores the backed-up parameter file. No rollback/finally guarantee across failed hooks is established; inspect leftover generated content/backup after a failed authorized provision.
+
+For example, the name `APPSETTING_KV_STORAGETABLEOPTIONS__KEY` becomes Bicep input `KV_STORAGETABLEOPTIONS__KEY`, Function App setting `STORAGETABLEOPTIONS__KEY` containing a vault reference, and vault secret `STORAGETABLEOPTIONS--KEY`. .NET configuration binds the resolved setting as `StorageTableOptions:Key`. The same transformation works for each environment using that environment's values and resource names. No credential value belongs in documentation or logs.
+
+Follow generic composition when adding runtime configuration. Inspect the resource owner, workflow `env`, parameter generation, merge precedence, secret-population hook and runtime consumer first. Do not create a test-specific module parameter as a shortcut for a missing application setting. If a value is derived from an application resource, its ownership stays in the application composition layer; any new mechanism must preserve the reusable host boundary.
+
+### PR #11 Table SAS clarification
+
+PR #11 introduced `testTableSasSigningKey`, a test-only vault secret and a test-only setting in `function-app.bicep`. This is a known deviation from the owner-confirmed design above, not a pattern to copy. The documentation records the discrepancy; removing or replacing that implementation remains a separate correction for the owner to determine.
+
+The parameter carries the existing data account's first account key, not an already issued SAS or a new test-only credential. `main.bicep` retrieves it through `listKeys()` for test, and the module places it in `STORAGETABLEOPTIONS--KEY`. The app setting contains a Key Vault reference rather than the literal key. The test-specific setting is merged after caller settings; adding another input without resolving this exception can leave competing settings or sources.
+
+The Function App binds this value to `StorageTableOptions.Key`. Niobium 4.0.60's [AzureTableSignatureIssuer](https://github.com/niobium-nz/Niobium/blob/1fa044968f504ef575021720c728a17dc72bb067/Niobium.Platform.StorageTable/AzureTableSignatureIssuer.cs) uses it to sign scoped Table SAS credentials returned through the resource-token endpoint. This is normal application runtime functionality for authorized callers, not code restricted to integration tests. The registered issuer serves the application's Table resource grants, including invoice-item ownership grants. Its [AzureTableClientFactory](https://github.com/niobium-nz/Niobium/blob/1fa044968f504ef575021720c728a17dc72bb067/Niobium.Database.StorageTable/AzureTableClientFactory.cs) continues using identity credentials for the server's direct Table operations.
+
+The integration runner separately reads the same account key as `TEST_STORAGE_KEY` for creating, checking and cleaning up its own fixtures. It does not consume the Bicep parameter or read this host vault secret. The resource-token case obtains a scoped SAS from the actual Function App and probes that credential's read/write boundaries against storage. These three uses must be distinguished: host signing key, runner fixture credential and returned scoped SAS. This key is unrelated to invoice-link token derivation and Functions HTTP authorization keys.
+
+Production's workflow projects its runtime signing key through `APPSETTING_KV_STORAGETABLEOPTIONS__KEY` from its GitHub environment secret and the generic hooks. PR #11 did not verify production `/rsas`; the production allowlist checks only health and designated invoice reads. Preserve that verification boundary when reporting evidence.
+
+Do not run provisioning hooks merely to validate documentation. Settings and precedence are catalogued in [development](configuration-and-development.md).
 
 ## Declared runtime topology
 
