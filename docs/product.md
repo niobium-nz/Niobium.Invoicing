@@ -37,7 +37,7 @@ For example, an invoicing management group can oversee a restaurant and a playgr
 | Manual bank-transfer settlement | Business use confirmed; recording partial | Payment instructions and request `Settled` exist; no reconciliation/ledger/settlement endpoint |
 | Processor collection/direct debit/reconciliation | Planned | No processor integrations or reconciliation workflows |
 | MCP tools | Planned | No MCP server or tool contracts in repository |
-| Five-year retention and version audit | Planned | No retention schedule, soft-delete or historical-version store |
+| Ten-year retention and version audit | Planned | Q28 supersedes the original five-year duration; no retention schedule, soft-delete or historical-version store |
 | Accounting | Out of scope | Q01 |
 
 Evidence entry points: [Contracts](../src/Niobium.Invoicing.Contracts), [Core flows](../src/Niobium.Invoicing.Core/Flows), [Server](../src/Niobium.Invoicing.Server). Tests and their limits are mapped in [testing](testing-and-conventions.md).
@@ -56,11 +56,11 @@ These are **Owner-confirmed requirements**, not claims that every row is enforce
 | R06 | Content can change before sending and is frozen when notification is queued. | Q04/Q10; persistent transition and concurrency protection incomplete. |
 | R07 | Cancellation is permitted only before any partial/full payment. | Q04; not implemented. |
 | R08 | Replay recognises the same invoice and preserves its state; the same outgoing message may be published again. | Q11; conditional upsert planned, stable ID already used. |
-| R09 | Transport or Notification prevents replay from causing another recipient email. | Q11; downstream message-ID storage planned, broker detection a later option. |
+| R09 | Transport or Notification prevents replay from causing another recipient email. Retry multiple times with exponential backoff and jitter within the 24-hour window. | Q11/Q28; downstream message-ID storage and provider recovery planned, broker detection a later option. No business retry scheduler implemented here. |
 | R10 | Delivered means positive delivery confirmation; queueing means Delivering. | Q04/Q10; current Delivered records enqueue completion instead. Deferred pending downstream work. |
 | R11 | Billees can view via a correct-token link without an account. | Q05/Q13; intended expiry/revocation policy deferred. |
 | R12 | PRs to main deploy only to test; successful test-environment checks precede production. | Q06/Q14; unit checks exist, integration tests and promotion correction planned. |
-| R13 | Retain data for five years and preserve historical versions across updates/soft deletion. | Q08; retention clock, purge and recovery details deferred; not implemented. |
+| R13 | Retain data for ten years and preserve historical versions across updates/soft deletion. | Q28 supersedes Q08's five-year duration. Reconcile clock, purge and recovery details with the accepted recommendations before implementation; duration alone does not certify AU/NZ compliance. |
 | R14 | Previously emailed links continue to work where the invoice has a saved token; resends preserve that token. | Q17; saved-token validation/reuse is implemented. No new expiry or legacy recovery for tokenless records is introduced. |
 
-No SLA was committed (Q08). Success metrics, capacity targets, availability/latency targets, support response times and roadmap dates are Unknown. Detailed rounding policy, fractional quantity support, credits/negative amounts and future MCP/payment protocols are accepted deferrals in [decisions](decisions-and-risks.md#accepted-unknowns).
+No SLA was committed (Q08). Success metrics, capacity targets, availability/latency targets, support response times and roadmap dates are Unknown. Detailed rounding policy, fractional quantity support, credits/negative amounts and future MCP/payment protocols are recorded in [decisions](decisions-and-risks.md#accepted-unknowns). [Q28](decisions-and-risks.md#q28-business-decision-follow-up) records the later acceptance of business recommendations and post-MCP deferrals; their exact numbered source must be reconciled before changing these detailed policies.

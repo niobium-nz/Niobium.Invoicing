@@ -13,7 +13,7 @@ These entries preserve owner answers during discovery and approval. They are ret
 | Q05 | HTTP biller checks and private Store queue integration intentionally differ. Email trigger is debug-only and should not be in production. Billees need public token links without accounts. Direct table SAS served historical biller UI. | The earlier debug-route removal is superseded by Q26; restore privileged Function-key access. Public stored-token viewing remains. |
 | Q06 | Test/prod use separate resource groups and prefixes. PRs to main should deploy only to test; production should depend on successful test checks. | PR production eligibility is removed and local verification gates deployment; the deployed integration gate remains open. |
 | Q07 | Tracked development examples contain public/demo values. Sensitive information still requires careful handling. | Do not copy values into documentation; use placeholders. |
-| Q08 | Five-year retention and audit versions across updates/soft deletes are planned. No SLA. Backup/recovery expected from Azure PaaS. | Actual recovery configuration and detailed policy remain unverified/deferred. |
+| Q08 | Audit versions across updates/soft deletes are planned. The original five-year retention duration is superseded by ten years under Q28. No SLA. Backup/recovery expected from Azure PaaS. | Actual recovery configuration and detailed policy remain unverified; the new duration is a requirement, not an implemented retention control. |
 | Q09 | **Final HTML grand total includes tax.** Separate subtotal/tax calculation is valid. Biller-specific tax treatment uses 0% for exemption. | Earlier inference that arithmetic conflicted with inclusive pricing was withdrawn. No requirement to treat unit prices as tax-inclusive was established. |
 | Q10 | Freeze content when notification is queued; desired Delivering then confirmed Delivered. | Content freeze is implemented under Q21; delivery confirmation remains blocked on Notification. |
 | Q11 | Invoicing retries preserve the existing invoice but publish the same exact downstream message again. Conditional persistence is the planned way to retain the invoice for reconstruction. Transport/Notification prevents another email. | Do not suppress repeat publishing in the proposed Invoicing requirement. Stable ID/content and conditional persistence are implemented. Downstream protection remains planned. |
@@ -43,6 +43,25 @@ Restoration uses two reviewed steps because the original immutable-main suite re
 
 Q27 was confirmed on 2026-10-31 (Pacific/Auckland): keep public viewing dependent on a saved matching token and preserve token-based freeze semantics. Instead of moving token generation to create/update, the owner requested a separate Function-key-guarded endpoint to debug invoice viewing. The implementation is `DebugInvoice`, `GET /debug/{issuer}/invoices/{invoice}`, rendering saved invoice/items without writes, token generation, freeze or notification. Its key grants operational access across billers, like the manual email function. Public tokenless access remains forbidden. No package/schema changes or production test allowlist expansion are required.
 
+### Q28: business-decision follow-up
+
+Recorded on **2026-11-06 (Pacific/Auckland)**. The owner accepted all recommendations in the preceding numbered business-decision discussion, with the following additions and deferrals. These discussion numbers are not backlog B IDs or existing Q IDs.
+
+| Discussion item | Owner instruction | Traceability and next work |
+| --- | --- | --- |
+| #1 | Retry multiple times with exponential backoff and jitter within the 24-hour window. | B02 / Q11: carry this requirement into the downstream Notification inbox/provider recovery work. Preserve the same outgoing identity/content on exact replay. No business retry scheduler is implemented in Invoicing by this decision. |
+| #6 | Use a ten-year retention period instead of the previously proposed duration, to support AU/NZ recordkeeping requirements. | B08 / Q08 / R13: ten years supersedes five years in the current requirements. Historical versions and soft-delete audit remain required. Storage, recovery and deletion controls still need implementation and verification. |
+| #8 | Defer for now; revisit after MCP is built. | Keep the original item number and the MCP dependency until its topic is recovered from the numbered discussion. Do not substitute an unrelated backlog item. |
+| #10 | Plan further investigation after MCP is released; findings may require changes for AU/NZ markets or the stated IRS/IRD requirements. | Preserve this investigation milestone. Its topic and applicable jurisdictions must be reconciled with the original recommendation; this statement does not establish US product scope or a tax-compliance claim. |
+| #11 | Plan implementation after MCP is released. | Preserve this implementation milestone separately from #10's investigation. Map its topic from the original recommendation before scheduling code changes. |
+| #2-#5, #7, #9 | Accept the recommendations as previously presented. | Approval is recorded. The exact recommendation text and topic-to-ID mapping still need to be recovered; do not invent their contents or request the same approval again. |
+
+The available project records do not contain the complete numbered recommendation list. This is a source-reconciliation dependency, not a rejection of the owner's approval. The explicit #1/#6 requirements can be recorded now; affected implementation waits only where the accepted terms cannot yet be reconstructed. Existing unknowns below are not automatically new approval requests, nor are their details silently resolved by guessing which numbered recommendation covered them.
+
+For B02, recover the accepted provider-outcome and after-window handling before changing sending behavior. A queue transport retry is not a durable provider retry schedule or duplicate-email protection. The implementation must demonstrate the accepted retry window, exponential delays with jitter, multiple attempts and stable message identity under concurrent delivery/restart; the exact schedule and exhaustion behavior must come from the recovered terms or an explicit subsequent decision.
+
+For B08, ten years is the owner's product retention requirement. It does not establish the retention clock, exceptions, purge/privacy handling, legacy compatibility or recovery guarantees by itself. Reconcile those accepted recommendations before building retention or deletion automation. AU/NZ legal and tax applicability needs separate verification; the duration alone is not evidence of compliance. No production migration or deletion is authorized by this record.
+
 ## Current discrepancies and proposed backlog
 
 Priority below is **Proposed review order**, not a committed delivery schedule. Evidence is linked to implementation; security-sensitive details are kept in private findings, not reproduced here.
@@ -50,13 +69,13 @@ Priority below is **Proposed review order**, not a committed delivery schedule. 
 | Priority / ID | Work | Evidence and completion consideration |
 | --- | --- | --- |
 | P1 / B01 | Conditional persistence and lifecycle enforcement | `UpsertFlow.RunAsync`, `InvoiceDomain.UpdateAsync`; load/recognise existing state, distinguish replay from changed input and concurrent edits. Preserve replay message identity/content (Q11). |
-| P1 / B02 | Downstream email idempotency | [Notification evidence](niobium-integration.md#notification-boundary); planned message-ID table, recovery protocol and tests; broker option later. |
+| P1 / B02 | Downstream email idempotency | [Notification evidence](niobium-integration.md#notification-boundary); planned message-ID table, recovery protocol and tests; Q28 adds multiple retries with exponential backoff and jitter within 24 hours. Broker option later. |
 | P1 / B03 | Due-date and billing validation | `Invoice.BuildNew`, `InvoiceDomain.UpdateAsync`; prevent null due date, validate currency/ownership/item linkage and appropriate ranges with decided policy. |
 | P1 / B04 | Correct production promotion and debug-route exposure | [Protected delivery](delivery-and-operations.md) verifies feature deployment before reviewed promotion. Q26 restores the manual email route with Function-key protection and explicit deployed authorization tests; production verification must never call that side-effecting route. |
 | Deferred / B05 | Review invoice-item identifier/key assumptions | [data model](domain-and-data.md); per-biller ID uniqueness is not global uniqueness. Owner accepted deferral under Q16. Resource registration correction is implemented under Q15; key isolation is still unresolved. |
 | P2 / B06 | Delivering/Delivered confirmation and cancellation | Q04/Q10; downstream callback/event and state transitions absent; deferred. |
 | P2 / B07 | Integration tests before promotion | Q14; isolate resources/data and cover API/storage/messaging failures before adding execution gates. |
-| P2 / B08 | Retention, audit and recoverability | Q08; five-year requirement, version history/soft-delete, backup inventory and tested restore procedure need implementation/confirmation. |
+| P2 / B08 | Retention, audit and recoverability | Q08/Q28; ten-year requirement, version history/soft-delete, backup inventory and tested restore procedure need implementation/verification. Reconcile the accepted detailed recommendations before automation. |
 | P2 / B09 | Reconcile request/display behavior | Q20 precedence is implemented and tested. Stored Template still does not select HTML; selector and compatibility policy remain deferred. |
 | P3 / B10 | MCP, payments and reconciliation | Product direction confirmed; contracts, credentials, scheduling and acceptance details deferred. |
 
@@ -75,4 +94,4 @@ There is **no tax-pricing defect recorded solely because current helpers add tax
 | U07 | Complete isolated application setup and clean-cache restore | Existing-cache diagnostic build, unit tests and local Table/HTTP component integration verified. Complete isolated deployed setup and clean-cache restore remain open. |
 | U08 | Exact runtime behavior of untested framework/host edges | Local tests establish adapter read/write ETag behavior, stale rejection and ASP.NET result execution. Functions middleware/binding and live Azure remain open. |
 
-The owner accepted these as explicit unknowns with the documentation scope. Resolve a decision by updating its entry, affected requirements, implementation references and tests; never silently replace Unknown with an assumption.
+The owner accepted these as explicit unknowns with the original documentation scope. Q28 records later approval of the business recommendations; reconcile their exact terms with these IDs before treating an older unknown as either resolved or a fresh approval request. Resolve a decision by updating its entry, affected requirements, implementation references and tests; never silently replace Unknown with an assumption.

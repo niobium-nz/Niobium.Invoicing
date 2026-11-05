@@ -57,6 +57,9 @@ See [infrastructure composition and settings flow](docs/delivery-and-operations.
 - Amounts use integer cents; tax rate uses hundredths of one percent (`1500` means 15%). The HTML grand total includes tax. Do not reinterpret this as requiring tax-inclusive unit prices (Q09).
 - Current `Delivered` means the notification was enqueued and the subsequent save completed. Confirmation-based delivery states are planned (Q04/Q10).
 - Intended retries preserve the invoice and may republish the same message. Downstream email idempotency is separate planned work (Q11).
+- Q28 requires multiple notification retries with exponential backoff and jitter within the 24-hour window. This belongs to the downstream B02 recovery work; SDK retries do not implement that business policy. Preserve Q11's stable replay identity/content.
+- Q28 supersedes Q08's five-year retention duration with ten years, including the existing history/soft-delete audit requirement. Treat this as a product requirement, not an implemented control or legal-compliance certification.
+- The owner accepted the earlier numbered business recommendations. Q28 records the explicit additions and post-MCP deferrals for discussion #8/#10/#11; recover their exact topics and accepted terms before mapping them to backlog IDs or implementing them. Do not guess the missing numbered text or ask for the same approval again.
 - Preserve stored invoice-link tokens on resend; old emailed links must keep working when their token exists in storage (Q17). Public viewing requires a saved matching token.
 - Encode invoice text at HTML rendering, validate URL contexts separately, and keep notification parameters unencoded for the downstream renderer (Q18).
 - InvoiceItem uses ownership-based resource grants; do not add a blanket table entitlement. Its identifier/key risk remains explicitly deferred (Q15/Q16).

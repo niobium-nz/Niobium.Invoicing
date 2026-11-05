@@ -44,7 +44,7 @@ Token persistence failure prevents enqueueing; enqueue failure leaves the saved 
 
 ## Sensitive data and logging
 
-Invoices snapshot business/customer names, addresses, email, identifiers, contacts, payment instructions and settlement amounts. Notification messages contain recipient details, invoice facts and access links. Protect table data, queue bodies, telemetry and backups according to their data content; no approved detailed privacy/retention schedule beyond Q08 was established.
+Invoices snapshot business/customer names, addresses, email, identifiers, contacts, payment instructions and settlement amounts. Notification messages contain recipient details, invoice facts and access links. Protect table data, queue bodies, telemetry and backups according to their data content. Q28 sets ten-year retention and records acceptance of earlier business recommendations; the exact detailed privacy/retention terms must be recovered before implementation, not inferred from the duration.
 
 Use synthetic names/identifiers and `.invalid` URLs in examples. Do not copy real credentials, private keys, customer records, complete JWT/SAS/link tokens or raw production messages into issues, public docs or logs. Configuration catalogs identify keys and secret classification only. The owner confirmed tracked development values as public/demo examples (Q07); that is not permission to reuse them as real credentials.
 
@@ -52,6 +52,6 @@ Core enables IdentityModel PII logging for the framework's development environme
 
 ## Retention, recovery and review
 
-Five-year retention, soft deletion and historical-version audit are planned requirements, not implemented controls. No SLA is committed. Azure PaaS reliance was owner-confirmed, but backup inventory, restore capability, retention clock, deletion requests, regional data handling and RPO/RTO remain [accepted unknowns](decisions-and-risks.md#accepted-unknowns). No compliance claim is made.
+Ten-year retention, soft deletion and historical-version audit are planned requirements, not implemented controls. Q28 supersedes the original five-year duration; it does not by itself establish statutory compliance in AU/NZ. No SLA is committed. Azure PaaS reliance was owner-confirmed; reconcile the accepted detailed recommendations against the recorded [recovery and privacy unknowns](decisions-and-risks.md#accepted-unknowns) before implementing backup, retention-clock, deletion or regional-handling policy. Restore capability and RPO/RTO are not verified by this documentation change.
 
 For a security-related change, trace both HTTP and direct-resource paths, the matched framework version and private integration assumptions. Add meaningful isolated authorization/contract/failure tests when implementation work is authorized. Report suspected exposures privately with file/symbol locations and no copied values; agree disclosure/remediation before publishing sensitive details.

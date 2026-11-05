@@ -135,4 +135,6 @@ The flow skips blank recipient email. Otherwise it reuses the saved link token o
 
 **Q11 implementation:** persisted snapshots, item order, formatting culture, saved token and endpoint support stable exact replays. Changed frozen content receives 409. Exact retries republish the same message, including after an uncertain enqueue result. See [preparation/recovery](invoice-recovery.md) for checkpoint and compatibility limits. Downstream inbox/provider recovery remains B02 in Notification; repeated publication is intentional.
 
+**Q28 requirement:** the owner requires multiple retries with exponential backoff and jitter within the 24-hour window. This is planned downstream business recovery, separate from SDK send retries and Functions redelivery. It must preserve Q11 message identity/content and be verified with concurrency, restart and window-boundary cases. Recover the accepted provider-outcome/after-window recommendations and concrete scheduling terms before implementing that protocol; no retry scheduler or Notification change is included here.
+
 No OpenAPI/AsyncAPI generation, route version prefix or message-version field is configured. Contract/package changes need consumer compatibility review and targeted serialization tests. Machine-readable specifications and new tooling were outside the approved documentation scope.
