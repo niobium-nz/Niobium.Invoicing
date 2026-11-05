@@ -40,6 +40,22 @@ class AppSettingsTests(unittest.TestCase):
                 self.assertNotIn(value, generated + result.stdout + result.stderr)
             self.assertEqual(Path(str(path) + ".backup").read_text(), original)
 
+    def test_vault_prefixes_are_case_insensitive_throughout_parameter_generation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "main.bicepparam"
+            path.write_text("using 'main.bicep'\n")
+            settings = {
+                "APPSETTING_kv_LOWER__SECRET": "synthetic-lowercase-secret",
+                "AppSetting_kV_MIXED__SECRET": "synthetic-mixed-case-secret",
+            }
+            result = self.generate(path, settings)
+            generated = path.read_text()
+            for name, value in settings.items():
+                setting_name = name[len("APPSETTING_"):]
+                self.assertIn(f"name: '{setting_name}'\n    value: ''", generated)
+                self.assertNotIn(f"readEnvironmentVariable('{name}')", generated)
+                self.assertNotIn(value, generated + result.stdout + result.stderr)
+
     def test_regeneration_replaces_settings_and_keeps_original_backup(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "main.bicepparam"
