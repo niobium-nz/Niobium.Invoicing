@@ -70,6 +70,36 @@ If enqueue or the subsequent Delivered save fails, keep the invoice frozen and
 retry the exact request. The queue may already contain the message. Notification
 must handle duplicates; never clear the saved token or thaw content to retry.
 
+## Accepted downstream recovery requirements
+
+Q28 settles the B02 business policy; implementation belongs in Notification after
+its delivery safeguards are installed. Replaying an invoice preserves the same
+notification identity and frozen payload. A deliberate extra copy needs its own
+operation identity, not a retry that silently bypasses deduplication.
+
+- Persist a concurrency-safe inbox, provider attempt and retry schedule. Retry an
+  uncertain submission multiple times with exponential backoff and jitter within
+  the provider's 24-hour idempotency window, always with the same key/payload.
+- Preserve the first-submission boundary and next attempt across restarts. An old
+  queued message or recovered worker must not start a fresh window accidentally.
+- If the outcome remains unknown after the window, hold it for investigation.
+  Resolve from provider evidence; otherwise require an explicit resend decision.
+- Suppress confirmed submissions durably beyond 24 hours. Provider deduplication
+  lifetime is not the retention policy for local message history.
+- Verify concurrent/restarted consumers, lost responses, window boundaries and
+  attempt exhaustion. Neither Service Bus redelivery nor SDK retries establishes
+  this protocol, and no exactly-once delivery guarantee is claimed.
+
+Q28 also defines the following B06 lifecycle: authenticated provider events must
+confirm recipient mail-server acceptance before marking Delivered. Queue/provider
+acceptance remains Delivering. Preserve old enqueue timestamps with unknown
+confirmation, without resending historical invoices. Invoice cancellation remains
+independent: permit it at any delivery stage before any payment ever occurred,
+retain history and show Cancelled through the existing link. Best-effort send
+suppression cannot recall an email, and late delivery cannot undo cancellation.
+These rules require new implementation; they do not reinterpret the current
+Delivered column or add a production recovery command.
+
 ## Storage and consumer compatibility
 
 Seven nullable string columns are added to Invoice: `IssuanceState`,

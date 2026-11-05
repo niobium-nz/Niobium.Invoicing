@@ -23,7 +23,7 @@ Source links are relative and name symbols where useful. They follow the checkou
 
 The research implementation starts from main `e2f7269676359d85cc7e4308d4babfd1f6f0b39c`. Its [acceptance ledger](implementation-progress.md), [billing rules](billing-validation.md), [recovery protocol](invoice-recovery.md) and [local integration guide](integration-tests.md) record current changes and limits. Discovery records above remain historical evidence.
 
-The later [Q28 business-decision follow-up](decisions-and-risks.md#q28-business-decision-follow-up) records the owner's acceptance of the business recommendations, multiple retries with exponential backoff/jitter within 24 hours, ten-year retention and post-MCP deferrals. It distinguishes these confirmed additions from the numbered recommendations whose exact text still needs reconciliation.
+The later [Q28 business-decision follow-up](decisions-and-risks.md#q28-business-decision-follow-up) maps all thirteen accepted recommendations: provider retry/recovery, delivery confirmation and cancellation, Notification safeguards, ten-year audit retention, recovery targets, template/MCP/payment scope and post-MCP work. It distinguishes approved requirements from unimplemented controls and remaining validation/configuration prerequisites.
 
 ## Reading map and maintenance
 
