@@ -44,7 +44,7 @@ Token persistence failure prevents enqueueing; enqueue failure leaves the saved 
 
 ## Sensitive data and logging
 
-Invoices snapshot business/customer names, addresses, email, identifiers, contacts, payment instructions and settlement amounts. Notification messages contain recipient details, invoice facts and access links. Protect table data, queue bodies, telemetry and backups according to their data content; no approved detailed privacy/retention schedule beyond Q08 was established.
+Invoices snapshot business/customer names, addresses, email, identifiers, contacts, payment instructions and settlement amounts. Notification messages contain recipient details, invoice facts and access links. Protect table data, queue bodies, telemetry and backups according to their data content. Q28 requires ten-year invoice/history retention with material-change snapshots, actor/reason/timestamps and soft deletion. Validate the proposed financial-year clock, legal holds, exceptions and privacy handling before automatic purging. Keep notification deduplication retention compatible so deleted history cannot permit old sends.
 
 Use synthetic names/identifiers and `.invalid` URLs in examples. Do not copy real credentials, private keys, customer records, complete JWT/SAS/link tokens or raw production messages into issues, public docs or logs. Configuration catalogs identify keys and secret classification only. The owner confirmed tracked development values as public/demo examples (Q07); that is not permission to reuse them as real credentials.
 
@@ -52,6 +52,8 @@ Core enables IdentityModel PII logging for the framework's development environme
 
 ## Retention, recovery and review
 
-Five-year retention, soft deletion and historical-version audit are planned requirements, not implemented controls. No SLA is committed. Azure PaaS reliance was owner-confirmed, but backup inventory, restore capability, retention clock, deletion requests, regional data handling and RPO/RTO remain [accepted unknowns](decisions-and-risks.md#accepted-unknowns). No compliance claim is made.
+Ten-year retention, soft deletion and historical-version audit are planned requirements, not implemented controls. Q28 supersedes the original five-year duration; it does not by itself establish statutory compliance in AU/NZ. Inventory actual backups and prove restores in the existing test environment against the accepted one-hour RPO/four-hour RTO engineering targets. Assign operational ownership; these are not an advertised SLA or verified recovery capability. [Remaining validation work](decisions-and-risks.md#accepted-unknowns) includes the retention clock, purge/privacy/hold handling and actual backup configuration.
+
+The accepted B06 boundary requires Notification to authenticate provider webhooks before persisting events and publishing authenticated internal confirmations. Legacy enqueue timestamps must not be presented as verified delivery. Public-link expiry/revocation is scheduled after MCP for versioned new links with controlled replacement; existing saved-token links remain compatible, including a future Cancelled view.
 
 For a security-related change, trace both HTTP and direct-resource paths, the matched framework version and private integration assumptions. Add meaningful isolated authorization/contract/failure tests when implementation work is authorized. Report suspected exposures privately with file/symbol locations and no copied values; agree disclosure/remediation before publishing sensitive details.
