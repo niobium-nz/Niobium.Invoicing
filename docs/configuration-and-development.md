@@ -81,6 +81,8 @@ Evidence: [BillingOptions](../src/Niobium.Invoicing.Core/Options/BillingOptions.
 
 ## Deployment inputs and environment differences
 
+For the existing test biller, approved recipient and production read-only invoice fixture, use the [GitHub environment configuration inventory](environment-configuration.md). It records stored names, variable/secret kinds, runner mappings and repository scope. These fixture inputs are separate from the runtime settings above; reuse them instead of requesting replacement identities.
+
 | Input | Purpose / default |
 | --- | --- |
 | `AZURE_ENV_NAME` | Bicep environment; default `dev`, workflows use test/prod |

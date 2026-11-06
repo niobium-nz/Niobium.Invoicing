@@ -52,6 +52,8 @@ See [infrastructure composition and settings flow](docs/delivery-and-operations.
 
 - Invoicing tenant = management group; biller = business and authenticated user; billee = recipient/customer. Each biller belongs to exactly one group (Q02/Q12).
 - Notification tenant = sender, intentionally the invoicing biller.
+- Use Invoicing terminology for invoice-related configuration, documentation and tests, including dependency tests. New harness inputs use `TEST_BILLER_ID`, mapped from the existing GitHub variable `TEST_INVOICE_BILLER`; do not require a second stored variable. Preserve Notification's established `Tenant` wire/storage fields at the integration boundary.
+- Reuse the owner-confirmed test biller in `TEST_INVOICE_BILLER` and approved mailbox secret `TEST_NOTIFICATION_RECIPIENT`. These are repository-scoped GitHub environment settings, not Function App settings. Missing bindings in Notification do not reopen fixture selection. Production `TEST_INVOICE_TOKEN` remains required for the designated existing invoice's read-only check. Read the [environment configuration inventory](docs/environment-configuration.md) before asking for configuration or adding inputs; never copy actual mailbox/token values into documentation.
 - Invoice IDs are reverse Unix millisecond values through `Invoice.ParseID`, not ordinary Unix timestamps. They are not guaranteed globally unique.
 - Inspect key builders before storage changes. Invoice and invoice-item partitions differ; do not assume tenant is part of a key.
 - Amounts use integer cents; tax rate uses hundredths of one percent (`1500` means 15%). The HTML grand total includes tax. Do not reinterpret this as requiring tax-inclusive unit prices (Q09).

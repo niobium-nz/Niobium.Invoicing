@@ -36,6 +36,7 @@ The later [Q28 business-decision follow-up](decisions-and-risks.md#q28-business-
 | [API and messaging](api-and-messaging.md) | Routes, authorization, wire contracts, retries | Triggers, middleware, DTOs or messages change |
 | [Security](security.md) | Controls, assumptions, data handling | Identity, permissions or rendering changes |
 | [Configuration and development](configuration-and-development.md) | Settings and safe commands | SDK, options, setup or tooling changes |
+| [GitHub environment configuration](environment-configuration.md) | Existing fixture settings, repository scope, biller mapping and production token use | Fixture consumers, environment bindings or onboarding requirements change |
 | [Testing and conventions](testing-and-conventions.md) | Evidence and change recipes | Tests, warnings or compatibility policy change |
 | [Delivery and operations](delivery-and-operations.md) | Workflows, Azure declarations, operations | Hooks/resources/operating practices change |
 | [Decisions and risks](decisions-and-risks.md) | Confirmed decisions and planned work | Requirements clarified or backlog implemented |
