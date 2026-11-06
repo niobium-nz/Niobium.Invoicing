@@ -2,7 +2,8 @@
 
 ## Baseline and source
 
-The supplied `invoicing-plan.md` is readable in full: 175 lines, 34,257 bytes,
+The supplied [original research plan](invoicing-plan.md) is preserved unchanged in
+`docs/invoicing-plan.md` and is readable in full: 175 lines, 34,257 bytes,
 SHA-256 `1321b7712c4c9e10b477d03b230e12fce5485fbde3375d94c374fc96290313eb`.
 Its recommendations are task input; the user's instructions and recorded owner
 decisions govern implementation. The report's citation markers are not new evidence.
