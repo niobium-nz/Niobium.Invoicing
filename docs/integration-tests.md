@@ -89,6 +89,8 @@ The candidate deployed suite now contains 27 cases. Local component/storage inte
 
 ## Read-only production suite
 
+Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide covers reuse of the approved test biller and recipient across repository boundaries.
+
 Every merged PR starts production deployment followed by the separate Python read-only suite. There is no independent production gate. The agent that merged the PR must monitor the terminal result and immediately investigate/fix failures.
 
 Production environment configuration is **required**: variables `TEST_INVOICE_BILLER`, `TEST_INVOICE_ID`, and secret `TEST_INVOICE_TOKEN` identify the existing production test invoice. The test does not generate one, copy a test invoice into production, seed or clean up any data, call a write endpoint, send/receive queue messages, or send notifications.
