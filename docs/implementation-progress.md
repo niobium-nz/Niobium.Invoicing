@@ -14,7 +14,7 @@ the user's request or the recorded owner decisions.
 The user explicitly included Niobium.Notification. Its clean main baseline was
 `4a93385be1b09a9d97d0c2384e1085f254c7d84c`; B02 implementation is on
 `codex/notification-durable-retries`, commit
-`fcf53a9e20fb3b72ab308169d74c8435730cc5cb`, in
+`5ea944a7bec36978d9d8cc21d3cea94c3b23b754`, in
 [Notification draft PR #2](https://github.com/niobium-nz/Niobium.Notification/pull/2).
 The main ruleset was observed active with one approval, resolved review threads,
 test deployment and the trusted `Test deployment verified` status required.
@@ -28,17 +28,21 @@ This read-only inspection is not a new deployed verification result.
 | B04 | Current protected delivery supersedes the early workflow notes below. Q26 restored the Function-key EmailInvoice route; Q27 added the read-only debug view. The original report's route-removal recommendation is not applied again. |
 | B05 | Key migration remains deferred until after MCP under Q28; existing collision and compatibility risks remain recorded. |
 | B06 | Follows B02. Signed provider events, authenticated internal confirmation and payment-ever evidence still need implementation; current Delivered remains enqueue evidence. No confirmation or cancellation behavior changes here. |
-| B07 | Existing Invoicing local/deployed harnesses remain. Notification adds restart, lost-response, scheduling, concurrency and cutoff tests plus real local Table adapter coverage. Enabled Service Bus/Blob/provider integration remains unverified. |
+| B07 | Existing Invoicing local/deployed harnesses remain. Notification adds restart, lost-response, scheduling, concurrency and cutoff tests plus real local Table/Blob adapter coverage. Enabled cloud identity, Service Bus and provider integration remain unverified. |
 | B08 | Ten-year history/soft deletion and one-hour RPO/four-hour RTO are accepted requirements, not completed controls. Aggregate/history commit consistency, direct-writer compatibility, retention-clock/hold/privacy validation and actual restore evidence remain. |
 | B09 | Q20 display precedence is implemented. Versioned template selection remains deferred, including compatibility for legacy ignored selectors before enforcement. |
 | B10 | Read/draft MCP and durable payment records/manual reconciliation remain the accepted starting scope. Concrete authorization, payment and recurrence contracts remain outstanding. |
 
-Notification's Release build passed with zero warnings/errors; 88 application
-tests and one separately invoked real Table adapter scenario passed with no
-failures or skips. Authored coverage was 98.17%, with all module thresholds met.
-Its [ledger](https://github.com/niobium-nz/Niobium.Notification/blob/fcf53a9e20fb3b72ab308169d74c8435730cc5cb/docs/implementation-progress.md)
+Notification's Release builds passed with zero warnings/errors; 88 application
+tests and four separately invoked local storage scenarios passed with no
+failures or skips. The storage follow-through uses the pinned Niobium Blob adapter
+and real Table client to verify frozen payloads and recovery after a lost outcome
+write, whether that write committed or not. Queue/provider replies remain simulated.
+Authored application coverage was 98.17%, with all module thresholds met; application
+source and that test result are unchanged by the additional storage tests.
+Its [ledger](https://github.com/niobium-nz/Niobium.Notification/blob/5ea944a7bec36978d9d8cc21d3cea94c3b23b754/docs/implementation-progress.md)
 records exact commands and local evidence; the
-[protocol](https://github.com/niobium-nz/Niobium.Notification/blob/fcf53a9e20fb3b72ab308169d74c8435730cc5cb/docs/durable-submission.md)
+[protocol](https://github.com/niobium-nz/Niobium.Notification/blob/5ea944a7bec36978d9d8cc21d3cea94c3b23b754/docs/durable-submission.md)
 records activation prerequisites and operational limits. Invoicing changes are
 documentation only: byte comparison, SHA-256 and `git diff --check` passed; its
 application suites were not rerun for this continuation.
@@ -48,10 +52,19 @@ data access and production migrations. These draft commits use `[skip ci]` to
 respect that boundary despite the normal feature-deployment policy. No live
 readiness result is claimed. B02 activation and the later milestones remain open;
 the historical evidence below describes earlier changes, not this draft's CI.
-Notification's [PR readiness run](https://github.com/niobium-nz/Niobium.Notification/actions/runs/42199332875)
+Notification's [PR readiness run](https://github.com/niobium-nz/Niobium.Notification/actions/runs/42200884092)
 failed because this head has no successful authenticated build/test deployment/
 deployed integration run. No deployment or package run existed for that head at
 inspection. This required delivery gate remains unresolved under the task boundary.
+
+The remaining compatibility decisions are specific: B02 needs an identified
+new-operation cohort or verified suppression evidence for historical sends; B06
+needs the versioned confirmation contract and a treatment for legacy records with
+no trustworthy payment-ever evidence; B08 must reconcile required history with
+direct Table/SAS writers that can bypass Core or erase additive columns. The
+accepted delivery, cancellation and ten-year retention business rules are not
+being reopened. Live verification/restore exercises and production changes cannot
+be used to resolve these gaps within this task's delivery boundary.
 
 ## Baseline and source
 
