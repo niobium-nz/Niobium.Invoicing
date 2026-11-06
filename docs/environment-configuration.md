@@ -1,6 +1,6 @@
 # GitHub environment configuration
 
-This is the fixture-setting reference for agents, DevOps and developer onboarding. The owner reconfirmed the existing test biller and approved recipient on 2026-11-06 (Pacific/Auckland). Reuse these configured identities; do not request a new biller or mailbox because a dependent workflow is missing its configuration binding. Values, recipient addresses and tokens must remain outside source, logs and review comments.
+This is the fixture-setting reference for agents, DevOps and developer onboarding. The owner reconfirmed the existing test biller and approved recipient on 2026-11-06 (Pacific/Auckland). Reuse these configured identities in Invoicing-owned tests. Notification is an independent shared service; its own tests must not require these invoice fixtures. Values, recipient addresses and tokens must remain outside source, logs and review comments.
 
 ## Existing Invoicing settings
 
@@ -21,19 +21,13 @@ The existing [deployed test fixture](../src/Niobium.Invoicing.Deployment.Tests/D
 
 ## Invoice terminology and dependency mapping
 
-Use **biller** for the invoice issuer, including configuration and tests that interact with Notification. For new invoice-related harness inputs, the name is `TEST_BILLER_ID`. Preserve the existing stored GitHub variable `TEST_INVOICE_BILLER`; map it explicitly rather than requiring a second variable or renaming the existing configuration:
+Use **biller** for the invoice issuer in Invoicing-owned configuration, documentation and tests, including tests of its integration with Notification. For new Invoicing harness inputs, the name is `TEST_BILLER_ID`, explicitly mapped from the existing stored GitHub variable `TEST_INVOICE_BILLER`. Invoicing's current deployed suite still consumes `TEST_INVOICE_BILLER`; no second stored variable or runtime/wire rename is needed.
 
-```yaml
-# Job: environment: test
-# Test-step environment inputs:
-env:
-  TEST_BILLER_ID: ${{ vars.TEST_INVOICE_BILLER }}
-  TEST_NOTIFICATION_RECIPIENT: ${{ secrets.TEST_NOTIFICATION_RECIPIENT }}
-```
+Notification is an independent shared service. Invoicing maps its biller to Notification's established `Tenant` field and supplies its channel/template parameters at the caller boundary. Notification renders and sends the generic request; it must not know invoice business rules or require Invoicing's test configuration. Invoicing's management-group tenant is a separate identity.
 
-This is the Notification harness input mapping. Invoicing's existing deployed suite still consumes `TEST_INVOICE_BILLER`; no runtime or wire contract is renamed by this naming rule. Notification's established `Tenant` field and source `Invoice` template partition represent the Invoicing biller at that boundary. Invoicing's management-group tenant is a different identity. A uniquely owned Notification fixture may use its own partition; it must retain an explicit mapping to the source biller rather than changing shared template records.
+Invoice-specific end-to-end checks belong in this repository and use the configured biller, recipient and real Notification service through its established contract. Notification owns its generic sender/template/recipient tests in its own existing test resources. Its tests must not read a consumer's `Invoice` template to discover a sender or require invoice/biller identifiers. This corrects the earlier instruction to copy `TEST_INVOICE_BILLER` into Notification; that request is withdrawn.
 
-GitHub environment settings are **repository scoped**. A job using `environment: test` in `Niobium.Notification` reads Notification's test settings, not Invoicing's. To use the same approved biller and recipient there, bind the same approved values under `TEST_INVOICE_BILLER` and secret `TEST_NOTIFICATION_RECIPIENT` in that repository's `test` environment. This is configuration reuse, not authorization for a new recipient or new infrastructure. Do not assume that an identically named environment or a cross-repository reusable workflow automatically shares environment secrets. The current connector cannot inspect or manage these environment settings; a missing binding may require an administrator, but it does not reopen the choice of biller or mailbox.
+GitHub environment settings are **repository scoped**, but scope alone is not a reason to duplicate a consumer's fixtures into a shared service. Keep the invoice settings above in Invoicing. An approved mailbox may separately be used as a generic Notification test recipient, with explicit service-owned configuration and no dependency on invoice data. The same environment name or a reusable workflow does not automatically share settings. Do not infer a new sender, recipient or cross-service fixture obligation from missing configuration.
 
 ## Why the production token is still needed
 
@@ -63,7 +57,7 @@ See the [runtime configuration catalog](configuration-and-development.md#runtime
 
 1. Identify the repository, GitHub environment, workflow job and exact commit being run. Check its explicit `vars`/`secrets` projection before asking for another setting.
 2. Use the stored names and kinds in the inventory. Keep the approved recipient in a secret, not a plain variable, documentation or a fallback template. A secret's value cannot be read back through GitHub's settings API.
-3. For a dependent repository, verify its own binding to the same approved biller and recipient. An empty Notification input does not show that Invoicing's configured value is missing or invalid. The Notification preflight checks configuration without resource access; its actual deployed cases must still verify the biller's existing `Invoice` template and real provider path.
+3. Identify which service owns the test. Invoice-specific checks run here using the existing Invoicing settings. Notification's independent service checks use its own generic sender/template/recipient fixtures, without reading invoice templates or importing biller configuration. A missing setting in one repository does not show that another repository's configured value is missing or invalid.
 4. Keep environment fixtures separate. In production, check that the biller, invoice ID and saved token refer to the same existing invoice; do not copy test fixture values into production.
 5. Verify the latest run's actual deployment, candidate/trusted suites and read-only report. A local pass, an old green run, a skipped suite or configuration confirmation is not current deployment evidence. Use names and sanitized error codes in diagnostics, never credential or mailbox values.
 

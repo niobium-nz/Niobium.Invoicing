@@ -89,7 +89,7 @@ The candidate deployed suite now contains 27 cases. Local component/storage inte
 
 ## Read-only production suite
 
-Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide covers reuse of the approved test biller and recipient across repository boundaries.
+Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide records the service boundary: Invoicing owns invoice-specific integration tests, while Notification owns generic notification tests without biller/invoice fixtures.
 
 Every merged PR starts production deployment followed by the separate Python read-only suite. There is no independent production gate. The agent that merged the PR must monitor the terminal result and immediately investigate/fix failures.
 

@@ -53,7 +53,7 @@ The connected GitHub identity cannot administer repository rules or Actions perm
 
 ## Real-environment integration and configuration
 
-The [GitHub environment configuration inventory](environment-configuration.md) is the operator and onboarding reference for the existing `TEST_INVOICE_BILLER`, `TEST_INVOICE_ID`, `TEST_NOTIFICATION_RECIPIENT` and production `TEST_INVOICE_TOKEN` settings. Reuse the approved identities and distinguish repository-scoped bindings from missing business decisions. The production token is still required by the read-only client.
+The [GitHub environment configuration inventory](environment-configuration.md) is the operator and onboarding reference for the existing `TEST_INVOICE_BILLER`, `TEST_INVOICE_ID`, `TEST_NOTIFICATION_RECIPIENT` and production `TEST_INVOICE_TOKEN` settings. Reuse the approved identities in Invoicing-owned tests. Keep invoice-specific end-to-end checks here; Notification owns generic service tests and must not import these invoice fixtures. The production token is still required by the read-only client.
 
 The test function uses its normal `niobiumnotify-sb-test.servicebus.windows.net` namespace. Tests never receive or complete messages from the Notification service's queue. They send one invoice notification to the approved `TEST_NOTIFICATION_RECIPIENT` **environment secret**, using a test biller, and wait for Invoicing's persisted enqueue acknowledgement. That verifies the real outgoing transport; `Delivered` still does not prove the email provider accepted or delivered a message. Provider receipts remain outside this repository's observable contract.
 
