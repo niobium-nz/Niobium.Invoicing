@@ -1,5 +1,58 @@
 # Research plan implementation
 
+## Current follow-through: 2026-11-06
+
+This continuation starts from clean `origin/main` at
+`74d7a8f877f38b943f106a8f4745c522fdb4d213`, on
+`codex/invoicing-plan-follow-through` in `/workspace/Niobium.Invoicing`.
+The original upload was absent from that baseline. It is now preserved byte for
+byte in [invoicing-plan.md](invoicing-plan.md), indexed in the documentation and
+included in [draft PR #17](https://github.com/niobium-nz/Niobium.Invoicing/pull/17).
+Its checksum below matches the upload; instructions in the report do not override
+the user's request or the recorded owner decisions.
+
+The user explicitly included Niobium.Notification. Its clean main baseline was
+`4a93385be1b09a9d97d0c2384e1085f254c7d84c`; B02 implementation is on
+`codex/notification-durable-retries`, commit
+`fcf53a9e20fb3b72ab308169d74c8435730cc5cb`, in
+[Notification draft PR #2](https://github.com/niobium-nz/Niobium.Notification/pull/2).
+The main ruleset was observed active with one approval, resolved review threads,
+test deployment and the trusted `Test deployment verified` status required.
+This read-only inspection is not a new deployed verification result.
+
+| Plan ID | Current reconciliation |
+| --- | --- |
+| B01 | Existing conditional aggregate preparation/freeze, replay and conservative uncertain-write handling remain implemented. The cooperative-writer and nontransactional limits still apply. |
+| B02 | Invoicing already republishes stable exact replays. Notification draft PR #2 adds conditional inbox claims, frozen provider payload/key, persisted 24-hour retry state, recovery wakes, accepted-send suppression and held outcomes. It is disabled by default until legacy-operation cutover and controlled live verification are complete. |
+| B03 | Shared validation, identity/ownership checks, defaults and checked arithmetic already exist. Current quantity, credit and rounding compatibility remains unchanged. |
+| B04 | Current protected delivery supersedes the early workflow notes below. Q26 restored the Function-key EmailInvoice route; Q27 added the read-only debug view. The original report's route-removal recommendation is not applied again. |
+| B05 | Key migration remains deferred until after MCP under Q28; existing collision and compatibility risks remain recorded. |
+| B06 | Follows B02. Signed provider events, authenticated internal confirmation and payment-ever evidence still need implementation; current Delivered remains enqueue evidence. No confirmation or cancellation behavior changes here. |
+| B07 | Existing Invoicing local/deployed harnesses remain. Notification adds restart, lost-response, scheduling, concurrency and cutoff tests plus real local Table adapter coverage. Enabled Service Bus/Blob/provider integration remains unverified. |
+| B08 | Ten-year history/soft deletion and one-hour RPO/four-hour RTO are accepted requirements, not completed controls. Aggregate/history commit consistency, direct-writer compatibility, retention-clock/hold/privacy validation and actual restore evidence remain. |
+| B09 | Q20 display precedence is implemented. Versioned template selection remains deferred, including compatibility for legacy ignored selectors before enforcement. |
+| B10 | Read/draft MCP and durable payment records/manual reconciliation remain the accepted starting scope. Concrete authorization, payment and recurrence contracts remain outstanding. |
+
+Notification's Release build passed with zero warnings/errors; 88 application
+tests and one separately invoked real Table adapter scenario passed with no
+failures or skips. Authored coverage was 98.17%, with all module thresholds met.
+Its [ledger](https://github.com/niobium-nz/Niobium.Notification/blob/fcf53a9e20fb3b72ab308169d74c8435730cc5cb/docs/implementation-progress.md)
+records exact commands and local evidence; the
+[protocol](https://github.com/niobium-nz/Niobium.Notification/blob/fcf53a9e20fb3b72ab308169d74c8435730cc5cb/docs/durable-submission.md)
+records activation prerequisites and operational limits. Invoicing changes are
+documentation only: byte comparison, SHA-256 and `git diff --check` passed; its
+application suites were not rerun for this continuation.
+
+The current task prohibits deployment, merging, package publication, production
+data access and production migrations. These draft commits use `[skip ci]` to
+respect that boundary despite the normal feature-deployment policy. No live
+readiness result is claimed. B02 activation and the later milestones remain open;
+the historical evidence below describes earlier changes, not this draft's CI.
+Notification's [PR readiness run](https://github.com/niobium-nz/Niobium.Notification/actions/runs/42199332875)
+failed because this head has no successful authenticated build/test deployment/
+deployed integration run. No deployment or package run existed for that head at
+inspection. This required delivery gate remains unresolved under the task boundary.
+
 ## Baseline and source
 
 The supplied [original research plan](invoicing-plan.md) is preserved unchanged in
