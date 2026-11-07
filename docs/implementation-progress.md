@@ -1,6 +1,40 @@
 # Research plan implementation
 
-## Current follow-through: 2026-11-06
+## Notification domain review follow-up: 2026-11-07
+
+The owner asked for a DDD/data-access investigation and documentation in the three
+application repositories and Niobium. The new [domain/data-access guide](domain-data-access.md),
+linked from AGENTS.md and the documentation index, explains InvoiceDomain and
+InvoicePreparation, repository mapping, conditional save, verified read-back,
+storage compatibility and the limits of direct writers. Invoicing runtime code and
+package versions remain unchanged.
+
+The corresponding Notification refactor is commit
+`eea196e71adfb24ad8d4cadc435f81e9506f7bfb` in
+[Notification PR #2](https://github.com/niobium-nz/Niobium.Notification/pull/2).
+It addresses all five owner review comments using enums, the existing options
+class, explicit actions before conditions, and a rich submission domain backed by
+Niobium's repository. The SDK-specific application store is removed. The generic
+repository requires a provisioned table, so Notification declares that table in
+its existing data account. The internal draft schema is version 2 and the new
+option remains disabled; no historical sends are migrated or replayed.
+
+Notification's Release build passed with zero warnings/errors, 96 application
+tests and four actual Table/Blob adapter scenarios passed, and authored line
+coverage is 98.15%. Full Bicep compilation is blocked by proxy 403 responses when
+restoring existing AVM modules; syntax validation passed. Its
+[ledger](https://github.com/niobium-nz/Niobium.Notification/blob/eea196e71adfb24ad8d4cadc435f81e9506f7bfb/docs/implementation-progress.md)
+records commands, results and limits. Shared guidance is in
+[Niobium PR #1](https://github.com/niobium-nz/Niobium/pull/1) and
+[Store PR #2](https://github.com/niobium-nz/Niobium.Store/pull/2).
+
+For this documentation update, relative file links and whitespace passed and the
+original uploaded plan still matches byte for byte with the checksum below.
+Invoicing application tests were not rerun. The task's no-deployment/no-merge/
+no-publication boundary remains; this draft uses `[skip ci]` and does not claim
+live readiness or approval. The prior dated evidence below remains historical.
+
+## Prior follow-through: 2026-11-06
 
 This continuation starts from clean `origin/main` at
 `74d7a8f877f38b943f106a8f4745c522fdb4d213`, on

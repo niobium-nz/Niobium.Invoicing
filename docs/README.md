@@ -1,5 +1,7 @@
 # Documentation index
 
+[Rich domains and repository usage](domain-data-access.md) explains the domain/data-access boundary and current framework limitations.
+
 These documents describe implementation and owner-confirmed product direction. Planned requirements are not implementation guarantees.
 
 ## Baseline and evidence language

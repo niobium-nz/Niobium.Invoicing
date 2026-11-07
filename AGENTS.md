@@ -1,5 +1,11 @@
 # Working in Niobium.Invoicing
 
+Read [rich domains and data access](docs/domain-data-access.md) for domain, flow and
+repository changes. Keep business transitions on rich domains and backend SDK
+factories in framework adapters. Use enums for finite states/outcomes with explicit
+storage compatibility. Execute I/O and mutation actions before an `if`, then test
+a named result; do not hide actions inside conditions.
+
 ## Before changing anything
 
 - Read this file and task-specific documents below; linked Markdown is not automatically loaded.
