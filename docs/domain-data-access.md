@@ -47,7 +47,7 @@ supports scalar columns, not a general enum codec. JSON ignore attributes do not
 exclude properties from Table mapping. Keep I/O and mutation calls out of `if`
 conditions; execute the operation and then test a named result.
 
-The [framework guide](https://github.com/niobium-nz/Niobium/blob/codex/domain-data-access-guidance/docs/domain-data-access.md)
+The [framework guide](https://github.com/niobium-nz/Niobium/blob/1e370fccd38635f7209c1c4b01ddafcbe10ea618/docs/domain-data-access.md)
 records registration, mapping, save/event semantics and source-backed limitations.
 It also points to Store examples and the Notification domain refactor. No Invoicing
 runtime, public contract, package or schema change accompanies this guide.

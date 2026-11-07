@@ -1,5 +1,29 @@
 # Research plan implementation
 
+## Approved delivery follow-up: 2026-11-07
+
+The owner requested merging the approved documentation PRs while keeping
+Notification PR #2 open for its remaining review. This supersedes the earlier
+no-merge/no-deployment boundary for Invoicing PR #17 and resumes the normal
+[test deployment, review and production verification process](delivery-and-operations.md#required-delivery-sequence).
+The original uploaded plan remains unchanged; runtime and package changes are
+not part of this PR.
+
+The automated review on PR #17 identified a mutable framework-guide link. It now
+pins the exact Niobium documentation commit
+`1e370fccd38635f7209c1c4b01ddafcbe10ea618`, which is included in merged Niobium PR #1.
+The referenced file matches the merged guide. Relative link and whitespace checks
+passed. This correction uses a normal feature push so the required deployment
+checks can run. A valid approval for the resulting head and successful delivery
+checks remain prerequisites; PR evidence records their outcome.
+
+Niobium PR #1 and Store PR #2 were already merged by the owner. Their
+[framework workflow](https://github.com/niobium-nz/Niobium/actions/runs/42337718517),
+[Store deployment](https://github.com/niobium-nz/Niobium.Store/actions/runs/42337681464)
+and [Store package workflow](https://github.com/niobium-nz/Niobium.Store/actions/runs/42337681547)
+were observed completed successfully. A successful package workflow does not by
+itself mean a package was published.
+
 ## Notification domain review follow-up: 2026-11-07
 
 The owner asked for a DDD/data-access investigation and documentation in the three
