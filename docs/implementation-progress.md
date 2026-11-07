@@ -24,7 +24,7 @@ and [Store package workflow](https://github.com/niobium-nz/Niobium.Store/actions
 were observed completed successfully. A successful package workflow does not by
 itself mean a package was published.
 
-## Notification domain review follow-up: 2026-11-07
+## Historical Notification domain review checkpoint: 2026-11-07
 
 The owner asked for a DDD/data-access investigation and documentation in the three
 application repositories and Niobium. The new [domain/data-access guide](domain-data-access.md),
@@ -52,11 +52,13 @@ records commands, results and limits. Shared guidance is in
 [Niobium PR #1](https://github.com/niobium-nz/Niobium/pull/1) and
 [Store PR #2](https://github.com/niobium-nz/Niobium.Store/pull/2).
 
-For this documentation update, relative file links and whitespace passed and the
-original uploaded plan still matches byte for byte with the checksum below.
-Invoicing application tests were not rerun. The task's no-deployment/no-merge/
-no-publication boundary remains; this draft uses `[skip ci]` and does not claim
-live readiness or approval. The prior dated evidence below remains historical.
+At this earlier checkpoint, relative file links and whitespace passed and the
+original uploaded plan matched byte for byte with the checksum below. Invoicing
+application tests were not rerun. Those draft commits used `[skip ci]` under the
+then-current no-deployment/no-merge/no-publication restriction. The approved
+delivery follow-up above supersedes that restriction for Invoicing PR #17; normal
+verification and merge requirements now apply. This paragraph records historical
+evidence, not current delivery instructions.
 
 ## Prior follow-through: 2026-11-06
 
@@ -105,10 +107,11 @@ records activation prerequisites and operational limits. Invoicing changes are
 documentation only: byte comparison, SHA-256 and `git diff --check` passed; its
 application suites were not rerun for this continuation.
 
-The current task prohibits deployment, merging, package publication, production
-data access and production migrations. These draft commits use `[skip ci]` to
-respect that boundary despite the normal feature-deployment policy. No live
-readiness result is claimed. B02 activation and the later milestones remain open;
+At the 2026-11-06 checkpoint, the task prohibited deployment, merging, package
+publication, production data access and production migrations. Those draft commits
+used `[skip ci]` under that earlier restriction and had no live readiness result.
+The approved delivery follow-up above supersedes the Invoicing merge/deployment
+restriction; production data mutations and migrations remain outside scope. B02 activation and the later milestones remain open;
 the historical evidence below describes earlier changes, not this draft's CI.
 Notification's [PR readiness run](https://github.com/niobium-nz/Niobium.Notification/actions/runs/42200884092)
 failed because this head has no successful authenticated build/test deployment/
@@ -188,7 +191,11 @@ The report's IDs are retained. Partial work is not completion of the entire epic
 | B05 | Reopen key-isolation decision; compatible schema, migration/dual reads/backfill/rollback and ownership tests. | Q28 #8 defers until after MCP, retaining Q16's collision risk. Ownership correction is complete under Q15; plan migration compatibility and rollback before wider multi-biller rollout. |
 | B10 | MCP over Core flows with approved tool/auth contracts; payment attempts/idempotency, mandates, exact remaining-balance charge and reconciliation. | Q28 #12 starts MCP with read/draft and payments with durable records/manual reconciliation before a provider. Concrete privileged tool authority, provider/merchant/mandate/webhook/recurrence details remain. No accounting scope. |
 
-## Delivery boundaries
+## Historical delivery boundaries for the initial research
+
+These initial-task restrictions were superseded by the delivery-policy follow-ups
+and the approved delivery section at the top of this ledger. They do not authorize
+skipping current verification.
 
 No deployment, package publication, workflow dispatch, real queue consumption,
 production data access or production migration is authorized. Submission commits
