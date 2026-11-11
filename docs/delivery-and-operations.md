@@ -4,6 +4,14 @@
 
 The owner clarified this process on **2026-10-31 (Pacific/Auckland)**. Q25 assigns PR creation to the branch author, superseding workflow-created PRs. Earlier corrections removed the request-before-PR rule, independent-reviewer restriction, independent production gate and isolated notification sink.
 
+The owner reaffirmed the agreed process on **2026-11-12 (Pacific/Auckland)** after
+a continuation incorrectly reapplied the original research goal's restrictions.
+PR creation/submission, ordinary feature deployment and test fixtures, monitoring
+native review, fixes, and merge/production verification after current-head approval
+remain authorized. A repeated historical goal snapshot does not revoke that later
+authorization. Do not ask for it again or use skip-CI markers to avoid the required
+pipeline. Production data mutations and migrations remain outside this authority.
+
 1. Implement on a feature branch, run applicable local checks, and push directly. Do not push to `main`, create an untested PR, or use skip-CI markers. Slash-containing branches and documentation-only changes also run verification.
 2. `Azure Deployment` restores/builds the solution and deployed-test project, runs policy/tooling tests, and runs unit/local integration tests with coverage. Authored Contracts/Core/Server source must reach **90% combined line coverage and 80% per module**. Generated `obj`/`bin` code is excluded; authored application files are not.
 3. Deploy the feature commit to **the existing test environment**, then run deployed integration tests against its actual Functions host, Table storage, Service Bus and Notification service. Run the candidate suite and, on a fresh runner, the previously reviewed suite from an immutable main commit. The second runner checks out only main, including all project references, build inputs and the read-only client; it consumes no feature artifacts. Use test data in the real resources, without extra Azure test stacks, substitute queues or notification sinks. A workflow-wide concurrency lock covers build, deployment and both integration runners across feature branches. Both suites must see the exact feature SHA at `/health`.

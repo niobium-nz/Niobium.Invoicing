@@ -1,5 +1,26 @@
 # Research plan implementation
 
+## Delivery authority reaffirmed: 2026-11-12
+
+The owner confirmed that automatic author-created/submitted PRs, native Codex
+review and the agreed deployment process were already authorized. The previous
+continuation incorrectly treated the original goal's no-deployment wording as a
+current restriction and used `[skip ci]`. That was an agent error, not a missing
+owner approval or an external deployment blocker.
+
+This follow-up corrects AGENTS.md and the delivery guide so resumed goals retain
+the latest owner authorization. It resumes normal feature verification for
+[PR #18](https://github.com/niobium-nz/Niobium.Invoicing/pull/18), followed by ready
+review, native review monitoring and fixes, current-head approval, then merge and
+production read-only verification. No new permission is needed to create/submit
+the PR or run its ordinary test deployment. The runtime implementation and the
+original research plan remain unchanged. The PR records terminal workflow and
+review evidence for the new head; earlier local results do not replace it.
+
+Remaining B02 activation and later business/compatibility dependencies in the
+reconciliation below do not block delivery of this independent B07 change.
+Production data mutations, migrations and bypassing review are still prohibited.
+
 ## Queue measurements continuation: 2026-11-11
 
 The complete original report is available and unchanged: 34,257 bytes, SHA-256
@@ -59,14 +80,12 @@ The existing Table fixture used an owned in-memory Azurite process on loopback
 port 18486, cleaned its records/tables and was stopped afterward. The explicit
 Git whitespace option respects the existing CRLF test-file convention.
 
-The continuing goal explicitly prohibits deployment, merge, package publication,
-production data access and migrations. This new work is therefore submitted as
-a **draft** with `[skip ci]` to prevent the feature-push deployment trigger. This
-is a task-specific boundary, not a change to normal delivery policy or evidence
-of green deployed checks. The trusted readiness controller must remain unsatisfied
-until an authorized normal push completes the real test deployment and both
-deployed suites. Request independent draft review and address its findings; do not
-mark this ready or merge based on local metrics collection.
+Historical submission: the agent incorrectly reapplied the original goal's
+deployment restriction and submitted a draft with `[skip ci]`. PR readiness then
+failed because the feature commit had no authenticated deployment run. Manual
+code/security review completed without findings, but could not replace that run.
+The delivery-authority correction above resumes the already authorized normal
+pipeline. This historical checkpoint does not authorize skipping current checks.
 
 ## Approved delivery follow-up: 2026-11-07
 

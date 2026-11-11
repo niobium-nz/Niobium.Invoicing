@@ -8,7 +8,8 @@ cases collect the actual consumer's measurements through OpenTelemetry and cover
 failure/cancellation, wall-clock changes, repeated delivery and enqueue metadata
 boundaries. Combined authored line coverage is 92.14% (Contracts 100.00%, Core
 90.92%, Server 90.84%). These are local results; deployed telemetry ingestion and
-CI remain pending under this continuation's no-deployment boundary. See
+current-head CI require separate evidence. The 2026-11-12 delivery correction
+resumes the already authorized normal feature pipeline. See
 [queue measurements](queue-observability.md) and the latest
 [progress checkpoint](implementation-progress.md#queue-measurements-continuation-2026-11-11).
 
