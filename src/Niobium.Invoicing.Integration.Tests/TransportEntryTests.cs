@@ -2,6 +2,8 @@ using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Niobium.Invoicing.Flows;
@@ -41,7 +43,8 @@ public sealed class TransportEntryTests
     {
         Mock<UpsertFlow> upsert = new(MockBehavior.Strict, null!, null!, null!, null!);
         Mock<EmailFlow> email = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
-        IssueInvoiceCommandConsumer consumer = new(new IssueFlow(upsert.Object, email.Object), NullLogger<IssueInvoiceCommandConsumer>.Instance);
+        using ServiceProvider services = new ServiceCollection().AddInvoiceQueueTelemetry(new ConfigurationBuilder().Build()).BuildServiceProvider();
+        IssueInvoiceCommandConsumer consumer = new(new IssueFlow(upsert.Object, email.Object), NullLogger<IssueInvoiceCommandConsumer>.Instance, services.GetRequiredService<InvoiceQueueTelemetry>());
         ServiceBusReceivedMessage message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: new BinaryData(body), contentType: contentType, messageId: "synthetic");
         if (contentType == "application/json")
         {
@@ -79,7 +82,8 @@ public sealed class TransportEntryTests
         Mock<UpsertFlow> upsert = new(MockBehavior.Strict, null!, null!, null!, null!);
         upsert.Setup(x => x.RunAsync(It.Is<IssueInvoiceRequest>(r => r.BilleeID == customer.ID), It.Is<Billee?>(b => b!.ID == customer.ID), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         Mock<EmailFlow> email = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
-        IssueInvoiceCommandConsumer consumer = new(new IssueFlow(upsert.Object, email.Object), NullLogger<IssueInvoiceCommandConsumer>.Instance);
+        using ServiceProvider services = new ServiceCollection().AddInvoiceQueueTelemetry(new ConfigurationBuilder().Build()).BuildServiceProvider();
+        IssueInvoiceCommandConsumer consumer = new(new IssueFlow(upsert.Object, email.Object), NullLogger<IssueInvoiceCommandConsumer>.Instance, services.GetRequiredService<InvoiceQueueTelemetry>());
         ServiceBusReceivedMessage message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: new BinaryData(JsonMarshaller.Marshall(command)), contentType: "application/json", messageId: "synthetic");
         await consumer.Run(message, CancellationToken.None);
         upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()), Times.Once);

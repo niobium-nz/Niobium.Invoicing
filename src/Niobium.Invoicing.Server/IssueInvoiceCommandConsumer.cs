@@ -12,7 +12,8 @@ namespace Niobium.Invoicing.Server;
 /// </summary>
 /// <param name="flow">Application flow invoked by this trigger.</param>
 /// <param name="logger">Logger for command parse/validation failures.</param>
-public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCommandConsumer> logger)
+/// <param name="telemetry">Queue attempt measurements in the existing telemetry pipeline.</param>
+public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCommandConsumer> logger, InvoiceQueueTelemetry telemetry)
 {
     /// <summary>
     /// Parses and normalizes a trusted invoice command, then runs issuance with its embedded customer.
@@ -26,12 +27,18 @@ public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCom
     /// </remarks>
     /// <exception cref="InvalidOperationException">The message cannot be parsed by the helper or fails validation.</exception>
     [Function(nameof(IssueInvoiceCommandConsumer))]
-    public async Task Run(
+    public Task Run(
         [ServiceBusTrigger("issueinvoicecommand")]
         ServiceBusReceivedMessage message,
         CancellationToken cancellationToken)
     {
-        if (!message.TryParse(out IssueInvoiceCommand? command, out _))
+        return telemetry.MeasureAsync(message.EnqueuedTime, () => ProcessAsync(message, cancellationToken), cancellationToken);
+    }
+
+    private async Task ProcessAsync(ServiceBusReceivedMessage message, CancellationToken cancellationToken)
+    {
+        bool parsed = message.TryParse(out IssueInvoiceCommand? command, out _);
+        if (!parsed || command is null)
         {
             string err = $"Failed to parse message {message.MessageId}";
             logger.LogError(err);

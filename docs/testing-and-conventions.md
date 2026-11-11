@@ -2,6 +2,26 @@
 
 ## Executable evidence
 
+The 2026-11-12 exporter-verification follow-up passed 123 unit and 51 local
+integration cases, zero skips, after preserving explicit telemetry service
+identity across the installed Functions resource detector. Four new cases verify
+configured/absent name and version settings for metrics and traces. Both Release
+builds passed with zero warnings/errors. Coverage is 92.25% combined: Contracts
+100.00%, Core 90.92%, Server 91.61%. The candidate deployed suite has 28 cases,
+including an actual current-deployment Application Insights assertion; live
+results for the latest head are recorded in PR #18.
+
+The B07 / Q28 #13 queue-measurement continuation on 2026-11-11 passed all 123
+unit cases and 47 component/storage integration cases with zero skips. Nine new
+cases collect the actual consumer's measurements through OpenTelemetry and cover
+failure/cancellation, wall-clock changes, repeated delivery and enqueue metadata
+boundaries. Combined authored line coverage is 92.14% (Contracts 100.00%, Core
+90.92%, Server 90.84%). These are local results; deployed telemetry ingestion and
+current-head CI require separate evidence. The 2026-11-12 delivery correction
+resumes the already authorized normal feature pipeline. See
+[queue measurements](queue-observability.md) and the latest
+[progress checkpoint](implementation-progress.md#queue-measurements-continuation-2026-11-11).
+
 [Core.Tests.csproj](../src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj) uses MSTest.Sdk 4.4.0, Moq 4.20.72, FluentAssertions 8.10.0, AutoFixture/AutoFixture.AutoMoq 4.18.1. [MSTestSettings.cs](../src/Niobium.Invoicing.Core.Tests/MSTestSettings.cs) enables method-level parallelization. `global.json` selects Microsoft.Testing.Platform. Use the verified [commands](configuration-and-development.md#toolchain-and-safe-commands), not guessed VSTest switches.
 
 **Verified current local suite:** the unchanged unit suite passed 123 cases at the current main baseline; the resource-token follow-up passed 38 local integration cases, zero skipped in the opted-in run. Four new local cases cover the real registered item ownership controls. The main baseline had 60 unit cases; original discovery had 26. Counts include data rows. The preceding debug-view change's authored application line coverage was 91.82%: Contracts 100.00%, Core 90.92%, Server 87.88%. New live CI evidence must be verified for the pushed head separately. CI enforces 90% combined and 80% per module using the union of local suite coverage; generated sources are excluded. The conflict-resolution follow-up verified the earlier 114/16 suites against a normal Release build with style enforcement enabled. Exact commands, historical baseline results and remaining blockers are in the [implementation ledger](implementation-progress.md).

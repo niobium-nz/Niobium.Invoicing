@@ -432,7 +432,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsTrue(response.Headers.CacheControl?.NoStore == true);
     }
 
-    private static async Task<string> ReadExistingTestFunctionKey()
+    private static async Task<string> VerifiedTestFunctionApp()
     {
         Assert.AreEqual("test", Required("TEST_ENVIRONMENT"));
         Assert.AreEqual("test", Required("AZURE_ENV_NAME"));
@@ -444,6 +444,13 @@ public sealed partial class DeployedInvoiceTests
         string hostname = await ReadAzureValue("resource", "show", "--resource-group", group, "--name", app,
             "--resource-type", "Microsoft.Web/sites", "--api-version", "2024-11-01", "--query", "properties.defaultHostName");
         Assert.IsTrue(string.Equals(endpoint.Host, hostname, StringComparison.OrdinalIgnoreCase), "The test app must match the verified deployment host.");
+        return app;
+    }
+
+    private static async Task<string> ReadExistingTestFunctionKey()
+    {
+        string app = await VerifiedTestFunctionApp();
+        string group = Required("AZURE_RESOURCE_GROUP");
         // Read its existing default host function key through the workflow's Azure identity.
         // Do not use a master key, create/rotate keys or print credentials in assertions/logs.
         string key = await ReadAzureValue("functionapp", "keys", "list", "--resource-group", group, "--name", app,

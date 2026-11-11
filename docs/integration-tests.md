@@ -85,7 +85,20 @@ Six deployed cases exercise `GET /rsas` through the real test host: missing/inva
 
 The complete resource-token response is a credential. These tests never log it or the SAS, and storage-probe failures report only status codes. They reuse existing signing/storage configuration and synthetic invoices; they create no Azure resources or external entitlements and never call this route in production. Q16's same-ID cross-biller key collision remains deferred: the tests establish the existing ownership boundary for distinct invoice IDs, not a migrated key schema or an audit of historical tokens/external role grants.
 
-The candidate deployed suite now contains 27 cases. Local component/storage integration contains 38 cases. A successful local build/test run does not establish the deployed SAS result; the exact feature run must pass both candidate and trusted suites before PR creation.
+The candidate deployed suite now contains 28 cases. Local component/storage integration contains 51 cases, including nine queue-measurement and four Functions resource-identity cases. A successful local build/test run does not establish the deployed result; the exact feature run must pass both candidate and trusted suites before PR creation.
+
+## Queue metric export verification (B07)
+
+The deployed metrics case sends a synthetic invoice with notification disabled,
+waits for persistence, then requires all three queue instruments in the existing
+test Application Insights destination. It reuses the verified test Function App,
+resource group and Azure workflow identity. The current workflow `buildVersion`
+must match the host's `SERVICE_VERSION` with its existing prerelease suffix.
+Queries filter by that version, test service name and this case's start time.
+The test permits six minutes for export/ingestion, fails on missing configuration
+or query access, and never logs settings, credentials or raw telemetry. See
+[queue measurements](queue-observability.md) for exact assertions and limits.
+No workflow inputs, resources, notification sends or production checks are added.
 
 ## Read-only production suite
 

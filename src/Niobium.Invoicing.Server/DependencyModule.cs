@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Niobium.Invoicing.Options;
 using Niobium.Messaging.ServiceBus;
@@ -9,6 +10,8 @@ using Niobium.Platform.Identity;
 using Niobium.Platform.Profile;
 using Niobium.Platform.ServiceBus;
 using Niobium.Platform.StorageTable;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 namespace Niobium.Invoicing.Server
 {
@@ -37,8 +40,35 @@ namespace Niobium.Invoicing.Server
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
             builder.AddCore();
+            builder.Services.AddInvoiceQueueTelemetry(builder.Configuration);
             builder.AddInvoicing(builder.Configuration.GetSection(nameof(BillingOptions)).Bind);
             return builder;
+        }
+
+        /// <summary>
+        /// Adds application measurements to the platform's existing telemetry pipeline.
+        /// Preserves explicit service identity after the Functions resource detector runs.
+        /// Exporters remain owned by the installed Niobium platform.
+        /// </summary>
+        public static IServiceCollection AddInvoiceQueueTelemetry(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddMetrics();
+            services.TryAddSingleton(TimeProvider.System);
+            services.TryAddSingleton<InvoiceQueueTelemetry>();
+            services.AddOpenTelemetry().ConfigureResource(resource =>
+            {
+                // Functions 1.2.0 adds its detector after Platform's resource attributes. Keep
+                // explicitly configured service identity while retaining the detector's metadata.
+                List<KeyValuePair<string, object>> attributes = [];
+                string? name = configuration["SERVICE_NAME"];
+                string? version = configuration["SERVICE_VERSION"];
+                if (!string.IsNullOrWhiteSpace(name))
+                    attributes.Add(new("service.name", name));
+                if (!string.IsNullOrWhiteSpace(version))
+                    attributes.Add(new("service.version", version));
+                resource.AddAttributes(attributes);
+            }).WithMetrics(metrics => metrics.AddMeter(InvoiceQueueTelemetry.MeterName));
+            return services;
         }
 
         /// <summary>
