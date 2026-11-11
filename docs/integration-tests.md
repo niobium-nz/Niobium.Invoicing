@@ -85,7 +85,7 @@ Six deployed cases exercise `GET /rsas` through the real test host: missing/inva
 
 The complete resource-token response is a credential. These tests never log it or the SAS, and storage-probe failures report only status codes. They reuse existing signing/storage configuration and synthetic invoices; they create no Azure resources or external entitlements and never call this route in production. Q16's same-ID cross-biller key collision remains deferred: the tests establish the existing ownership boundary for distinct invoice IDs, not a migrated key schema or an audit of historical tokens/external role grants.
 
-The candidate deployed suite now contains 28 cases. Local component/storage integration contains 47 cases, including nine queue-measurement cases. A successful local build/test run does not establish the deployed result; the exact feature run must pass both candidate and trusted suites before PR creation.
+The candidate deployed suite now contains 28 cases. Local component/storage integration contains 51 cases, including nine queue-measurement and four Functions resource-identity cases. A successful local build/test run does not establish the deployed result; the exact feature run must pass both candidate and trusted suites before PR creation.
 
 ## Queue metric export verification (B07)
 

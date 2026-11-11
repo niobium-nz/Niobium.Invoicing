@@ -39,7 +39,9 @@ Flows, domains, repositories and relevant profile/broker registrations are trans
 Server also registers singleton `InvoiceQueueTelemetry` and its meter with the
 existing Niobium OpenTelemetry pipeline. It measures queue age and processing
 attempt duration/outcome around the complete consumer invocation without changing
-business flows. See [queue measurements](queue-observability.md) for units,
+business flows. After the installed Functions resource detector runs, registration
+preserves nonblank `SERVICE_NAME` and `SERVICE_VERSION` in the shared telemetry
+resource; absent values retain detection. See [queue measurements](queue-observability.md) for units,
 cardinality, cancellation semantics and verification limits.
 
 Health services are registered by the platform, but startup does not call the route-mapping extension for `/health` or `/alive`. No corresponding Functions exist here.

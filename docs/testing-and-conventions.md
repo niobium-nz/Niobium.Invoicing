@@ -2,6 +2,15 @@
 
 ## Executable evidence
 
+The 2026-11-12 exporter-verification follow-up passed 123 unit and 51 local
+integration cases, zero skips, after preserving explicit telemetry service
+identity across the installed Functions resource detector. Four new cases verify
+configured/absent name and version settings for metrics and traces. Both Release
+builds passed with zero warnings/errors. Coverage is 92.25% combined: Contracts
+100.00%, Core 90.92%, Server 91.61%. The candidate deployed suite has 28 cases,
+including an actual current-deployment Application Insights assertion; live
+results for the latest head are recorded in PR #18.
+
 The B07 / Q28 #13 queue-measurement continuation on 2026-11-11 passed all 123
 unit cases and 47 component/storage integration cases with zero skips. Nine new
 cases collect the actual consumer's measurements through OpenTelemetry and cover

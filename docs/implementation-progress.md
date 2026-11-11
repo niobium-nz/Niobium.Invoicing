@@ -34,6 +34,26 @@ suite is now 28 cases; the unchanged trusted baseline remains 27 until merge.
 The new head must repeat the complete pipeline and automatic review before merge;
 the earlier green run does not verify this added assertion.
 
+The deployed assertion correctly failed in run
+[43017086652](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43017086652)
+at head `90388deb6368d72e75ed0068d813e43785b85b11`: 27 cases passed, while the
+current-version metrics assertion timed out. The installed Functions 1.2.0
+resource detector runs after Platform's explicit service identity and replaces
+its name/version with site/assembly defaults. A local regression reproduced the
+override. Application registration now reapplies nonblank `SERVICE_NAME` and
+`SERVICE_VERSION` after the detector, preserving its other metadata and its
+fallback when a setting is absent. Four regression cases cover metric/trace
+identity, bringing local integration to 51. The live assertion remains strict;
+the next head must repeat deployment and automatic review. The shared resource
+identity change and dashboard grouping implications are documented in the
+[measurement guide](queue-observability.md#framework-integration).
+
+After that fix, normal Release solution and deployed-harness builds passed with
+zero warnings/errors. All 123 unit and 51 local integration cases passed, zero
+skips, using disposable loopback Table storage. Authored application coverage is
+92.25%: Contracts 100.00%, Core 90.92%, Server 91.61%. These local results do not
+replace the next head's required deployed export assertion.
+
 ## Queue measurements continuation: 2026-11-11
 
 The complete original report is available and unchanged: 34,257 bytes, SHA-256
@@ -70,7 +90,7 @@ Current reconciliation retains all original IDs and acceptance criteria:
 | B04 | Reviewed feature/test and trusted-main readiness workflows are present. Q26/Q27 supersede the original debug-route-removal recommendation. Additional production workflow changes require reviewed activation of the trusted pipeline; this continuation does not change or certify them. |
 | B05 | Explicitly deferred until after MCP under Q28 #8. Existing key and direct-SAS compatibility are preserved. |
 | B06 | B02 activation/verification remains a dependency. The signed provider-event/internal-confirmation contract and treatment of legacy records without trustworthy payment-ever evidence still require concrete implementation review. Accepted delivery and cancellation business rules are unchanged. |
-| B07 | Nine local measurement cases bring component/storage integration to 47. The 28-case candidate deployed suite now requires actual export of all three queue instruments to the current test Application Insights deployment. Current-head live evidence is recorded on PR #18. Provider receipts, external Identity/profile integration and recovery remain separate evidence. |
+| B07 | Nine local measurement and four Functions identity cases bring component/storage integration to 51. The 28-case candidate deployed suite now requires actual export of all three queue instruments to the current test Application Insights deployment. Current-head live evidence is recorded on PR #18. Provider receipts, external Identity/profile integration and recovery remain separate evidence. |
 | B08 | Ten-year history/soft deletion and one-hour RPO/four-hour RTO remain requirements. Committed aggregate/history consistency, direct Table/SAS writers, retention-clock/hold/privacy validation, recovery ownership and actual restore evidence are unresolved. No purge or migration is performed. |
 | B09 | Q20 display precedence is implemented. Versioned template customization remains deferrable; compatibility for formerly ignored selectors must precede enforcement. |
 | B10 | Read/draft MCP and durable payment records/manual reconciliation are the accepted starting scope. Concrete machine authority, payment identity/history and provider/recurrence contracts remain; no new authority is inferred. |

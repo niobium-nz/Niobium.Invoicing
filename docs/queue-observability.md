@@ -46,6 +46,19 @@ introduces no exporter, destination, credential or package upgrade.
 Functions composition remains on 4.0.60 at source
 [`1fa0449`](https://github.com/niobium-nz/Niobium/blob/1fa044968f504ef575021720c728a17dc72bb067/Niobium.Platform.Functions/DependencyModule.cs).
 
+That Functions module calls `UseFunctionsWorkerDefaults` after Platform configures
+its resource. The installed Worker.OpenTelemetry 1.2.0
+[`FunctionsResourceDetector`](https://github.com/Azure/azure-functions-dotnet-worker/blob/e704163e5177f5364bf168ce1d554772b886a069/src/DotNetWorker.OpenTelemetry/FunctionsResourceDetector.cs)
+then overwrites `service.name` and `service.version` with its site/assembly
+defaults unless the corresponding `OTEL_` environment overrides exist. The
+deployed assertion exposed that mismatch with the configured workflow version.
+`AddInvoiceQueueTelemetry` now reapplies nonblank `SERVICE_NAME` and
+`SERVICE_VERSION` after that detector. Missing/blank settings preserve detection;
+the detector's other metadata remains. This shared resource configuration also
+aligns tracing/logging identity with those explicit settings. Existing dashboards
+grouped by the Functions site/assembly fallback must use the configured service
+identity for new telemetry. No exporter, host setting or package is changed.
+
 ## Evidence and limits
 
 Nine component cases execute the actual consumer and collect through the actual
@@ -54,6 +67,9 @@ issuance, a wall-clock change, flow failures, requested and unrelated cancellati
 malformed transport, missing/future enqueue timestamps and repeated delivery.
 They verify instrument names, units, values and the complete attribute set.
 Repeated service registration does not duplicate observations.
+Four additional cases compose the installed Functions defaults and verify metric
+and trace identity with both explicit settings, each setting alone, and blank
+settings. The explicit-identity case failed before the fix and passes afterward.
 
 `Deployed_queue_measurements_reach_the_current_test_Application_Insights` sends an
 owned synthetic invoice with notification disabled through the existing test

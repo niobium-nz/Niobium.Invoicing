@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
+using Microsoft.Azure.Functions.Worker.OpenTelemetry;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -7,6 +9,8 @@ using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.Server;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Niobium.Invoicing.Integration.Tests;
 
@@ -14,6 +18,36 @@ namespace Niobium.Invoicing.Integration.Tests;
 [DoNotParallelize]
 public sealed class InvoiceQueueTelemetryTests
 {
+    [TestMethod]
+    [DataRow("Synthetic.Invoice.Service", "1.2.345-prerelease")]
+    [DataRow("Synthetic.Invoice.Service", null)]
+    [DataRow(null, "1.2.345-prerelease")]
+    [DataRow(" ", "")]
+    public void Configured_service_identity_survives_the_installed_Functions_resource_detector(string? name, string? version)
+    {
+        IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SERVICE_NAME"] = name,
+            ["SERVICE_VERSION"] = version
+        }).Build();
+        KeyValuePair<string, object>[] platformIdentity =
+            [new("service.name", name ?? "unknown-service"), new("service.version", version ?? "1.0.0-prerelease")];
+        Dictionary<string, object> detected = ResourceBuilder.CreateDefault().AddAttributes(platformIdentity)
+            .AddDetector(new FunctionsResourceDetector()).Build().Attributes.ToDictionary();
+        ServiceCollection registrations = new();
+        registrations.AddOpenTelemetry().ConfigureResource(resource => resource.AddAttributes(platformIdentity)).UseFunctionsWorkerDefaults();
+        registrations.AddInvoiceQueueTelemetry(configuration);
+        using ServiceProvider services = registrations.BuildServiceProvider();
+        Resource[] resources = [services.GetRequiredService<MeterProvider>().GetResource(), services.GetRequiredService<TracerProvider>().GetResource()];
+        foreach (Resource resource in resources)
+        {
+            Dictionary<string, object> attributes = resource.Attributes.ToDictionary();
+            Assert.AreEqual(string.IsNullOrWhiteSpace(name) ? detected["service.name"] : name, attributes["service.name"]);
+            Assert.AreEqual(string.IsNullOrWhiteSpace(version) ? detected["service.version"] : version, attributes["service.version"]);
+            Assert.IsTrue(attributes.ContainsKey("process.pid"), "Keep the Functions resource metadata.");
+        }
+    }
+
     [TestMethod]
     public async Task Consumer_waits_for_issuance_and_exports_monotonic_duration_with_bounded_tags()
     {
@@ -168,8 +202,9 @@ public sealed class InvoiceQueueTelemetryTests
             ServiceCollection registrations = new();
             registrations.AddLogging();
             registrations.AddSingleton<TimeProvider>(Clock);
-            registrations.AddInvoiceQueueTelemetry();
-            registrations.AddInvoiceQueueTelemetry(); // Repeated composition must not duplicate instruments.
+            IConfiguration configuration = new ConfigurationBuilder().Build();
+            registrations.AddInvoiceQueueTelemetry(configuration);
+            registrations.AddInvoiceQueueTelemetry(configuration); // Repeated composition must not duplicate instruments.
             registrations.AddOpenTelemetry().WithMetrics(metrics => metrics.AddReader(new CaptureReader(exporter)));
             services = registrations.BuildServiceProvider();
             provider = services.GetRequiredService<MeterProvider>();
