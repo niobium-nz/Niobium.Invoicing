@@ -55,11 +55,25 @@ malformed transport, missing/future enqueue timestamps and repeated delivery.
 They verify instrument names, units, values and the complete attribute set.
 Repeated service registration does not duplicate observations.
 
-Local collection is verified; Azure ingestion, dashboards and alert thresholds
-are not. No capacity or support target is inferred from these measurements.
-After an authorized test deployment, use the existing test queue fixtures and
-configured telemetry destination to verify all three instruments and their units.
-Do not use production messages or send additional notifications for this check.
+`Deployed_queue_measurements_reach_the_current_test_Application_Insights` sends an
+owned synthetic invoice with notification disabled through the existing test
+queue and requires its persisted total. It then queries the existing test
+Application Insights component through the workflow's Azure identity, after
+matching its instrumentation key to the verified Functions host's exporter.
+The query requires all three metric names, nonnegative values, nonempty samples
+and a successful processing outcome/count. It filters by the workflow's exact
+service version, test service name and a timestamp after this case started, so
+historical deployment measurements cannot satisfy it. Export/ingestion has a
+six-minute deadline; missing configuration, query access or measurements fail.
+Only the number of verified instruments is returned; configuration, customer data
+and raw telemetry are not logged. The case uses existing runner settings and
+resources, performs no provisioning and sends no notification. It never runs in
+production. Local tests verify the instrument units; Azure Monitor's metric
+conversion does not carry those units into `customMetrics`.
+
+Current-head CI and review evidence is recorded in PR #18. A local build or local
+exporter pass does not establish Azure ingestion. Dashboards, alert thresholds,
+capacity and support targets are not established by these measurements.
 Notification uncertain-submission/hold counters and confirmed-delivery failures
 remain separate B02/B06 work; this consumer cannot infer those outcomes from an
 enqueue acknowledgement.

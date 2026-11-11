@@ -21,6 +21,19 @@ Remaining B02 activation and later business/compatibility dependencies in the
 reconciliation below do not block delivery of this independent B07 change.
 Production data mutations, migrations and bypassing review are still prohibited.
 
+The normal head `8df2e40e5796468d143291415be7740b66e6503a` passed
+[Azure Deployment 43013720334](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43013720334):
+123 unit, 47 local integration, 20 Node and 24 Python cases, 92.14% application
+coverage, and 27 candidate plus 27 trusted deployed cases. The immutable-main
+readiness controller then published success. Marking PR #18 ready automatically
+triggered Codex review of that head; its actionable P1 requested deployed exporter
+verification. The follow-up adds a mandatory test-only Application Insights
+assertion for all three queue instruments, scoped to the current workflow service
+version and test window, using existing resources and identity. The candidate
+suite is now 28 cases; the unchanged trusted baseline remains 27 until merge.
+The new head must repeat the complete pipeline and automatic review before merge;
+the earlier green run does not verify this added assertion.
+
 ## Queue measurements continuation: 2026-11-11
 
 The complete original report is available and unchanged: 34,257 bytes, SHA-256
@@ -57,7 +70,7 @@ Current reconciliation retains all original IDs and acceptance criteria:
 | B04 | Reviewed feature/test and trusted-main readiness workflows are present. Q26/Q27 supersede the original debug-route-removal recommendation. Additional production workflow changes require reviewed activation of the trusted pipeline; this continuation does not change or certify them. |
 | B05 | Explicitly deferred until after MCP under Q28 #8. Existing key and direct-SAS compatibility are preserved. |
 | B06 | B02 activation/verification remains a dependency. The signed provider-event/internal-confirmation contract and treatment of legacy records without trustworthy payment-ever evidence still require concrete implementation review. Accepted delivery and cancellation business rules are unchanged. |
-| B07 | Existing local/deployed harnesses remain. This change adds the nine local measurement cases, bringing component/storage integration to 47. Real telemetry ingestion, provider receipts, external Identity/profile integration and recovery remain separate evidence. |
+| B07 | Nine local measurement cases bring component/storage integration to 47. The 28-case candidate deployed suite now requires actual export of all three queue instruments to the current test Application Insights deployment. Current-head live evidence is recorded on PR #18. Provider receipts, external Identity/profile integration and recovery remain separate evidence. |
 | B08 | Ten-year history/soft deletion and one-hour RPO/four-hour RTO remain requirements. Committed aggregate/history consistency, direct Table/SAS writers, retention-clock/hold/privacy validation, recovery ownership and actual restore evidence are unresolved. No purge or migration is performed. |
 | B09 | Q20 display precedence is implemented. Versioned template customization remains deferrable; compatibility for formerly ignored selectors must precede enforcement. |
 | B10 | Read/draft MCP and durable payment records/manual reconciliation are the accepted starting scope. Concrete machine authority, payment identity/history and provider/recurrence contracts remain; no new authority is inferred. |
