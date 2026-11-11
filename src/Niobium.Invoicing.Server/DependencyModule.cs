@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Niobium.Invoicing.Options;
 using Niobium.Messaging.ServiceBus;
@@ -9,6 +10,7 @@ using Niobium.Platform.Identity;
 using Niobium.Platform.Profile;
 using Niobium.Platform.ServiceBus;
 using Niobium.Platform.StorageTable;
+using OpenTelemetry.Metrics;
 
 namespace Niobium.Invoicing.Server
 {
@@ -37,8 +39,22 @@ namespace Niobium.Invoicing.Server
             builder.AddDatabase();
             builder.AddDatabaseResourceTokenSupport();
             builder.AddCore();
+            builder.Services.AddInvoiceQueueTelemetry();
             builder.AddInvoicing(builder.Configuration.GetSection(nameof(BillingOptions)).Bind);
             return builder;
+        }
+
+        /// <summary>
+        /// Adds application measurements to the platform's existing telemetry pipeline.
+        /// Exporters and resource identity remain owned by the installed Niobium platform.
+        /// </summary>
+        public static IServiceCollection AddInvoiceQueueTelemetry(this IServiceCollection services)
+        {
+            services.AddMetrics();
+            services.TryAddSingleton(TimeProvider.System);
+            services.TryAddSingleton<InvoiceQueueTelemetry>();
+            services.AddOpenTelemetry().WithMetrics(metrics => metrics.AddMeter(InvoiceQueueTelemetry.MeterName));
+            return services;
         }
 
         /// <summary>

@@ -1,5 +1,73 @@
 # Research plan implementation
 
+## Queue measurements continuation: 2026-11-11
+
+The complete original report is available and unchanged: 34,257 bytes, SHA-256
+`1321b7712c4c9e10b477d03b230e12fce5485fbde3375d94c374fc96290313eb`.
+The selected managed workspace contains `/workspace/Niobium.Invoicing` with the
+expected `niobium-nz/Niobium.Invoicing` origin. Freshly fetched main baseline:
+`1d7bd30b848fa0592656e7ca4a9671603252b918`. The prior branch was clean; this work
+uses `codex/invoicing-queue-observability` created from that exact main commit.
+The normal Release baseline build and all 123 unit tests passed before edits.
+
+The next unblocked implementation subset is **B07 / Q28 #13**: queue age,
+processing latency and bounded processing outcomes. `InvoiceQueueTelemetry`
+observes the actual Service Bus consumer, including parsing failures and awaited
+issuance, through the existing Niobium OpenTelemetry pipeline. It preserves thrown
+exceptions and cancellation, uses monotonic elapsed time, handles missing/future
+enqueue times, and counts redeliveries as attempts. It emits no invoice, recipient,
+message-ID or payload attributes. [The instrument guide](queue-observability.md)
+records exact names, units and limitations. No public DTO, Table schema, package
+version, framework source, workflow or deployment setting changes are included.
+
+The restored graph still uses Niobium 4.0.60/4.0.61 and Notification.Contracts
+2.0.7. Package metadata and corresponding framework source were rechecked:
+Platform 4.0.61 at `c2462746614ee6c768d725c99e3c54df2e3848c8` owns metrics/exporters;
+Functions 4.0.60 at `1fa044968f504ef575021720c728a17dc72bb067` composes that pipeline.
+No latest-main framework behavior is substituted for these packages.
+
+Current reconciliation retains all original IDs and acceptance criteria:
+
+| ID | Current source/evidence and remaining dependency |
+| --- | --- |
+| B01 | `UpsertFlow`, `InvoicePreparation` and replay/storage tests retain conditional preparation, freeze and conservative uncertain-write recovery. Direct writers and cross-table atomicity remain outside those guarantees. |
+| B02 | Notification PR #2 is merged at `adb9e59dd4428e1c8bf496fc40a42699bd003ba0`. Its durable inbox/retry implementation remains disabled by default. Activation needs quiesced legacy consumers, an approved new-operation cohort or verified historical suppression records, an operator for held outcomes, and enabled real queue/provider verification. The old draft-PR status below is historical. |
+| B03 | Shared `InvoiceValidation` and validation/calculation tests already implement the accepted rules, including default dates, item linkage, checked arithmetic and allowed overpayment. Existing calculation policy stays compatible. |
+| B04 | Reviewed feature/test and trusted-main readiness workflows are present. Q26/Q27 supersede the original debug-route-removal recommendation. Additional production workflow changes require reviewed activation of the trusted pipeline; this continuation does not change or certify them. |
+| B05 | Explicitly deferred until after MCP under Q28 #8. Existing key and direct-SAS compatibility are preserved. |
+| B06 | B02 activation/verification remains a dependency. The signed provider-event/internal-confirmation contract and treatment of legacy records without trustworthy payment-ever evidence still require concrete implementation review. Accepted delivery and cancellation business rules are unchanged. |
+| B07 | Existing local/deployed harnesses remain. This change adds the nine local measurement cases, bringing component/storage integration to 47. Real telemetry ingestion, provider receipts, external Identity/profile integration and recovery remain separate evidence. |
+| B08 | Ten-year history/soft deletion and one-hour RPO/four-hour RTO remain requirements. Committed aggregate/history consistency, direct Table/SAS writers, retention-clock/hold/privacy validation, recovery ownership and actual restore evidence are unresolved. No purge or migration is performed. |
+| B09 | Q20 display precedence is implemented. Versioned template customization remains deferrable; compatibility for formerly ignored selectors must precede enforcement. |
+| B10 | Read/draft MCP and durable payment records/manual reconciliation are the accepted starting scope. Concrete machine authority, payment identity/history and provider/recurrence contracts remain; no new authority is inferred. |
+
+Verification used .NET SDK 10.0.403 and the existing package cache. Commands ran
+from the repository root after sourcing the reviewed workspace tool environment:
+
+```sh
+dotnet build Niobium.Invoicing.slnx --configuration Release --no-restore --nologo --disable-build-servers -m:1
+dotnet test --project src/Niobium.Invoicing.Core.Tests/Niobium.Invoicing.Core.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --report-trx --results-directory /workspace/scratch/invoicing-observability-unit
+NIOBIUM_INVOICING_TEST_TABLE_ENDPOINT=http://127.0.0.1:18486/devstoreaccount1 dotnet test --project src/Niobium.Invoicing.Integration.Tests/Niobium.Invoicing.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --report-trx --results-directory /workspace/scratch/invoicing-observability-integration
+python scripts/check-coverage.py /workspace/scratch/invoicing-observability-unit/coverage.cobertura.xml /workspace/scratch/invoicing-observability-integration/coverage.cobertura.xml
+git -c core.whitespace=cr-at-eol diff --check
+```
+
+The build passed with zero warnings/errors. All **123 unit tests** and **47 local
+integration tests** passed, zero skipped. Authored line coverage is **92.14%**:
+Contracts 100.00%, Core 90.92%, Server 90.84%; all existing thresholds pass.
+The existing Table fixture used an owned in-memory Azurite process on loopback
+port 18486, cleaned its records/tables and was stopped afterward. The explicit
+Git whitespace option respects the existing CRLF test-file convention.
+
+The continuing goal explicitly prohibits deployment, merge, package publication,
+production data access and migrations. This new work is therefore submitted as
+a **draft** with `[skip ci]` to prevent the feature-push deployment trigger. This
+is a task-specific boundary, not a change to normal delivery policy or evidence
+of green deployed checks. The trusted readiness controller must remain unsatisfied
+until an authorized normal push completes the real test deployment and both
+deployed suites. Request independent draft review and address its findings; do not
+mark this ready or merge based on local metrics collection.
+
 ## Approved delivery follow-up: 2026-11-07
 
 The owner requested merging the approved documentation PRs while keeping

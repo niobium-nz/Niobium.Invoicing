@@ -44,6 +44,7 @@ The later [Q28 business-decision follow-up](decisions-and-risks.md#q28-business-
 | [Configuration and development](configuration-and-development.md) | Settings and safe commands | SDK, options, setup or tooling changes |
 | [GitHub environment configuration](environment-configuration.md) | Existing fixture settings, repository scope, biller mapping and production token use | Fixture consumers, environment bindings or onboarding requirements change |
 | [Testing and conventions](testing-and-conventions.md) | Evidence and change recipes | Tests, warnings or compatibility policy change |
+| [Invoice queue measurements](queue-observability.md) | Queue age, processing duration and bounded attempt outcomes | Instruments, telemetry composition or evidence change |
 | [Delivery and operations](delivery-and-operations.md) | Workflows, Azure declarations, operations | Hooks/resources/operating practices change |
 | [Decisions and risks](decisions-and-risks.md) | Confirmed decisions and planned work | Requirements clarified or backlog implemented |
 | [Discovery coverage](discovery/coverage.md) | File/component and symbol ledger | Source scope or exclusions change |
