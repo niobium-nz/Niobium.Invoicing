@@ -1,5 +1,23 @@
 # Research plan implementation
 
+## Formal approval handoff corrected: 2026-11-12
+
+The owner corrected a second premature stop at PR approval. Native code/security
+review had completed for Invoicing #18 and Notification #3, but the implementation
+agent had only assigned `5he11`; it had not invoked the recorded `pr_approver`
+handoff and incorrectly marked the goal blocked. The historical handoff depended
+on `/workspace/AGENTS.md`, which was absent in the resumed workspace, while some
+repository wording conflated a genuine approval agent with delegated self-approval.
+
+[The handoff procedure](pr-approval-handoff.md) is now versioned with each project
+and required by its AGENTS.md. The implementation agent must invoke the separate
+reviewer, supply the final head and evidence, handle findings and verify the actual
+formal GitHub decision. Pending review does not end the goal. The implementation
+agent still cannot approve its own change through `5he11`, bypass protection or
+predetermine the reviewer's verdict. Native review remains independently required.
+The separate approver session is active; current-head CI/review, merge and production
+results belong in the PR, without claiming an approval before it is recorded.
+
 ## Delivery authority reaffirmed: 2026-11-12
 
 The owner confirmed that automatic author-created/submitted PRs, native Codex
