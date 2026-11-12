@@ -1,5 +1,89 @@
 # Research plan implementation
 
+## B02 selective rollout and delivery evidence: 2026-11-12
+
+This continuation uses Invoicing main
+`36020f1dfa725dd7505b5fb961add8e5083fb585` and Notification main
+`9857b67d1199713017dcc97cf64dc1bee985be21` as its starting baselines. The complete
+original [research plan](invoicing-plan.md) remains unchanged: SHA-256
+`1321b7712c4c9e10b477d03b230e12fce5485fbde3375d94c374fc96290313eb`.
+The parent ledger update is isolated on `codex/invoicing-delivery-ledger`.
+
+[Notification PR #4](https://github.com/niobium-nz/Niobium.Notification/pull/4)
+adds optional sender-tenant selection for the existing B02 durable submission
+switch. Selected commands reuse the existing rich domain, frozen payload and
+operation identity. The entire comma-separated filter is validated before
+routing; malformed entries cannot broaden activation. Empty command tenants are
+rejected before either send path, including when the switch is disabled. The
+false default and absent-filter global behavior for valid commands are preserved.
+
+The verified feature head is `3646b16a7ee2dc3411f4f7688f99124bd4d0eec9`. The
+[Notification ledger](https://github.com/niobium-nz/Niobium.Notification/blob/3646b16a7ee2dc3411f4f7688f99124bd4d0eec9/docs/implementation-progress.md)
+records the exact commands, 142 passing application tests, 98.38% coverage and the
+six pre-existing package warnings. Native and separate review identified the
+empty-tenant boundary; four regressions reproduced it before the transport guard.
+
+[Feature run 43168181582](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43168181582)
+passed 142 application, 20 Node and 46 Python tests, plus eight candidate and eight
+trusted deployed checks. Both downloaded reports identify the exact feature head
+and their ZIP digests match GitHub metadata and upload logs. The trusted harness
+ran from the immutable Notification baseline above. Current-head native review
+completed, the finding was resolved, and the independent reviewer recorded
+[approval 5870221642](https://github.com/niobium-nz/Niobium.Notification/pull/4#pullrequestreview-5870221642)
+as `5he11`. The early readiness invocation preceded completed feature tests; its
+single retry passed once those tests were complete. The protected squash merge is
+`708b9c27774d6895a61e187c20ed75f60f985376`, with the same tested tree.
+
+[Production run 43170018582](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43170018582)
+and its production job completed successfully at 06:46 UTC on 12 November 2026.
+The downloaded GET-only `/health`
+[report artifact 13921329087](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43170018582/artifacts/13921329087)
+identifies merge `708b9c27774d6895a61e187c20ed75f60f985376` and records success.
+Its ZIP SHA-256
+`3bfda31fa6c5a33c478dc955764b99c43673b32dfe7bf14a151e8caa1d52393e` matches
+GitHub metadata and upload logs. Package
+[run 43170018518](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43170018518)
+passed and skipped publication because Contracts did not change.
+
+| Plan item | Current acceptance and remaining work |
+| --- | --- |
+| B02 / Q28 #1 | Selective routing is implemented without enabling an environment or changing wire/storage formats. Enabled real queue recovery, scheduled wakes and provider replay/hold evidence remain separate acceptance work. |
+| B02 cutover / U06 | Still needs an approved new-operation cohort or verified historical suppression, quiesced legacy consumers and an operator for held/dead-lettered outcomes. A tenant filter alone does not prove operation history. Keep enrolled tenants on the durable path while their operations can replay. |
+| B06 | The required B02 activation/verification dependency remains. Recipient mail-server acceptance, cancellation before any payment and legacy enqueue interpretation remain the accepted rules; no lifecycle or payment-history change is claimed here. |
+| B01, B03, B04, B07 | Existing implementations remain as reconciled below. The verified production result for PR #18 is recorded next. |
+| B05, B08, B09, B10 | The existing post-MCP deferrals, history/recovery dependencies, template compatibility and concrete machine/payment contracts remain. This routing increment does not resolve them. |
+
+### PR #18 production recovery completed
+
+[PR #18](https://github.com/niobium-nz/Niobium.Invoicing/pull/18) merged approved
+feature `10abab669fb13b8cfc99043533f93c2d1f9b7581` as
+`36020f1dfa725dd7505b5fb961add8e5083fb585`. Production
+[run 43095043731, attempt 2](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43095043731/attempts/2)
+completed successfully at 21:44 UTC on 11 November 2026. The first attempt passed
+deployment and all five read-only checks, but artifact creation received HTML
+instead of JSON and exhausted five upload requests. After terminal failure and
+confirmation that main and production had not advanced, the failed job was
+retried once under the standing delivery authorization. No confirmed platform
+outage is inferred from that response.
+
+The retry's downloaded report identifies the actual squash merge above and all
+five passes: deployed commit, missing invoice, missing token, the configured
+existing invoice HTML and wrong-token rejection. Artifact
+[13893517846](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43095043731/artifacts/13893517846)
+has ZIP SHA-256
+`b89767d7b176ee69ff2d08887c1b5390e5c432c379f0c283370f51aa6a4dd3d0`, matching
+GitHub metadata and the upload log. Package
+[run 43095043750](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43095043750)
+succeeded and correctly skipped publication because Contracts did not change.
+The bounded recovery continuation is disabled. The successful steps from the
+first attempt are not represented as a successful overall run.
+
+This parent-ledger change preserves application code, package references,
+workflows and the original research report. Local whitespace and relative-file
+link checks passed, and `sha256sum docs/invoicing-plan.md` matched the digest above.
+Its own exact-head CI, review and deployment evidence is recorded on the
+author-created PR under the normal delivery process.
+
 ## Formal approval handoff corrected: 2026-11-12
 
 The owner corrected a second premature stop at PR approval. Native code/security
