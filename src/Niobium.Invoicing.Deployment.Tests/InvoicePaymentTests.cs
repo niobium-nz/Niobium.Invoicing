@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Niobium.Invoicing.History;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Deployment.Tests;
 
@@ -35,6 +36,8 @@ public sealed partial class DeployedInvoiceTests
     {
         long id = await SeedInvoice(recipient: String.Empty, legacyFrozen: true);
         var original = await Read(id);
+        string savedToken = original.GetString(nameof(Invoice.Token))!;
+        await AssertDisplayedPaymentDue(id, savedToken, "NZD$115.00");
         RecordInvoicePaymentRequest receipt = ManualReceipt(12000);
         using (HttpResponseMessage posted = await LifecycleRequest(id, "payments", receipt, Token(biller, tenant)))
         {
@@ -57,11 +60,7 @@ public sealed partial class DeployedInvoiceTests
             Assert.AreEqual(biller, observed.Actor);
             Assert.AreEqual(receipt.Evidence, observed.Evidence);
         }
-        using (HttpResponseMessage viewed = await http.GetAsync($"/{biller}/invoices/{id}?token={original.GetString(nameof(Invoice.Token))}"))
-        {
-            Assert.AreEqual(HttpStatusCode.OK, viewed.StatusCode);
-            Assert.IsTrue((await viewed.Content.ReadAsStringAsync()).Contains("NZD$0.00", StringComparison.Ordinal));
-        }
+        await AssertDisplayedPaymentDue(id, savedToken, "NZD$0.00");
         receipt.AmountCents++;
         using (HttpResponseMessage conflict = await LifecycleRequest(id, "payments", receipt, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.Conflict, conflict.StatusCode);
@@ -69,6 +68,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.AreEqual(committed, (await Read(id)).ETag.ToString());
         using (HttpResponseMessage partial = await LifecycleRequest(id, "payments/reversals", ManualReversal(receipt, 3000), Token(biller, tenant)))
             Assert.AreEqual(9000, (await PaymentResult(partial)).SettledCents);
+        await AssertDisplayedPaymentDue(id, savedToken, "NZD$25.00");
         ReverseInvoicePaymentRequest final = ManualReversal(receipt, 9000);
         using (HttpResponseMessage reversed = await LifecycleRequest(id, "payments/reversals", final, Token(biller, tenant)))
         {
@@ -77,6 +77,7 @@ public sealed partial class DeployedInvoiceTests
             Assert.AreEqual(11500, balance.OutstandingCents);
             Assert.AreEqual(3, balance.Entries);
         }
+        await AssertDisplayedPaymentDue(id, savedToken, "NZD$115.00");
         string afterReversal = (await Read(id)).ETag.ToString();
         using (HttpResponseMessage replay = await LifecycleRequest(id, "payments/reversals", final, Token(biller, tenant)))
             Assert.AreEqual(3, (await PaymentResult(replay)).Entries);
@@ -141,7 +142,7 @@ public sealed partial class DeployedInvoiceTests
         HttpResponseMessage[] responses = await Task.WhenAll(
             LifecycleRequest(id, "payments", receipt, Token(biller, tenant)),
             LifecycleRequest(id, "cancel", cancellation, Token(biller, tenant)));
-        bool cancelled = responses[1].StatusCode == HttpStatusCode.OK;
+        bool cancellationAcknowledged = responses[1].StatusCode == HttpStatusCode.OK;
         foreach (HttpResponseMessage response in responses)
         {
             using (response)
@@ -149,10 +150,40 @@ public sealed partial class DeployedInvoiceTests
         }
         using (HttpResponseMessage retry = await LifecycleRequest(id, "payments", receipt, Token(biller, tenant)))
             Assert.AreEqual(1, (await PaymentResult(retry)).Entries);
+        var paid = await Read(id);
+        InvoiceCancellation? cancelled = InvoiceCheckpoint.ReadEvidence(paid).Cancellation;
+        if (cancellationAcknowledged)
+            Assert.IsNotNull(cancelled, "A successful cancellation must survive a later payment.");
+        if (cancelled != null)
+        {
+            Assert.AreEqual(cancellation.Operation, cancelled.Operation);
+            Assert.AreEqual(biller, cancelled.Actor);
+            Assert.AreEqual(cancellation.Reason, cancelled.Reason);
+        }
+        // The first response can be uncertain after a successful commit. Resolve
+        // the same operation against durable evidence, without creating a new one.
+        using (HttpResponseMessage replay = await LifecycleRequest(id, "cancel", cancellation, Token(biller, tenant)))
+            Assert.AreEqual(cancelled == null ? HttpStatusCode.Conflict : HttpStatusCode.OK, replay.StatusCode);
+        Assert.AreEqual(paid.ETag.ToString(), (await Read(id)).ETag.ToString());
         InvoiceLifecycleStatus status = await LifecycleStatus(id);
-        Assert.AreEqual(cancelled, status.Cancelled);
+        Assert.AreEqual(cancelled != null, status.Cancelled);
         Assert.AreEqual(InvoicePaymentHistory.PaymentOccurred, status.PaymentHistory);
         Assert.IsFalse(status.CanCancel);
+    }
+
+    private async Task AssertDisplayedPaymentDue(long id, string savedToken, string expected)
+    {
+        using HttpResponseMessage response = await http.GetAsync($"/{biller}/invoices/{id}?token={savedToken}");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        string html = await response.Content.ReadAsStringAsync();
+        int start = html.IndexOf("<div class=\"invoice-price-right\">", StringComparison.Ordinal);
+        Assert.IsTrue(start >= 0, "The invoice amount-due element is missing.");
+        int end = html.IndexOf("</div>", start, StringComparison.Ordinal);
+        Assert.IsTrue(end > start, "The invoice amount-due element is incomplete.");
+        string due = html[start..end];
+        Assert.IsTrue(due.Contains("<small>TOTAL AMOUNT DUE</small>", StringComparison.Ordinal));
+        Assert.IsTrue(due.Contains($"<span class=\"f-w-600\">{expected}</span>", StringComparison.Ordinal),
+            "The amount-due element must reflect the committed payment balance.");
     }
 
     private static RecordInvoicePaymentRequest ManualReceipt(long amount)
