@@ -42,7 +42,7 @@ public sealed partial class StorageFlowTests
         TableClientOptions options = new();
         options.Retry.MaxRetries = 0;
         tableService = new TableServiceClient(uri, new TableSharedKeyCredential("devstoreaccount1", EmulatorKey), options);
-        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable })
+        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, InvoicePaymentFixture.PaymentsTable, InvoicePaymentFixture.PostingsTable, InvoicePaymentIndexFixture.Table })
         {
             await tableService.CreateTableAsync(prefix + table);
         }
@@ -80,7 +80,7 @@ public sealed partial class StorageFlowTests
         host?.Dispose();
         if (tableService != null)
         {
-            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable })
+            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, InvoicePaymentFixture.PaymentsTable, InvoicePaymentFixture.PostingsTable, InvoicePaymentIndexFixture.Table })
             {
                 await tableService.DeleteTableAsync(prefix + table);
             }

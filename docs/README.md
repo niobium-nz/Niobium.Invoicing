@@ -41,6 +41,7 @@ The later [Q28 business-decision follow-up](decisions-and-risks.md#q28-business-
 | [Domain and data](domain-and-data.md) | Fields, money, IDs, keys, persistence | Models, calculation, mapping or retention changes |
 | [Invoice history](invoice-history.md) | Committed snapshots, attribution, representation and remaining B08 work | History writes, schema, read APIs or retention controls change |
 | [Invoice lifecycle](invoice-lifecycle.md) | Cancellation, historical-payment evidence, audit and compatible rollout | Lifecycle transitions, metadata or ownership boundaries change |
+| [Manual payments](invoice-payments.md) | Payment schema readiness, immutable records/index and owned cleanup boundaries | Payment contracts, verification or rollout state changes |
 | [API and messaging](api-and-messaging.md) | Routes, authorization, wire contracts, retries | Triggers, middleware, DTOs or messages change |
 | [Security](security.md) | Controls, assumptions, data handling | Identity, permissions or rendering changes |
 | [Configuration and development](configuration-and-development.md) | Settings and safe commands | SDK, options, setup or tooling changes |

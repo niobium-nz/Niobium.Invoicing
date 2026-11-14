@@ -7,6 +7,8 @@
   <ItemGroup>
     <ProjectReference Include="../Niobium.Invoicing.Server/Niobium.Invoicing.Server.csproj" />
     <Compile Include="../../test-support/InvoiceCheckpoint.cs" Link="Support/InvoiceCheckpoint.cs" />
+    <Compile Include="../../test-support/InvoicePaymentFixture.cs" Link="Support/InvoicePaymentFixture.cs" />
+    <Compile Include="../../test-support/InvoicePaymentIndexFixture.cs" Link="Support/InvoicePaymentIndexFixture.cs" />
     <Compile Include="../../test-support/InvoiceHistoryFixture.cs" Link="Support/InvoiceHistoryFixture.cs" />
     <Compile Include="../../test-support/DeployedHostDiagnostics.cs" Link="Support/DeployedHostDiagnostics.cs" />
   </ItemGroup>
