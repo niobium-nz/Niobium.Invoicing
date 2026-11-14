@@ -13,6 +13,7 @@ using Niobium.Messaging;
 using Niobium.Notification;
 using Niobium.Profile;
 using Niobium.Invoicing.Testing;
+using Niobium.Invoicing.History;
 
 namespace Niobium.Invoicing.Integration.Tests;
 
@@ -258,7 +259,7 @@ public sealed partial class StorageFlowTests
         public Task<TableServiceClient> CreateClientAsync(IEnumerable<DatabasePermissions> permissions, string table, string? partition = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (table is not (nameof(Invoice) or nameof(InvoiceItem) or nameof(Billee)))
+            if (table is not (nameof(Invoice) or nameof(InvoiceItem) or nameof(Billee) or nameof(InvoiceRevision) or nameof(InvoiceRevisionPart)))
             {
                 throw new InvalidOperationException("Unexpected integration table.");
             }

@@ -9,6 +9,7 @@ using Niobium.Invoicing.Options;
 using Niobium.Messaging;
 using Niobium.Notification;
 using Niobium.Profile;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Core.Tests.Support;
 
@@ -33,6 +34,7 @@ internal sealed class IssuanceScenario
     internal List<InvoiceItem> Items { get; } = [];
     internal List<MessagingEntry<NotifyCommand>> Messages { get; } = [];
     internal List<CancellationToken> Tokens { get; } = [];
+    internal HistoryScenario History { get; } = new();
     internal Mock<IRepository<Invoice>> InvoiceRepo { get; } = new(MockBehavior.Strict);
     internal Mock<IRepository<InvoiceItem>> ItemRepo { get; } = new(MockBehavior.Strict);
     internal Mock<IRepository<Billee>> BilleeRepo { get; } = new(MockBehavior.Strict);
@@ -176,7 +178,8 @@ internal sealed class IssuanceScenario
     {
         IOptions<BillingOptions> options = Microsoft.Extensions.Options.Options.Create(Options);
         GenericDomainRepository<InvoiceDomain, Invoice> domains = new(
-            () => new InvoiceDomain(options, new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object), []),
+            () => new InvoiceDomain(options, new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object), [],
+                History.Domains(), ItemRepo.Object, TimeProvider.System),
             new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object));
         Mock<IMessagingBroker<NotifyCommand>> broker = new(MockBehavior.Strict);
         broker.Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
@@ -190,7 +193,8 @@ internal sealed class IssuanceScenario
 
     internal InvoiceDomain Domain()
     {
-        InvoiceDomain domain = new(Microsoft.Extensions.Options.Options.Create(Options), new(() => InvoiceRepo.Object), []);
+        InvoiceDomain domain = new(Microsoft.Extensions.Options.Options.Create(Options), new(() => InvoiceRepo.Object), [],
+            History.Domains(), ItemRepo.Object, TimeProvider.System);
         domain.Initialize(Invoice.BuildPartitionKey(Request.BillerID), Invoice.BuildRowKey(Request.InvoiceID));
         return domain;
     }

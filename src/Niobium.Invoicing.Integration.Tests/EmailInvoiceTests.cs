@@ -1,3 +1,4 @@
+using Niobium.Invoicing.History;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -20,7 +21,7 @@ public sealed class EmailInvoiceTests
         using CancellationTokenSource cancellation = new();
         TaskCompletionSource completed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Mock<EmailFlow> flow = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
-        flow.Setup(x => x.RunAsync(biller, id, cancellation.Token)).Returns(completed.Task);
+        flow.Setup(x => x.RunAsync(biller, id, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.FunctionKey && origin.Actor == nameof(EmailInvoice)), cancellation.Token)).Returns(completed.Task);
         ServiceCollection collection = new();
         collection.AddLogging();
         collection.AddControllers();
@@ -37,7 +38,7 @@ public sealed class EmailInvoiceTests
 
         Assert.AreEqual(StatusCodes.Status201Created, context.Response.StatusCode);
         Assert.AreEqual(0L, body.Length);
-        flow.Verify(x => x.RunAsync(biller, id, cancellation.Token), Times.Once);
+        flow.Verify(x => x.RunAsync(biller, id, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.FunctionKey && origin.Actor == nameof(EmailInvoice)), cancellation.Token), Times.Once);
         flow.VerifyNoOtherCalls();
     }
 
@@ -48,13 +49,13 @@ public sealed class EmailInvoiceTests
         long id = Invoice.ParseID(DateTimeOffset.UtcNow);
         InvalidOperationException failure = new("Synthetic enqueue failure");
         Mock<EmailFlow> flow = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
-        flow.Setup(x => x.RunAsync(biller, id, CancellationToken.None)).ThrowsAsync(failure);
+        flow.Setup(x => x.RunAsync(biller, id, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.FunctionKey && origin.Actor == nameof(EmailInvoice)), CancellationToken.None)).ThrowsAsync(failure);
 
         InvalidOperationException actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new EmailInvoice(flow.Object).Run(new DefaultHttpContext().Request, biller, id, CancellationToken.None));
 
         Assert.AreSame(failure, actual);
-        flow.Verify(x => x.RunAsync(biller, id, CancellationToken.None), Times.Once);
+        flow.Verify(x => x.RunAsync(biller, id, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.FunctionKey && origin.Actor == nameof(EmailInvoice)), CancellationToken.None), Times.Once);
         flow.VerifyNoOtherCalls();
     }
 
@@ -66,13 +67,13 @@ public sealed class EmailInvoiceTests
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
         Mock<EmailFlow> flow = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
-        flow.Setup(x => x.RunAsync(biller, id, cancellation.Token)).Returns(Task.FromCanceled(cancellation.Token));
+        flow.Setup(x => x.RunAsync(biller, id, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.FunctionKey && origin.Actor == nameof(EmailInvoice)), cancellation.Token)).Returns(Task.FromCanceled(cancellation.Token));
 
         OperationCanceledException actual = await Assert.ThrowsAsync<OperationCanceledException>(() =>
             new EmailInvoice(flow.Object).Run(new DefaultHttpContext().Request, biller, id, cancellation.Token));
 
         Assert.AreEqual(cancellation.Token, actual.CancellationToken);
-        flow.Verify(x => x.RunAsync(biller, id, cancellation.Token), Times.Once);
+        flow.Verify(x => x.RunAsync(biller, id, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.FunctionKey && origin.Actor == nameof(EmailInvoice)), cancellation.Token), Times.Once);
         flow.VerifyNoOtherCalls();
     }
 }

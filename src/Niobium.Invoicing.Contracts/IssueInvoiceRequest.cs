@@ -8,6 +8,15 @@ namespace Niobium.Invoicing;
 public class IssueInvoiceRequest
 {
     /// <summary>
+    /// Optional explanation retained when invoice content changes. Omitted reasons
+    /// retain compatibility and record the domain operation's description instead.
+    /// </summary>
+    public string? ChangeReason
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Consumer-supplied reverse Unix millisecond identifier; HTTP issuance checks its decoded issue time
     /// against a 30-minute age limit.
     /// </summary>

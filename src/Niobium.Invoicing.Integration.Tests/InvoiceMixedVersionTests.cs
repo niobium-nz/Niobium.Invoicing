@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Options;
+using Niobium.Invoicing.History;
 using OldInvoice = Niobium.Invoicing.Integration.Tests.Legacy.Invoice;
 using OldDomain = Niobium.Invoicing.Integration.Tests.Legacy.Domains.InvoiceDomain;
 
@@ -41,7 +42,7 @@ public sealed partial class StorageFlowTests
         current.Token = "synthetic-frozen-link";
         current.SetPreparationStage(InvoicePreparationStage.Frozen);
         await currentStorage.UpdateAsync([current]);
-        InvoiceDomain domain = new(host.Services.GetRequiredService<IOptions<BillingOptions>>(), new(() => currentStorage), []);
+        InvoiceDomain domain = CurrentDomain(currentStorage);
         domain.Initialize(partition, row);
         await domain.CancelAsync(request.Tenant, request.BillerID,
             new()
@@ -75,7 +76,7 @@ public sealed partial class StorageFlowTests
         await storage.UpdateAsync([legacy]);
         OldDomain inFlight = PriorDomain(host.Services.GetRequiredService<IRepository<OldInvoice>>(), partition, row);
         await inFlight.GetEntityAsync();
-        InvoiceDomain current = new(host.Services.GetRequiredService<IOptions<BillingOptions>>(), new(() => storage), []);
+        InvoiceDomain current = CurrentDomain(storage);
         current.Initialize(partition, row);
         await current.ReconcilePaymentHistoryAsync(request.Tenant, request.BillerID, new()
         {
@@ -104,4 +105,9 @@ public sealed partial class StorageFlowTests
         domain.Initialize(partition, row);
         return domain;
     }
+
+    private static InvoiceDomain CurrentDomain(IRepository<Invoice> storage)
+        => new(host!.Services.GetRequiredService<IOptions<BillingOptions>>(), new(() => storage), [],
+            host.Services.GetRequiredService<IDomainRepository<InvoiceHistoryDomain, InvoiceRevision>>(),
+            host.Services.GetRequiredService<IRepository<InvoiceItem>>(), TimeProvider.System);
 }

@@ -9,5 +9,6 @@
     <PackageReference Include="Moq" Version="4.20.72" />
     <Compile Include="../../test-support/InvoiceCheckpoint.cs" Link="Support/InvoiceCheckpoint.cs" />
     <Compile Include="../../test-support/InvoiceHistoryFixture.cs" Link="Support/InvoiceHistoryFixture.cs" />
+    <Compile Include="../../test-support/HistoryScenario.cs" Link="Support/HistoryScenario.cs" />
   </ItemGroup>
 </Project>

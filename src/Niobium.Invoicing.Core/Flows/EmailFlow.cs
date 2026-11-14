@@ -4,6 +4,7 @@ using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Options;
 using Niobium.Messaging;
 using Niobium.Notification;
+using Niobium.Invoicing.History;
 
 namespace Niobium.Invoicing.Flows;
 
@@ -40,12 +41,18 @@ public class EmailFlow(
     /// It does not suppress replays, confirm recipient delivery or make enqueue/status persistence atomic.
     /// Cancellation or failure can leave earlier side effects completed.
     /// </remarks>
-    public virtual async Task RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
+    public virtual Task RunAsync(Guid issuer, long invoice, CancellationToken cancellationToken)
+        => RunAsync(issuer, invoice, null, cancellationToken);
+
+    public virtual async Task RunAsync(Guid issuer, long invoice, InvoiceChangeOrigin? origin,
+        CancellationToken cancellationToken)
     {
         InvoiceDomain domain = await repo.GetAsync(
             Invoice.BuildPartitionKey(issuer),
             Invoice.BuildRowKey(invoice), forceLoad: true, cancellationToken: cancellationToken);
         Invoice entity = await domain.GetEntityAsync(cancellationToken);
+        if (origin != null)
+            domain.SetChangeOrigin(origin);
         if (string.IsNullOrWhiteSpace(entity.RecipientEmail))
         {
             logger.LogWarning("Invoice {Invoice} has no recipient email, skipping notification.", entity.GetFullID());

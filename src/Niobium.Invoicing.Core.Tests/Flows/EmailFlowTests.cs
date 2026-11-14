@@ -9,6 +9,7 @@ using Niobium.Messaging;
 using Niobium.Notification;
 using System.Globalization;
 using System.Text.Json;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Core.Tests.Flows
 {
@@ -68,7 +69,8 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             }
 
             // Real domain with mocked infra
-            InvoiceDomain domain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>());
+            InvoiceDomain domain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>(),
+                new HistoryScenario().Domains(), itemRepo.Object, TimeProvider.System);
 
             // Initialize keys so GenericDomain can load using mocked repo
             string pk = Invoice.BuildPartitionKey(invoice.Biller);

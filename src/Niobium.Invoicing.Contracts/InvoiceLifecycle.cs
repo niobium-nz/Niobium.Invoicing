@@ -29,13 +29,19 @@ public sealed record InvoicePaymentHistoryDecision(Guid Operation, Guid Actor, I
 // model alone encodes this snapshot into its mapped scalar column.
 public sealed record InvoiceLifecycleSnapshot
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
+    private const int UnanchoredVersion = 1;
     [JsonInclude]
     public int Version
     {
         get; private init;
     }
     [JsonInclude] public string WriteID { get; private init; } = String.Empty;
+    [JsonInclude]
+    public Guid? HistoryRevision
+    {
+        get; private init;
+    }
     public InvoicePreparationStage Preparation
     {
         get; init;
@@ -73,11 +79,24 @@ public sealed record InvoiceLifecycleSnapshot
     public static InvoiceLifecycleSnapshot Create(InvoicePreparationStage preparation)
         => new()
         {
-            Version = CurrentVersion,
+            // A standalone lifecycle snapshot has no committed history reference.
+            // The domain advances it only after recording immutable history.
+            Version = UnanchoredVersion,
             Preparation = preparation
         };
 
     internal InvoiceLifecycleSnapshot CaptureWrite() => this with { WriteID = Guid.NewGuid().ToString("N") };
+    internal InvoiceLifecycleSnapshot CaptureHistory(Guid revision)
+        => revision == Guid.Empty ? throw new InvalidOperationException("A history revision is required.")
+            : this with
+            {
+                Version = CurrentVersion,
+                HistoryRevision = revision
+            };
+
+    internal bool HasSupportedRepresentation()
+        => Version == UnanchoredVersion ? HistoryRevision == null
+            : Version == CurrentVersion && HistoryRevision.HasValue && HistoryRevision.Value != Guid.Empty;
 }
 
 public partial class Invoice
@@ -107,7 +126,7 @@ public partial class Invoice
         try
         {
             InvoiceLifecycleSnapshot? snapshot = JsonSerializer.Deserialize<InvoiceLifecycleSnapshot>(LifecycleData, LifecycleJson);
-            if (snapshot == null || snapshot.Version != InvoiceLifecycleSnapshot.CurrentVersion
+            if (snapshot == null || !snapshot.HasSupportedRepresentation()
                 || !Enum.IsDefined(snapshot.Preparation)
                 || !Guid.TryParseExact(snapshot.WriteID, "N", out Guid write) || write == Guid.Empty)
                 throw InvalidLifecycle();
@@ -136,7 +155,7 @@ public partial class Invoice
     public void StoreLifecycle(InvoiceLifecycleSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        if (snapshot.Version != InvoiceLifecycleSnapshot.CurrentVersion || !Enum.IsDefined(snapshot.Preparation))
+        if (!snapshot.HasSupportedRepresentation() || !Enum.IsDefined(snapshot.Preparation))
             throw InvalidLifecycle();
         string serialized = JsonSerializer.Serialize(snapshot.CaptureWrite(), LifecycleJson);
         if (Encoding.UTF8.GetByteCount(serialized) > MaximumLifecycleBytes)
@@ -154,6 +173,12 @@ public partial class Invoice
         {
             Preparation = stage
         });
+    }
+
+    public void ReferenceHistory(Guid revision)
+    {
+        InvoiceLifecycleSnapshot snapshot = ReadLifecycle() ?? InvoiceLifecycleSnapshot.Create(GetPreparationStage());
+        StoreLifecycle(snapshot.CaptureHistory(revision));
     }
 
     private static InvalidOperationException InvalidLifecycle() => new("Unsupported invoice lifecycle representation.");

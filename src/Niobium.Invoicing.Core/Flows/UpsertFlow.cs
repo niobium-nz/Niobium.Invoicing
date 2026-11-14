@@ -1,5 +1,6 @@
 using Niobium.Invoicing.Domains;
 using Niobium.Profile;
+using Niobium.Invoicing.History;
 
 namespace Niobium.Invoicing.Flows;
 
@@ -29,7 +30,11 @@ public class UpsertFlow(
     /// retries; interrupted or uncertain writes remain blocked for recovery. This is not a transaction.
     /// </remarks>
     /// <exception cref="Niobium.ApplicationException">The biller or customer cannot be found.</exception>
-    public virtual async Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
+    public virtual Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
+        => RunAsync(request, billee, null, cancellationToken);
+
+    public virtual async Task RunAsync(IssueInvoiceRequest request, Billee? billee, InvoiceChangeOrigin? origin,
+        CancellationToken cancellationToken)
     {
         InvoiceValidation.ValidateRequest(request);
         InvoiceDomain domain = await invoiceRepo.GetAsync(
@@ -68,6 +73,11 @@ public class UpsertFlow(
             }
         }
 
+        InvoiceChangeOrigin caller = origin ?? new(InvoiceChangeAuthority.UnattributedCoreCaller, nameof(UpsertFlow));
+        domain.SetChangeOrigin(caller with
+        {
+            Reason = request.ChangeReason?.Trim() ?? caller.Reason
+        });
         InvoiceItem[] existing = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(request.InvoiceID),
             cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
         bool changed = await domain.UpdateAsync(request, existing, cancellationToken, billee, newInvoice: stored == null);

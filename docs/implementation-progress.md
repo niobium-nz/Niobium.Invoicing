@@ -1,5 +1,44 @@
 # Research plan implementation
 
+## B08 committed snapshot implementation: 2026-11-14
+
+Invoicing [PR #23](https://github.com/niobium-nz/Niobium.Invoicing/pull/23) is
+delivered as `8b0e9faa1a2561486783ab886530f76313d92e5a`. Feature run 43607155583
+passed, native review completed, and independent approval 5905234801 covered its
+exact head. Production run 43608750098 succeeded with all five GET-only checks on
+the actual merge. Its downloaded report ZIP matched SHA-256
+`eda86adc7f42486458a95df180ea15a5bd2c746be904e3f0c1c6710efe166393`.
+Package run 43608750148 published Contracts 2.0.36; the public package was downloaded
+and its repository commit verified. This closes the cancellation increment's
+pending delivery language below, not the full roadmap.
+
+The next application increment records immutable invoice and line snapshots with
+actor, reason and time. Rich domains own the transitions and commit ordering;
+business-named models privately own keys, serialization and digest. The existing
+Niobium repositories perform persistence. [The history guide](invoice-history.md)
+describes the invoice-reference commit point, failure behavior, proposed versus
+verified lines, legacy observed baselines and old-writer fencing. No current key,
+legacy link or historical total is migrated.
+
+Local solution and deployed-test builds passed. All 205 unit and 112 opted-in local
+integration cases passed with 94.27% combined authored application line coverage.
+The 24 Python tooling and 20 Node policy cases also pass. A local Bicep compile
+could not restore the unchanged AVM modules because the workspace proxy returned
+HTTP 403 for the public registry; actual feature provisioning remains required.
+An actual-adapter regression also verifies snapshots spanning more than one
+100-operation Table batch and an unchanged invoice/history on exact replay.
+New deployed coverage checks multipart snapshots, authenticated attribution,
+retained previous lines/totals and exact replays through real test HTTP/storage.
+The independent trusted verifier must be delivered before this schema-2 application
+can pass trusted CI. Exact-head feature, native/formal review and production/package
+results remain required before this increment is described as delivered.
+
+This is the snapshot portion of B08. A history-reading API, soft deletion, validated
+ten-year retention clock/holds, purge policy and tested recovery remain unfinished.
+Notification receipts still need the separately requested provider/environment
+configuration; Invoicing delivery projection cannot consume an unpublished contract.
+The accepted payment, operator, template, MCP and post-MCP work remains active.
+
 ## Cancellation and historical eligibility implementation: 2026-11-14
 
 The original research plan remains unchanged. Q29 records the accepted operator,

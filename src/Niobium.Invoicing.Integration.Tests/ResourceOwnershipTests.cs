@@ -1,12 +1,31 @@
 using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Niobium.Invoicing.Flows;
+using Niobium.Invoicing.History;
 using Niobium.Platform;
 
 namespace Niobium.Invoicing.Integration.Tests;
 
 public sealed partial class StorageFlowTests
 {
+    [TestMethod]
+    [DataRow(nameof(InvoiceRevision))]
+    [DataRow(nameof(InvoiceRevisionPart))]
+    public async Task History_models_do_not_gain_a_direct_client_table_grant(string table)
+    {
+        Guid biller = Guid.NewGuid();
+        ClaimsPrincipal principal = ResourcePrincipal(biller);
+        foreach (IResourceControl control in host!.Services.GetServices<IResourceControl>())
+        {
+            bool applicable = control.Grantable(ResourceType.AzureStorageTable, table);
+            if (!applicable)
+                continue;
+            StorageControl? grant = await control.GrantAsync(principal, ResourceType.AzureStorageTable,
+                table, biller.ToString(), null);
+            Assert.IsNull(grant, "History registration must not grant a client direct access to audit rows.");
+        }
+    }
+
     [TestMethod]
     public async Task Registered_item_control_grants_only_query_for_the_owned_invoice_partition()
     {

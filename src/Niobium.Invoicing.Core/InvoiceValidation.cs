@@ -24,6 +24,9 @@ internal static class InvoiceValidation
             throw Invalid("Invoice identifier must be a positive reverse Unix millisecond value.");
         }
 
+        if (request.ChangeReason != null && (String.IsNullOrWhiteSpace(request.ChangeReason) || request.ChangeReason.Length > 500))
+            throw Invalid("A supplied invoice change reason must contain at most 500 characters and cannot be blank.");
+
         try
         {
             _ = Invoice.ParseID(request.InvoiceID);

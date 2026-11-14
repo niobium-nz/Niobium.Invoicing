@@ -24,5 +24,6 @@
 
   <ItemGroup>
     <PackageReference Update="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
+    <Compile Include="../../test-support/HistoryScenario.cs" Link="Support/HistoryScenario.cs" />
   </ItemGroup>
 </Project>

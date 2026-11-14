@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Niobium.Invoicing.Flows;
+using Niobium.Invoicing.History;
 using System.Net;
 
 namespace Niobium.Invoicing.Server
@@ -31,7 +32,7 @@ namespace Niobium.Invoicing.Server
             long invoice,
             CancellationToken cancellationToken)
         {
-            await flow.RunAsync(issuer, invoice, cancellationToken);
+            await flow.RunAsync(issuer, invoice, new(InvoiceChangeAuthority.FunctionKey, nameof(EmailInvoice)), cancellationToken);
             return new StatusCodeResult((int)HttpStatusCode.Created);
         }
     }

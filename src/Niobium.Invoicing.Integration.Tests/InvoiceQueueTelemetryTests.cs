@@ -1,3 +1,4 @@
+using Niobium.Invoicing.History;
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker.OpenTelemetry;
@@ -53,7 +54,7 @@ public sealed class InvoiceQueueTelemetryTests
     {
         using Fixture fixture = new();
         TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()))
+        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), It.IsAny<CancellationToken>()))
             .Returns(completion.Task);
 
         Task processing = fixture.Consumer.Run(fixture.Message(), CancellationToken.None);
@@ -69,7 +70,7 @@ public sealed class InvoiceQueueTelemetryTests
         AssertMeasurement(measurements, "niobium.invoicing.queue.processing.duration", "s", 1, 2, "succeeded");
         AssertMeasurement(measurements, "niobium.invoicing.queue.processed", "{attempt}", 1, 1, "succeeded");
         Assert.AreEqual(3, measurements.Count);
-        fixture.Upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()), Times.Once);
+        fixture.Upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), It.IsAny<CancellationToken>()), Times.Once);
         fixture.Email.VerifyNoOtherCalls();
     }
 
@@ -86,7 +87,7 @@ public sealed class InvoiceQueueTelemetryTests
             source.Cancel();
         }
         Exception expected = cancellationException ? new OperationCanceledException(source.Token) : new InvalidOperationException("synthetic failure");
-        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), source.Token))
+        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), source.Token))
             .Returns(() =>
             {
                 fixture.Clock.Advance(TimeSpan.FromSeconds(3));
@@ -106,7 +107,7 @@ public sealed class InvoiceQueueTelemetryTests
         List<Measurement> measurements = fixture.Collect();
         AssertMeasurement(measurements, "niobium.invoicing.queue.processing.duration", "s", 1, 3, outcome);
         AssertMeasurement(measurements, "niobium.invoicing.queue.processed", "{attempt}", 1, 1, outcome);
-        fixture.Upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), source.Token), Times.Once);
+        fixture.Upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), source.Token), Times.Once);
         fixture.Email.VerifyNoOtherCalls();
     }
 
@@ -140,7 +141,7 @@ public sealed class InvoiceQueueTelemetryTests
     public async Task Missing_enqueue_time_is_omitted_and_future_time_is_clamped(bool future)
     {
         using Fixture fixture = new();
-        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()))
+        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         await fixture.Consumer.Run(fixture.Message(future ? fixture.Clock.UtcNow.AddSeconds(30) : default(DateTimeOffset)), CancellationToken.None);
         List<Measurement> measurements = fixture.Collect();
@@ -159,7 +160,7 @@ public sealed class InvoiceQueueTelemetryTests
     public async Task Redelivery_counts_attempts_and_retains_the_original_enqueue_age()
     {
         using Fixture fixture = new();
-        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()))
+        fixture.Upsert.Setup(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
                 fixture.Clock.Advance(TimeSpan.FromSeconds(3));

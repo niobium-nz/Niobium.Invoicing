@@ -1,0 +1,92 @@
+using Niobium.Invoicing.History;
+
+namespace Niobium.Invoicing.Domains;
+
+public partial class InvoiceDomain
+{
+    private InvoiceChangeOrigin? historyOrigin;
+
+    public void SetChangeOrigin(InvoiceChangeOrigin origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        if (!Enum.IsDefined(origin.Authority) || String.IsNullOrWhiteSpace(origin.Actor)
+            || origin.Actor.Length > 256 || origin.Actor != origin.Actor.Trim()
+            || (origin.Reason != null && (String.IsNullOrWhiteSpace(origin.Reason) || origin.Reason.Length > 500 || origin.Reason != origin.Reason.Trim())))
+            throw BadRequest("A bounded invoice change origin is required.");
+        if (origin.Authority == InvoiceChangeAuthority.AuthenticatedBiller
+            && (!Guid.TryParse(origin.Actor, out Guid actor) || actor == Guid.Empty
+                || !Guid.TryParse(PartitionKey, out Guid biller) || actor != biller))
+            throw new ApplicationException(InternalError.Forbidden, "The change actor must match the invoice biller.");
+        historyOrigin = origin;
+    }
+
+    private async Task PersistWithHistoryAsync(Invoice next, InvoiceChangeKind kind, string reason,
+        IReadOnlyList<InvoiceItem>? lines = null, InvoiceLineEvidence lineEvidence = InvoiceLineEvidence.Observed,
+        InvoiceChangeAuthority authority = InvoiceChangeAuthority.UnattributedCoreCaller, string actor = "InvoiceDomain",
+        CancellationToken cancellationToken = default)
+    {
+        if (authority == InvoiceChangeAuthority.UnattributedCoreCaller && historyOrigin != null)
+        {
+            authority = historyOrigin.Authority;
+            actor = historyOrigin.Actor;
+        }
+        if (kind is InvoiceChangeKind.PreparationStarted or InvoiceChangeKind.PreparationCompleted && historyOrigin?.Reason != null)
+            reason = historyOrigin.Reason;
+        Invoice current = await GetEntityAsync(cancellationToken);
+        Guid? previous = current.ReadLifecycle()?.HistoryRevision;
+        InvoiceRevisionSnapshot? priorSnapshot = null;
+        if (previous.HasValue)
+        {
+            InvoiceHistoryDomain prior = await LoadRevisionAsync(current, previous.Value, cancellationToken);
+            priorSnapshot = await prior.ReadSnapshotAsync(cancellationToken);
+        }
+
+        // Existing rows have no invented pre-rollout audit. Capture the observed
+        // baseline, explicitly unattributed, when first entering history or when
+        // an external/direct writer has changed data outside the audited domain.
+        bool stored = !String.IsNullOrWhiteSpace(current.ETag) || current.Timestamp != null;
+        bool unexplained = priorSnapshot != null && !InvoiceRevision.MatchesInvoice(priorSnapshot, current);
+        if (stored && (priorSnapshot == null || unexplained))
+        {
+            InvoiceItem[] observed = await historyItems.GetAsync(InvoiceItem.BuildPartitionKey(current.GetID()),
+                cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
+            InvoiceRevision.Prepared baseline = InvoiceRevision.Capture(current, observed, InvoiceLineEvidence.Observed,
+                new(InvoiceChangeKind.ObservedBaseline, InvoiceChangeAuthority.UnattributedCoreCaller,
+                    "Observed storage state", unexplained ? "Observed change outside the invoice history writer" : "First observed pre-history invoice state",
+                    clock.GetUtcNow()), previous);
+            await RecordRevisionAsync(baseline, cancellationToken);
+            previous = baseline.Revision.ID;
+            priorSnapshot = baseline.Revision.ReadSnapshot(baseline.Parts);
+        }
+        if (lines == null)
+        {
+            lines = priorSnapshot?.Lines ?? await historyItems.GetAsync(InvoiceItem.BuildPartitionKey(current.GetID()),
+                cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
+            lineEvidence = priorSnapshot?.LineEvidence ?? InvoiceLineEvidence.Observed;
+        }
+        InvoiceRevision.Prepared prepared = InvoiceRevision.Capture(next, lines, lineEvidence,
+            new(kind, authority, actor, reason, clock.GetUtcNow()), previous);
+        await RecordRevisionAsync(prepared, cancellationToken);
+        next.ReferenceHistory(prepared.Revision.ID);
+        // The only commit point: a conditional invoice update references already
+        // verified immutable records. Failed competing writes leave unreferenced
+        // candidates, which readers never discover by scanning the history table.
+        await PersistInvoiceAsync(next, cancellationToken);
+    }
+
+    private async Task RecordRevisionAsync(InvoiceRevision.Prepared prepared, CancellationToken cancellationToken)
+    {
+        InvoiceHistoryDomain domain = await history.BuildAsync(prepared.Revision, cancellationToken);
+        await domain.RecordAsync(prepared, cancellationToken);
+    }
+
+    private async Task<InvoiceHistoryDomain> LoadRevisionAsync(Invoice invoice, Guid revision, CancellationToken cancellationToken)
+    {
+        StorageKey key = InvoiceRevision.Key(invoice.Biller, revision);
+        InvoiceHistoryDomain domain = await history.GetAsync(key.PartitionKey, key.RowKey, forceLoad: true, cancellationToken: cancellationToken);
+        InvoiceRevision stored = await domain.GetEntityAsync(cancellationToken);
+        if (!stored.Describes(invoice.Biller, invoice.Created))
+            throw Conflict("Invoice history does not belong to this invoice.");
+        return domain;
+    }
+}
