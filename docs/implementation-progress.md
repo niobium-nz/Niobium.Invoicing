@@ -938,23 +938,32 @@ B08 history writer changes lifecycle JSON to schema 2. It does not activate hist
 change application code or relax any deployment gate.
 
 The raw checkpoint verifier accepts only reviewed versions 1 and 2, requires the
-schema-2 revision reference, and preserves it and unrelated evidence when arranging
-an owned saved-link fixture. Lifecycle assertions independently validate the raw
-representation before materializing read-only evidence; the prior application
-codec must never rewrite a newer fixture. Unknown schemas remain rejected.
+schema-2 revision reference, and reads lifecycle evidence without an older codec
+rewriting a newer fixture. Unknown schemas remain rejected. A schema-2 row cannot
+be synthetically frozen: that material transition must use its history writer.
+Saved-link/debug fixtures are instead fully seeded legacy frozen snapshots, with
+owned lines, totals and token, before any HTTP mutation. Real reconciliation and
+cancellation then use the deployed application; existing email/queue cases still
+exercise the actual current freeze path.
 
-After a synthetic invoice's conditional delete succeeds, cleanup queries the two
-history tables by that biller and invoice, validates every selected identity and
-version before deleting any child, and uses observed ETags. Missing tables are
-allowed only for fixtures that do not require history; permission failures are not
-masked. The loopback test proves another invoice under the same biller is retained.
-No production fixture mutation or broader client entitlement is introduced.
+Cleanup validates every root representation and all selected child identities
+before invoking an awaited callback that conditionally deletes the owned invoice.
+A schema-2 reference must identify a selected revision. The callback uses the
+observed parent ETag, and failed or uncertain parent deletion preserves all history.
+Only after success are child rows deleted with their observed ETags. Queries are
+scoped to the biller and invoice; missing tables are allowed only for unanchored
+fixtures, and permission failures propagate. Actual Table tests cover a missing
+advertised revision, a stale parent and retention of another invoice under the same
+biller. No production fixture mutation or client entitlement is introduced.
 
-Both Release builds passed with zero warnings/errors. All 169 unit, 92 opted-in
-local integration, 24 Python tooling and 20 Node policy cases passed with no skips.
-Combined authored line coverage is 93.40% (Contracts 97.11%, Core 92.63%, Server
-93.14%). The integration tests used a disposable loopback Table emulator that was
-stopped afterward. Feature deployment, candidate/trusted suites, native review,
-independent formal approval and terminal production/package evidence still belong
-to the exact pushed head and actual merge, and will be recorded on the PR. The
-application history increment and remaining B08 work are not complete here.
+Revised local verification passed both Release builds with zero warnings/errors,
+169 unit and 102 opted-in actual Table/component cases with no skips, and 93.40%
+application coverage. The 24 Python and 20 Node tooling checks remain unchanged.
+
+PR #24 native review and the separate approver identified missing-reference,
+unsupported-root and inconsistent-freeze gaps in initial head `00ee1e8`. These are
+corrected above and have dedicated regressions. Its earlier successful deployed
+run does not validate the revised head. Local and new exact-head feature evidence,
+native re-review, separate formal decision and terminal production/package results
+will be recorded on the PR before delivery is claimed. The application history
+increment and remaining B08 work are not complete here.

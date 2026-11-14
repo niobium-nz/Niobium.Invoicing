@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Azure.Data.Tables;
 using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Deployment.Tests;
@@ -37,9 +36,7 @@ public sealed partial class DeployedInvoiceTests
     [TestMethod]
     public async Task Legacy_history_requires_audited_reconciliation_and_cancelled_saved_link_stays_usable()
     {
-        long id = await SeedInvoice(recipient: String.Empty);
-        using (HttpResponseMessage issued = await Post(Request(id), Token(biller, tenant)))
-            Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
+        long id = await SeedInvoice(recipient: String.Empty, legacyFrozen: true);
         CancelInvoiceRequest cancellation = new()
         {
             Operation = Guid.NewGuid(),
@@ -53,14 +50,10 @@ public sealed partial class DeployedInvoiceTests
         using (HttpResponseMessage reconciled = await LifecycleRequest(id, "payment-history/reconcile", review, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.OK, reconciled.StatusCode);
 
-        // Only this new owned test fixture is frozen for a saved-link read. No
-        // notification is needed, and no production/test reference is modified.
+        // Reconciliation/cancellation use the real application on a fully seeded
+        // legacy frozen snapshot. Never rewrite a history-linked fixture directly.
         IRepository<Invoice> repository = services.GetRequiredService<IRepository<Invoice>>();
         Invoice before = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
-        before.Token = Guid.NewGuid().ToString("N");
-        TableEntity owned = await Read(id);
-        InvoiceCheckpoint.FreezeOwnedFixture(owned, before.Token);
-        await tables.GetTableClient(nameof(Invoice)).UpdateEntityAsync(owned, owned.ETag, TableUpdateMode.Replace);
         using (HttpResponseMessage response = await LifecycleRequest(id, "cancel", cancellation, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Invoice cancelled = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;

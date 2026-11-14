@@ -22,13 +22,25 @@ internal static class InvoiceCheckpoint
     internal static InvoiceLifecycleSnapshot ReadEvidence(TableEntity invoice)
         => JsonSerializer.Deserialize<InvoiceLifecycleSnapshot>(ReadLifecycle(invoice).ToJsonString()) ?? throw Invalid();
 
-    internal static PreparationCheckpoint ReadActive(TableEntity invoice)
+    internal static PreparationCheckpoint ReadActive(TableEntity invoice) => ReadPreparation(invoice, true);
+
+    internal static Guid? ReadHistoryReference(TableEntity invoice)
+    {
+        _ = ReadPreparation(invoice, false); // Cancelled fixtures still require complete representation validation.
+        if (invoice.GetString(nameof(Invoice.IssuanceState)) != LifecycleCheckpoint)
+            return null;
+        JsonObject lifecycle = ReadLifecycle(invoice);
+        return lifecycle["Version"]!.GetValue<int>() == 2
+            ? Guid.ParseExact(lifecycle["HistoryRevision"]!.GetValue<string>(), "D") : null;
+    }
+
+    private static PreparationCheckpoint ReadPreparation(TableEntity invoice, bool requireActive)
     {
         string? checkpoint = invoice.GetString(nameof(Invoice.IssuanceState));
         if (checkpoint == LifecycleCheckpoint)
         {
             JsonObject lifecycle = ReadLifecycle(invoice);
-            if (lifecycle["Cancellation"] != null)
+            if (requireActive && lifecycle["Cancellation"] != null)
                 throw Invalid();
             return (PreparationCheckpoint)lifecycle["Preparation"]!.GetValue<int>();
         }
@@ -45,11 +57,12 @@ internal static class InvoiceCheckpoint
         };
     }
 
-    // Used only on a newly created, owned synthetic test invoice. Preserve every
-    // unrelated column and all lifecycle evidence while arranging a saved-link view.
+    // Only unanchored synthetic legacy fixtures can be arranged without a history
+    // transition. Never alter a schema-2 row or detach its committed revision.
     internal static void FreezeOwnedFixture(TableEntity invoice, string token)
     {
-        if (ReadActive(invoice) != PreparationCheckpoint.Ready || String.IsNullOrWhiteSpace(token))
+        Guid? history = ReadHistoryReference(invoice);
+        if (history.HasValue || ReadActive(invoice) != PreparationCheckpoint.Ready || String.IsNullOrWhiteSpace(token))
             throw Invalid();
         if (invoice.GetString(nameof(Invoice.IssuanceState)) == LifecycleCheckpoint)
         {

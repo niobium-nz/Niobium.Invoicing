@@ -119,21 +119,23 @@ public sealed class InvoiceCheckpointTests
     }
 
     [TestMethod]
-    public void ReviewedHistoryRepresentation_PreservesItsReferenceAndAllUnrelatedEvidence()
+    public void Reviewed_history_is_readable_but_cannot_be_frozen_without_its_history_transition()
     {
         TableEntity invoice = Fixture(true);
         JsonObject data = JsonNode.Parse(invoice.GetString("LifecycleData")!)!.AsObject();
-        string revision = Guid.NewGuid().ToString();
+        Guid revision = Guid.NewGuid();
         data["Version"] = 2;
-        data["HistoryRevision"] = revision;
-        invoice["LifecycleData"] = data.ToJsonString();
+        data["HistoryRevision"] = revision.ToString();
+        string raw = data.ToJsonString();
+        invoice["LifecycleData"] = raw;
         Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.ReadActive(invoice));
-        InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-token");
-        JsonObject actual = JsonNode.Parse(invoice.GetString("LifecycleData")!)!.AsObject();
-        Assert.AreEqual(revision, actual["HistoryRevision"]!.GetValue<string>());
-        Assert.AreEqual(2, actual["Version"]!.GetValue<int>());
-        Assert.IsTrue(JsonNode.DeepEquals(data["Reconciliations"], actual["Reconciliations"]));
-        Assert.AreEqual(InvoicePreparationStage.Frozen, InvoiceCheckpoint.ReadEvidence(invoice).Preparation);
+        Assert.AreEqual(revision, InvoiceCheckpoint.ReadHistoryReference(invoice));
+        Assert.AreEqual(InvoicePreparationStage.Ready, InvoiceCheckpoint.ReadEvidence(invoice).Preparation);
+        int columns = invoice.Count;
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-token"));
+        Assert.AreEqual(columns, invoice.Count);
+        Assert.AreEqual(raw, invoice.GetString("LifecycleData"));
+        Assert.IsFalse(invoice.ContainsKey(nameof(Invoice.Token)));
     }
 
     [TestMethod]
