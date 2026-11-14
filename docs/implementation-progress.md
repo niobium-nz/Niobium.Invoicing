@@ -1,5 +1,79 @@
 # Research plan implementation
 
+## B02 / B07 concurrent recovery evidence: 2026-11-14
+
+This continuation starts from Invoicing main
+`bbc978acdbc29583115638c270df6df9027fdbf3` and Notification main
+`708b9c27774d6895a61e187c20ed75f60f985376`. The complete original
+[research report](invoicing-plan.md) is readable and unchanged: 34,257 bytes,
+SHA-256 `1321b7712c4c9e10b477d03b230e12fce5485fbde3375d94c374fc96290313eb`.
+The parent ledger change is isolated on `codex/invoicing-concurrent-recovery-ledger`.
+
+[Notification PR #5](https://github.com/niobium-nz/Niobium.Notification/pull/5)
+adds five real-adapter integration cases to B02/B07. Two durable flows compete for
+the same stored ETag; only one may schedule and submit. Four late provider outcomes
+(acceptance, rejection, retry and hold) cannot overwrite a recovery worker's saved
+acceptance. Each stale write receives HTTP 412, preserving the complete winning
+record, provider evidence and first-submission boundary. The attempts retain the
+same key and frozen bytes, and accepted replays remain suppressed after two days.
+
+The [Notification ledger](https://github.com/niobium-nz/Niobium.Notification/blob/5485c840974cab0a86907f7defbbee173945bf28/docs/implementation-progress.md)
+records the exact commands and limits. All nine local Table/Blob cases and 142
+application cases passed, with 98.38% application coverage and the same six
+pre-existing NU1603 warnings. The opt-in storage suite uses the actual pinned
+Niobium 4.2.66 adapters against disposable loopback Azurite. Its controlled queue,
+clock and HTTP replies do not establish live scheduling or provider deduplication.
+Runtime code, package references, schema and environment activation are unchanged.
+
+[Feature workflow 43540899694](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43540899694)
+passed on `5485c840974cab0a86907f7defbbee173945bf28`: 142 application, 20 Node and
+46 Python checks, plus eight candidate and eight trusted deployed checks. The
+trusted harness checked out immutable main `708b9c27774d6895a61e187c20ed75f60f985376`.
+Both downloaded integration reports identify the feature head and all eight passes;
+ZIP digests match GitHub metadata and upload logs. The candidate digest is
+`d2c28bf448b65a21a478a2dd67b7e072acf57120f171918f2fcd3176c4ed4fca`; the trusted
+digest is `05b3f0b83f514950ba61bb2c29ab46b1afe63b5954f6bc083c814a78a137b368`.
+These deployed checks still exercise the existing synchronous send path.
+
+Native code/security review completed on that feature head without reported
+findings. The separate reviewer independently built and ran the nine storage cases
+and recorded [approval 5900556073](https://github.com/niobium-nz/Niobium.Notification/pull/5#pullrequestreview-5900556073)
+as `5he11`. The protected squash merge is
+`72f100bfc5a742de42a4aa860e5e5e41585ff06f`, with actual tree
+`69c9c6b15dea1c6d61d4dadfae063be0bbcd52c1`, matching the tested tree.
+
+Production [run 43542466096](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43542466096)
+and job 132285923081 completed successfully at 01:49 UTC on 14 November. The
+downloaded GET-only `/health`
+[report 14092343424](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43542466096/artifacts/14092343424)
+identifies merge `72f100bfc5a742de42a4aa860e5e5e41585ff06f` and success.
+Its ZIP SHA-256 `6c67809da84de4b3eb4e98164f88c48f53b6f837d367c1c1f9c4257feb12dfa7`
+matches metadata and upload logs. Package
+[run 43542466113](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43542466113)
+succeeded and correctly skipped publication because Contracts did not change.
+
+| Plan item | Acceptance gained and remaining work |
+| --- | --- |
+| B02 / B07 | Actual adapter/domain concurrency and late-result recovery are now tested together. The storage project remains opt-in locally, outside automatic CI. |
+| B02 activation / U06 | An approved new-operation cohort or verified historical suppression, quiesced legacy consumers, enabled live queue/provider evidence and an owner for held/dead-lettered outcomes are still required. No answer is inferred for the pending cohort/operator question. |
+| B06 | Verified B02 remains a dependency; recipient mail-server acceptance and cancellation before any payment remain the accepted rules. |
+| B01, B03, B04, B05, B08, B09, B10 | Existing acceptance, compatibility boundaries and post-MCP deferrals in the reconciliation below are unchanged. No migration, purge or new machine/payment authority is introduced. |
+
+The previous parent-ledger [PR #19](https://github.com/niobium-nz/Niobium.Invoicing/pull/19)
+is also verified complete. Production
+[run 43173686392](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43173686392)
+and job 131032736462 succeeded at 07:17 UTC on 12 November. Its downloaded
+[report 13924015254](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43173686392/artifacts/13924015254)
+identifies actual merge `bbc978acdbc29583115638c270df6df9027fdbf3`, all five
+read-only checks and success. ZIP SHA-256
+`40e50ff3aee06135093b3c3ce5cb247d5c3be4b8c7700667f759b89a6122b010` matches
+metadata and logs. Package run 43173686526 succeeded and correctly skipped
+publication. Its PR description now records the terminal result.
+
+This parent-ledger update changes only this document. Local whitespace, relative
+file links and the original-report digest/byte count passed. Its own exact-head
+CI, review and delivery results are recorded on its author-created PR.
+
 ## B02 selective rollout and delivery evidence: 2026-11-12
 
 This continuation uses Invoicing main
