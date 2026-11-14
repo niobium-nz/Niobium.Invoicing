@@ -16,6 +16,7 @@ public sealed partial class DeployedInvoiceTests
         string stage = "test-configuration";
         object report;
         int? observedMemoryMB = null;
+        int? observedConcurrency = null;
         try
         {
             string app = await VerifiedTestFunctionApp();
@@ -30,6 +31,13 @@ public sealed partial class DeployedInvoiceTests
             bool parsedMemory = int.TryParse(memory, NumberStyles.None, CultureInfo.InvariantCulture, out int memoryMB);
             Assert.IsTrue(parsedMemory && memoryMB > 0, "The configured test instance memory is required.");
             observedMemoryMB = memoryMB;
+            stage = "test-http-concurrency";
+            string concurrency = await ReadAzureValue("resource", "show", "--resource-group", Required("AZURE_RESOURCE_GROUP"),
+                "--name", app, "--resource-type", "Microsoft.Web/sites", "--api-version", "2024-11-01",
+                "--query", "properties.functionAppConfig.scaleAndConcurrency.triggers.http.perInstanceConcurrency");
+            bool parsedConcurrency = int.TryParse(concurrency, NumberStyles.None, CultureInfo.InvariantCulture, out int concurrentRequests);
+            Assert.IsTrue(parsedConcurrency && concurrentRequests > 0, "Explicit test HTTP concurrency is required.");
+            observedConcurrency = concurrentRequests;
             stage = "test-telemetry-destination";
             Guid insights = await ReadTestTelemetryApp(app);
             stage = "test-telemetry-query";
@@ -40,7 +48,8 @@ public sealed partial class DeployedInvoiceTests
             IReadOnlyList<DeployedHostDiagnostics.Counts> counts = DeployedHostDiagnostics.Parse(aggregates);
             report = new
             {
-                success = true, commit, version, started = diagnosticsStarted, ended, instanceMemoryMB = memoryMB, counts,
+                success = true, commit, version, started = diagnosticsStarted, ended, instanceMemoryMB = memoryMB,
+                httpPerInstanceConcurrency = observedConcurrency, counts,
                 limitation = "Sampled telemetry may be delayed or absent. Other-version/host events and the preceding window do not prove a cause in this deployment."
             };
         }
@@ -48,7 +57,8 @@ public sealed partial class DeployedInvoiceTests
         {
             // CLI responses, exception messages and telemetry can contain credentials
             // or customer data. Record a fixed stage only, never the raw failure.
-            report = new { success = false, started = diagnosticsStarted, ended, instanceMemoryMB = observedMemoryMB, failedStage = stage };
+            report = new { success = false, started = diagnosticsStarted, ended, instanceMemoryMB = observedMemoryMB,
+                httpPerInstanceConcurrency = observedConcurrency, failedStage = stage };
         }
         try
         {

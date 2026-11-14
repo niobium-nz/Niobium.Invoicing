@@ -59,6 +59,33 @@ memory and unversioned host events, after owned cleanup. It retains all 43 cases
 40-second request limits, immutable-main verification and production restrictions.
 The diagnostic parser has nine local regression cases for output/injection bounds.
 
+Diagnostic head `c6e003d2989118d63592d2f71b6e245316b4332d` also failed: run
+[43637210729](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43637210729)
+passed 36/43 candidate cases, with six timeouts and one 502 after the many-line
+case. The verified ZIP includes an ARM observation of 512 MB. Aggregate telemetry
+failed independently at its query stage, so no live OOM/exit cause is established.
+The KQL correction normalizes numeric types across its union branches.
+
+The next correction selects 2048 MB and explicit HTTP concurrency 2 in application
+composition for both environments, retaining the generic module boundary and
+10-instance cap. It adds a concurrent rejection/post-rejection usability case and
+reports actual deployed concurrency with memory. The candidate now has 44 cases;
+all 39 trusted cases and 40-second request limits remain. The increased provisioned
+memory and verification limits are recorded in [operations](delivery-and-operations.md#invoice-request-capacity).
+A proposed host transport-size setting was not retained: local validation returned
+a host binding failure before application execution. No transport-limit behavior
+is claimed here. Current-head feature verification, native review and formal
+approval remain required before merge and production/package verification.
+
+Local verification of the narrowed capacity correction passed both C# Release
+builds without warnings/errors and all 125 actual Table/component cases without
+skips. A same-host real-binding/domain probe passed two concurrent large requests
+with zero writes and an ordinary write afterward; peak combined RSS was about
+1.45 GiB, excluding the client/emulator and without reproducing Azure limits.
+Local Bicep validation could not restore pinned registry modules because the
+workspace proxy returned HTTP 403. Successful CI compilation/provisioning and
+actual deployed settings remain required; local template validation is not claimed.
+
 The trusted-verifier prerequisite [PR #24](https://github.com/niobium-nz/Niobium.Invoicing/pull/24)
 is delivered as `b702d8743ac1211b5b3389f630eea9768eebaa06`: production run
 43621450032 passed all five GET checks on the actual merge, and package run

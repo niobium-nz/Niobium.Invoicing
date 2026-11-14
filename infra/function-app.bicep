@@ -21,6 +21,10 @@ param instanceMemoryMB int = 512
 @description('Maximum number of function instances that can be running simultaneously.')
 param maximumInstanceCount int = 10
 
+@minValue(1)
+@description('Maximum concurrent HTTP requests per instance. Explicit sizing is independent of the memory tier.')
+param httpPerInstanceConcurrency int = 4
+
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed. Can optionally use deployer().objectId if manually deployed')
 param userIdentityPrincipalId string = ''
 
@@ -139,6 +143,11 @@ module functionApp 'br/public:avm/res/web/site:0.24.0' = {
       scaleAndConcurrency: {
         instanceMemoryMB: instanceMemoryMB
         maximumInstanceCount: maximumInstanceCount
+        triggers: {
+          http: {
+            perInstanceConcurrency: httpPerInstanceConcurrency
+          }
+        }
       }
     }
     configs: [{

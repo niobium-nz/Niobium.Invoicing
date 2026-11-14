@@ -125,7 +125,7 @@ Do not run provisioning hooks merely to validate documentation. Settings and pre
 
 | Component | Declaration / defaults | Limit of evidence |
 | --- | --- | --- |
-| Functions | Linux .NET 10 isolated, FC1 Flex Consumption, 512 MB instances, max 10, alwaysOn false | Not a measured capacity or actual scale record |
+| Functions | Linux .NET 10 isolated, FC1 Flex Consumption, application selects 2048 MB instances and HTTP concurrency 2, max 10, alwaysOn false | Feature verification must confirm the actual settings; not a general load-capacity guarantee |
 | Storage | Two Standard_LRS StorageV2 accounts: data/host dependencies and deployment package blob container | LRS is not evidence of recoverability from overwrite/delete; no application backup policy declared |
 | Service Bus | Basic default, incoming queue `issueinvoicecommand`; 5-minute lock, 14-day TTL, max deliveries 10, expiry dead-lettering, sessions/duplicate detection/partitioning off | Both environments use their real external Notification service; tests do not intercept that service’s messages |
 | Identity | User-assigned shared identity plus function system identity | Actual identity permissions outside declarations not verified |
@@ -135,6 +135,31 @@ Do not run provisioning hooks merely to validate documentation. Settings and pre
 | Network / browser | Public access and wildcard CORS declared for relevant resources; optional custom domain/managed certificate | No deployed firewall/edge/security audit performed |
 
 Azure Verified Modules and API versions are pinned in Bicep. Some comments describe a container app, but the declared app is a Function App. No SQL schema/migration, scheduler, payment processor or local Notification provider is provisioned here. Table creation is not declared by the app or these templates. The solution includes `infra/RBAC.bicep` with different casing from the tracked file; this is a navigation inconsistency, not changed by documentation.
+
+### Invoice request capacity
+
+Application composition in `infra/main.bicep` selects 2048 MB and two concurrent
+HTTP requests per instance in both test and production. The generic host module
+owns those resource properties and exposes environment-agnostic inputs. The
+10-instance limit and existing resources remain. This increases provisioned
+memory per instance fourfold and the configured maximum from 5 to 20 GiB.
+Actual usage-based cost depends on execution time and scaling; it is not a fixed
+fourfold monthly-cost estimate. Azure also supplies a separate host/system buffer.
+See [Flex instance sizes and billing](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan)
+and [HTTP concurrency](https://learn.microsoft.com/en-us/azure/azure-functions/functions-concurrency).
+Explicit concurrency prevents a memory-tier change from selecting the platform's
+larger implicit HTTP concurrency.
+
+The test ARM report confirmed 512 MB during repeated large-request timeouts/502s.
+Pinned local Functions binding and real domain probes rejected the same input
+without writes but showed substantial host allocation before domain validation.
+The size/concurrency correction must pass the unchanged domain limit and both
+candidate and trusted deployed suites; it does not claim a confirmed live OOM
+cause. The snapshot format remains bounded to 16 MiB. A test with two outstanding
+oversized requests requires clean 400 responses, no invoice/history writes and a
+successful ordinary issuance afterward. Azure may route them to different
+instances, so that deployed case alone is not a same-instance memory benchmark
+or a general throughput guarantee.
 
 ## Telemetry, failure recovery and operating knowledge
 

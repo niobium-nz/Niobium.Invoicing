@@ -141,7 +141,7 @@ No workflow inputs, resources, notification sends or production checks are added
 After owned-fixture cleanup, the deployed test harness writes
 `test-host-diagnostics.json` beside its TRX. It verifies the test Function App and
 its existing Application Insights destination through the workflow's Azure
-identity, reads the actual configured instance memory, and queries aggregate
+identity, reads the actual configured instance memory and HTTP concurrency, and queries aggregate
 exception, worker-exit/restart, timeout and HTTP-status counts. The suite window
 and preceding two hours are separate, as are the current application version and
 other/unspecified versions. Host events need not carry the worker's version.
@@ -154,6 +154,12 @@ Empty, sampled or delayed telemetry is not proof of health or of a failure's cau
 Collection does not change test verdicts, retry requests, extend request timeouts
 or replace either deployed suite. This helper runs only in the test harness;
 production retains the existing five GET-only checks.
+
+The capacity correction adds a candidate case with two outstanding 100,000-line
+requests. Both must return 400, leave their owned invoice ETags and history
+unchanged, and permit a normal invoice write afterward. The candidate suite now
+has 44 cases; the immutable-main suite still has 39. These live requests are not
+assumed to land on the same Azure instance. No notification is added by this case.
 
 ## Read-only production suite
 

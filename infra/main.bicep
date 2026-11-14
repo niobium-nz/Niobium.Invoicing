@@ -121,6 +121,10 @@ var storageSettings = [
 module app 'function-app.bicep' = {
   params: {
     appShortName: appShortName
+    // Request binding also allocates in the Functions host before Core validation.
+    // Keep HTTP concurrency explicit when choosing the application's memory tier.
+    instanceMemoryMB: 2048
+    httpPerInstanceConcurrency: 2
     userAssignedManagedIdentityName: sharedManagedIdentityName
     environmentName: environmentName
     appSettings: concat(appSettings, serviceBusSettings, storageSettings)

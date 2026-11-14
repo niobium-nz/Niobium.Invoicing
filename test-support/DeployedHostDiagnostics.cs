@@ -27,7 +27,7 @@ internal static class DeployedHostDiagnostics
                     | where severityLevel >= 3 or message has_any ("OutOfMemory", "OOM", "memory", "Restarting", "restarting", "exited")
                     | project timestamp, application_Version, source="trace", text=message, code=0, elapsed=0.0),
                 (requests | where timestamp between (datetime({{first}}) .. datetime({{last}}))
-                    | project timestamp, application_Version, source="request", text="", code=toint(resultCode), elapsed=todouble(duration))
+                    | project timestamp, application_Version, source="request", text="", code=tolong(resultCode), elapsed=todouble(duration))
             | extend window=iff(timestamp >= datetime({{suite}}), "suite", "preceding-two-hours"),
                 version=iff(application_Version == "{{version}}-prerelease", "current", "other-or-unspecified")
             | summarize exceptions=countif(source == "exception"),
