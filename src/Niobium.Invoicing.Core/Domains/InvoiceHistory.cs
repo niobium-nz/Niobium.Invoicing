@@ -48,6 +48,9 @@ public partial class InvoiceDomain
         // ETags and timestamps do not constitute a business-content change.
         InvoiceItem[] observed = await historyItems.GetAsync(InvoiceItem.BuildPartitionKey(current.GetID()),
             cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
+        RequireHistoryCapacity(current, observed);
+        if (lines != null)
+            RequireHistoryCapacity(next, lines, requested: kind == InvoiceChangeKind.PreparationStarted);
         bool sameLines = priorSnapshot != null && InvoiceRevision.MatchesLines(priorSnapshot.Lines, observed);
         bool pendingLines = priorSnapshot?.LineEvidence == InvoiceLineEvidence.Proposed
             && current.GetPreparationStage() is InvoicePreparationStage.Preparing or InvoicePreparationStage.Retryable;
@@ -96,6 +99,13 @@ public partial class InvoiceDomain
     {
         InvoiceHistoryDomain domain = await history.BuildAsync(prepared.Revision, cancellationToken);
         await domain.RecordAsync(prepared, cancellationToken);
+    }
+
+    private static void RequireHistoryCapacity(Invoice invoice, IReadOnlyList<InvoiceItem> lines, bool requested = false)
+    {
+        if (InvoiceRevision.ExceedsCapacity(invoice, lines))
+            throw requested ? BadRequest("Requested invoice history exceeds the supported snapshot size.")
+                : Conflict("Existing invoice history exceeds the supported snapshot size.");
     }
 
     private async Task<InvoiceHistoryDomain> LoadRevisionAsync(Invoice invoice, Guid revision, CancellationToken cancellationToken)

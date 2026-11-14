@@ -1,5 +1,99 @@
 # Research plan implementation
 
+## Authenticated history reader implementation: 2026-11-14
+
+The next local increment exposes committed invoice/line history to the owning
+biller through an authenticated GET route. The domain follows verified predecessor
+references; bounded, expiring continuations preserve a page position across new
+edits and reject cross-invoice reuse. Reads never write, send, scan abandoned
+candidates or create legacy history. Wire DTOs move to Contracts with Core type
+forwarding and unchanged stored JSON. [The history guide](invoice-history.md)
+records the API, identity, cursor and compatibility boundaries.
+
+Initial reader head `3ed3a784e899990f92e2f43cf5c9bf957346f770` passed the build job
+and all 40 candidate deployed cases in [run 43629043886](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43629043886).
+The independent harness from writer main `ae65fb4d2bdf42353c84ee6344640bb999e97977`
+then passed 38 of 39 cases: the oversized-history request returned HTTP 500 instead
+of 400. The overall run failed. Both downloaded ZIP digests were verified; a
+successful candidate did not substitute for trusted verification. No PR was opened
+and that failed deployment was not blindly retried.
+
+Local reproduction identified excessive allocation before size rejection, without
+establishing the live HTTP 500's cause. The correction adds a model-owned lower
+bound for JSON-encoded text and line structure before copies/fingerprints, retaining
+the exact 16 MiB envelope check. Scalar line copies preserve the prior business
+JSON and exclude storage metadata. Regression coverage includes escaped/Unicode
+text, aggregate text, 100,000 short lines, unchanged existing/new/anchored state on
+rejection, excluded metadata and an accepted exact-limit snapshot. Independent
+probes confirmed 540 line/date/numeric/null/encoding combinations, byte-identical
+copies and the exact accepted boundary. They measured full-domain allocation for
+the short-line case falling from 123.70 MiB to 18.10 MiB; this is not a universal
+request-memory guarantee or evidence of the live host's failure mechanism.
+
+Both corrected Release builds pass with zero warnings/errors. All 245 unit and
+116 actual Table/component cases pass without skips, with 94.59% combined authored
+application coverage. The earlier binary-consumer probe verified the forwarded
+types. The candidate suite now includes 43 cases, with 39 in the immutable-main
+harness; fresh feature verification is required before PR creation. Native review,
+independent current-head approval and terminal production/package verification
+remain required. Soft deletion, retention/holds and tested restore remain unfinished
+B08 work.
+
+Corrected head `7b8d255649166e817fdac234dd0efbaa9232de49` passed the local CI job,
+but [run 43632811255](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43632811255)
+failed candidate verification. Attempt 1 passed 35/43 cases with eight 40-second
+client timeouts. One independently assessed diagnostic retry of the unchanged head
+passed 33/43, with five timeouts followed by five HTTP 502 responses. Both attempts
+first failed on the 100,000-line request; all three oversized-text cases passed.
+The retry later passed the resource-token cases. Trusted verification skipped,
+and both overall attempts failed. The five read-only checks occurred before the
+failures and do not establish recovery. Both downloaded evidence ZIP digests were
+verified; no PR or further unchanged-head retry is justified by these results.
+
+An isolated Functions host using the pinned packages and actual handler/middleware
+successfully bound the same shapes and reached a marked mock flow, but its host
+and worker together peaked near 915 MiB RSS. This excludes the client and does not
+establish a live memory kill or a production configuration. The next candidate
+adds bounded read-only test-host aggregate diagnostics, including actual instance
+memory and unversioned host events, after owned cleanup. It retains all 43 cases,
+40-second request limits, immutable-main verification and production restrictions.
+The diagnostic parser has nine local regression cases for output/injection bounds.
+
+Diagnostic head `c6e003d2989118d63592d2f71b6e245316b4332d` also failed: run
+[43637210729](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43637210729)
+passed 36/43 candidate cases, with six timeouts and one 502 after the many-line
+case. The verified ZIP includes an ARM observation of 512 MB. Aggregate telemetry
+failed independently at its query stage, so no live OOM/exit cause is established.
+The KQL correction normalizes numeric types across its union branches.
+
+The next correction selects 2048 MB and explicit HTTP concurrency 2 in application
+composition for both environments, retaining the generic module boundary and
+10-instance cap. It adds a concurrent rejection/post-rejection usability case and
+reports actual deployed concurrency with memory. The candidate now has 44 cases;
+all 39 trusted cases and 40-second request limits remain. The increased provisioned
+memory and verification limits are recorded in [operations](delivery-and-operations.md#invoice-request-capacity).
+A proposed host transport-size setting was not retained: local validation returned
+a host binding failure before application execution. No transport-limit behavior
+is claimed here. Current-head feature verification, native review and formal
+approval remain required before merge and production/package verification.
+
+Local verification of the narrowed capacity correction passed both C# Release
+builds without warnings/errors and all 125 actual Table/component cases without
+skips. A same-host real-binding/domain probe passed two concurrent large requests
+with zero writes and an ordinary write afterward; peak combined RSS was about
+1.45 GiB, excluding the client/emulator and without reproducing Azure limits.
+Local Bicep validation could not restore pinned registry modules because the
+workspace proxy returned HTTP 403. Successful CI compilation/provisioning and
+actual deployed settings remain required; local template validation is not claimed.
+
+The trusted-verifier prerequisite [PR #24](https://github.com/niobium-nz/Niobium.Invoicing/pull/24)
+is delivered as `b702d8743ac1211b5b3389f630eea9768eebaa06`: production run
+43621450032 passed all five GET checks on the actual merge, and package run
+43621449958 correctly skipped unchanged Contracts. The downloaded report and
+[terminal evidence](https://github.com/niobium-nz/Niobium.Invoicing/pull/24#issuecomment-6881551491)
+were verified. The separate history-writing application's production verification
+is recorded below; it does not certify this new reader increment.
+
 ## B08 committed snapshot implementation: 2026-11-14
 
 Invoicing [PR #23](https://github.com/niobium-nz/Niobium.Invoicing/pull/23) is
@@ -46,8 +140,23 @@ lines while preserving proposed/partial-write semantics, returns domain-level
 history anchor. Thirteen unit boundary cases, two actual-adapter cases and additional
 deployed drift/oversize checks cover these corrections. The first regression run
 reproduced nine failures before the implementation fix.
-The corrected head must repeat feature/native/formal verification. Production and
-Contracts publication remain required before this increment is delivered.
+Corrected head `422e5be96a03479f9025a3c27167a424255d258d` then passed feature run
+43626303603: 219 unit, 115 Table/component, 39 candidate and 37 trusted deployed
+cases, plus all five read-only checks in both deployed reports. Downloaded candidate
+and trusted ZIP digests matched their published values. Native code/security review
+completed, all three findings were resolved, and independent review 5906488222 by
+`5he11` approved that exact head. Readiness passed; its early PR-event attempt was
+retried once after feature prerequisites completed.
+
+[PR #25](https://github.com/niobium-nz/Niobium.Invoicing/pull/25) was protected-squash
+merged as `ae65fb4d2bdf42353c84ee6344640bb999e97977`, with the tested tree unchanged.
+Production run 43628431431 and job 132549432828 completed successfully. The downloaded
+report verifies the actual merge and all five approved GET-only checks; its ZIP
+SHA-256 is `51dad649c1b4acea9efb50113016550381b8b87438dbfa69bb503c45f3aca002`.
+Package run 43628431454 successfully uploaded Contracts 2.0.38 and symbols. The
+public NuGet package was subsequently downloaded and its repository commit matched
+the actual merge. Its SHA-256 is
+`2f1cb9d4275671ee0b986fd119a37523166e9060897bce3102d264b91a4e0a70`.
 
 This is the snapshot portion of B08. A history-reading API, soft deletion, validated
 ten-year retention clock/holds, purge policy and tested recovery remain unfinished.

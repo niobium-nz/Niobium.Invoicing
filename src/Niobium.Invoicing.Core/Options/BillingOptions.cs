@@ -7,7 +7,8 @@ public class BillingOptions
 {
     /// <summary>
     /// High-entropy secret used in full for new invoice-link tokens. Existing saved tokens are reused
-    /// without this value being involved in validation.
+    /// without this value being involved in validation. History continuations use a separate
+    /// cryptographic purpose with this secret and expire independently of public invoice links.
     /// </summary>
     public required string InvoiceTokenSecretSalt
     {

@@ -66,12 +66,41 @@ public sealed partial class DeployedInvoiceTests
     }
 
     [TestMethod]
-    public async Task Oversized_history_request_returns_http_bad_request_without_creating_an_observed_baseline()
+    [DataRow("plain")]
+    [DataRow("escaped")]
+    [DataRow("aggregate")]
+    [DataRow("many")]
+    public async Task Oversized_history_request_returns_http_bad_request_without_creating_an_observed_baseline(string shape)
     {
         long id = await SeedInvoice(recipient: String.Empty);
         TableEntity before = await Read(id);
         IssueInvoiceRequest request = Request(id);
-        request.InvoiceItems[0].Description = new String('x', 17 * 1024 * 1024);
+        if (shape == "many")
+        {
+            string currency = request.InvoiceItems[0].UnitPriceCurrency;
+            request.InvoiceItems = Enumerable.Range(0, 100_000).Select(index => new InvoiceItem
+            {
+                Invoice = Invoice.ParseID(id),
+                ID = index,
+                Subject = itemSubject,
+                UnitPriceCurrency = currency,
+                LineTotalCurrency = currency,
+                Quantity = 1
+            }).ToList();
+        }
+        else
+        {
+            request.InvoiceItems[0].Description = shape == "escaped"
+                ? new String('\u0001', 3 * 1024 * 1024)
+                : new String('x', (shape == "aggregate" ? 9 : 17) * 1024 * 1024);
+            if (shape == "aggregate")
+            {
+                InvoiceItem second = Request(id).InvoiceItems[0];
+                second.ID = request.InvoiceItems[0].ID + 1;
+                second.Description = request.InvoiceItems[0].Description;
+                request.InvoiceItems.Add(second);
+            }
+        }
         using HttpResponseMessage response = await Post(request, Token(biller, tenant));
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
         TableEntity after = await Read(id);
