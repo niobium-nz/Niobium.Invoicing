@@ -39,6 +39,7 @@ The later [Q28 business-decision follow-up](decisions-and-risks.md#q28-business-
 | [Architecture](architecture.md) | Boundaries, DI, flows, partial failures | Projects, registrations or dependencies change |
 | [Niobium integration](niobium-integration.md) | Package provenance and inherited contracts | Relevant package/resolved graph changes |
 | [Domain and data](domain-and-data.md) | Fields, money, IDs, keys, persistence | Models, calculation, mapping or retention changes |
+| [Invoice lifecycle](invoice-lifecycle.md) | Cancellation, historical-payment evidence, audit and compatible rollout | Lifecycle transitions, metadata or ownership boundaries change |
 | [API and messaging](api-and-messaging.md) | Routes, authorization, wire contracts, retries | Triggers, middleware, DTOs or messages change |
 | [Security](security.md) | Controls, assumptions, data handling | Identity, permissions or rendering changes |
 | [Configuration and development](configuration-and-development.md) | Settings and safe commands | SDK, options, setup or tooling changes |

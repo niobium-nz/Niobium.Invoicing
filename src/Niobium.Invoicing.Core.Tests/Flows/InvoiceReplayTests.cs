@@ -15,7 +15,7 @@ public class InvoiceReplayTests
     {
         IssuanceScenario scenario = new();
         await scenario.RunAsync();
-        scenario.Stored!.IssuanceState.Should().Be(InvoiceContent.Ready);
+        scenario.Stored!.GetPreparationStage().Should().Be(InvoicePreparationStage.Ready);
         string json = JsonMarshaller.Marshall(scenario.Stored);
         json.ToLowerInvariant().Should().NotContain("issuance");
         JsonMarshaller.Unmarshall<Invoice>(json)!.IssuanceState.Should().BeNull();
@@ -40,7 +40,7 @@ public class InvoiceReplayTests
         scenario.Stored!.BillerName.Should().Be(before.BillerName);
         scenario.Stored.RecipientEmail.Should().Be(before.RecipientEmail);
         scenario.Stored.DueBy.Should().Be(before.DueBy);
-        scenario.Stored.IssuanceState.Should().Be(InvoiceContent.Ready);
+        scenario.Stored.GetPreparationStage().Should().Be(InvoicePreparationStage.Ready);
     }
 
     [TestMethod]
@@ -55,7 +55,7 @@ public class InvoiceReplayTests
         scenario.Request.InvoiceItems[0].Description = "Revised description with the same total";
         await scenario.RunAsync();
         scenario.Stored!.ETag.Should().NotBe(oldVersion);
-        scenario.Stored.IssuanceState.Should().Be(InvoiceContent.Ready);
+        scenario.Stored.GetPreparationStage().Should().Be(InvoicePreparationStage.Ready);
         scenario.Items.Single().Description.Should().Be("Revised description with the same total");
     }
 
@@ -165,14 +165,14 @@ public class InvoiceReplayTests
         scenario.FailCreate = !delete;
         Func<Task> action = () => scenario.RunAsync();
         await action.Should().ThrowAsync<RequestFailedException>();
-        scenario.Stored!.IssuanceState.Should().Be(InvoiceContent.Retryable);
+        scenario.Stored!.GetPreparationStage().Should().Be(InvoicePreparationStage.Retryable);
         scenario.Stored.Token.Should().BeNull();
         scenario.Messages.Should().BeEmpty();
         scenario.FailDelete = scenario.FailCreate = false;
         await scenario.RunAsync();
         scenario.Items.Should().HaveCount(2);
         scenario.Stored!.GrandTotalCents.Should().Be(46000);
-        scenario.Stored.IssuanceState.Should().Be(InvoiceContent.Frozen);
+        scenario.Stored.GetPreparationStage().Should().Be(InvoicePreparationStage.Frozen);
         scenario.Messages.Should().HaveCount(1);
     }
 
@@ -199,7 +199,7 @@ public class InvoiceReplayTests
             .ThrowsAsync(new TimeoutException("Synthetic unknown storage outcome"));
         Func<Task> first = () => scenario.RunAsync();
         await first.Should().ThrowAsync<TimeoutException>();
-        scenario.Stored!.IssuanceState.Should().Be(InvoiceContent.Preparing);
+        scenario.Stored!.GetPreparationStage().Should().Be(InvoicePreparationStage.Preparing);
         Func<Task> retry = () => scenario.RunAsync();
         (await retry.Should().ThrowAsync<ApplicationException>()).Which.ErrorCode.Should().Be(409);
         scenario.Messages.Should().BeEmpty();
@@ -215,7 +215,7 @@ public class InvoiceReplayTests
         scenario.Request.NotifyBillee = true;
         Func<Task> first = () => scenario.RunAsync();
         await first.Should().ThrowAsync<TimeoutException>();
-        scenario.Stored!.IssuanceState.Should().Be(InvoiceContent.Frozen);
+        scenario.Stored!.GetPreparationStage().Should().Be(InvoicePreparationStage.Frozen);
         scenario.Stored.Delivered.Should().BeNull();
         string queued = JsonMarshaller.Marshall(scenario.Messages.Single().Value!);
         scenario.FailEnqueue = false;
@@ -229,13 +229,14 @@ public class InvoiceReplayTests
     {
         IssuanceScenario scenario = new();
         await scenario.RunAsync();
-        scenario.Stored!.IssuanceState = null;
+        scenario.Stored = JsonMarshaller.Unmarshall<Invoice>(JsonMarshaller.Marshall(scenario.Stored!));
+        scenario.Stored.IssuanceState = null;
         scenario.Stored.IssuanceFingerprint = null;
         scenario.Stored.Token = "legacy-synthetic-token";
         scenario.Request.NotifyBillee = true;
         await scenario.RunAsync();
         scenario.Stored.Token.Should().Be("legacy-synthetic-token");
-        scenario.Stored.IssuanceState.Should().Be(InvoiceContent.Frozen);
+        scenario.Stored.GetPreparationStage().Should().Be(InvoicePreparationStage.Frozen);
         scenario.Request.InvoiceItems[0].Quantity = 2;
         Func<Task> changed = () => scenario.RunAsync();
         (await changed.Should().ThrowAsync<ApplicationException>()).Which.ErrorCode.Should().Be(409);

@@ -59,6 +59,16 @@ public partial class InvoiceDomain(
         htmlTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.InvoiceTemplateResourceName, cancellationToken)
             ?? throw new ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
         Dictionary<string, string> parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
+        InvoiceLifecycleSnapshot lifecycle = Lifecycle(entity);
+        bool cancelled = lifecycle.Cancellation != null;
+        parameters["INVOICE_STATUS"] = cancelled ? "Cancelled" : String.Empty;
+        parameters["DUE_LABEL"] = cancelled ? "CANCELLED INVOICE" : "TOTAL AMOUNT DUE";
+        if (cancelled)
+        {
+            parameters["DUE"] = "Not payable";
+            parameters["PAYMENT_INSTRUCTIONS"] = "This invoice is cancelled. No payment is requested.";
+            parameters["DUE_BY"] = String.Empty;
+        }
         parameters["BILLER_LOGO"] = HtmlTemplate.ImageUrl(entity.BillerLogo);
         parameters["CONTACT_EMAIL_HREF"] = HtmlTemplate.ContactUrl("mailto", entity.ContactEmailAddress);
         parameters["CONTACT_PHONE_HREF"] = HtmlTemplate.ContactUrl("tel", entity.ContactPhoneNumber);
@@ -79,6 +89,8 @@ public partial class InvoiceDomain(
     public async Task<string> EnsureAccessTokenAsync(string salt, CancellationToken cancellationToken)
     {
         Invoice entity = await GetEntityAsync(cancellationToken);
+        CheckState(entity);
+        CheckActive(entity);
         if (!string.IsNullOrWhiteSpace(entity.Token))
         {
             return entity.Token;
@@ -130,17 +142,39 @@ public partial class InvoiceDomain(
     /// </remarks>
     public async Task OnDeliveredAsync(string token, CancellationToken cancellationToken)
     {
-        Invoice entity = await GetEntityAsync(cancellationToken);
-        if (entity.IssuanceState != InvoiceContent.Frozen || entity.Token != token)
+        Invoice sent = await GetEntityAsync(cancellationToken);
+        DateTimeOffset acknowledgedAt = DateTimeOffset.UtcNow;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            throw Conflict("Notification does not match the frozen invoice.");
+            // The broker has already accepted this operation. Merge that fact into
+            // current state without repeating the send or overwriting a concurrent
+            // cancellation/payment finding. Retry only conditional conflicts.
+            await ReloadAsync(cancellationToken);
+            Invoice current = await GetEntityAsync(cancellationToken);
+            if (current.GetPreparationStage() != InvoicePreparationStage.Frozen || current.Token != token
+                || current.IssuanceFingerprint != sent.IssuanceFingerprint
+                || current.IssuanceNotificationEndpoint != sent.IssuanceNotificationEndpoint)
+                throw Conflict("Notification does not match the frozen invoice.");
+            InvoiceLifecycleSnapshot lifecycle = Lifecycle(current);
+            if (current.Delivered.HasValue)
+                return;
+            RequireConditionalVersion(current);
+            Invoice next = InvoiceContent.Copy(current);
+            next.Delivered = acknowledgedAt;
+            next.StoreLifecycle(lifecycle with
+            {
+                QueuedAt = lifecycle.QueuedAt ?? acknowledgedAt
+            });
+            try
+            {
+                await PersistInvoiceAsync(next, cancellationToken);
+                return;
+            }
+            catch (ApplicationException error) when (error.ErrorCode == (int)InternalError.Conflict && attempt < 2)
+            {
+                // A fresh read on the next attempt retains the winning evidence.
+                // Unknown write responses and final conflicts propagate.
+            }
         }
-        if (entity.Delivered.HasValue)
-        {
-            return;
-        }
-        Invoice next = InvoiceContent.Copy(entity);
-        next.Delivered = DateTimeOffset.UtcNow;
-        await PersistInvoiceAsync(next, cancellationToken);
     }
 }

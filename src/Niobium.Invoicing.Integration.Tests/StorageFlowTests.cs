@@ -103,7 +103,7 @@ public sealed partial class StorageFlowTests
         IRepository<Invoice> repo = host.Services.GetRequiredService<IRepository<Invoice>>();
         Invoice before = (await repo.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
         Assert.IsFalse(string.IsNullOrWhiteSpace(before.ETag));
-        Assert.AreEqual(InvoiceContent.Ready, before.IssuanceState);
+        Assert.AreEqual(InvoicePreparationStage.Ready, before.GetPreparationStage());
         Assert.AreEqual(11500, before.GrandTotalCents);
         request.InvoiceItems[0].Quantity = 2;
         await host.Services.GetRequiredService<IssueFlow>().RunAsync(request, null, CancellationToken.None);
@@ -136,7 +136,7 @@ public sealed partial class StorageFlowTests
         CollectionAssert.AreEqual(itemsBefore.Select(i => i.ETag).ToArray(), itemsAfter.Select(i => i.ETag).ToArray());
         Assert.IsNull(after.Token);
         Assert.IsNull(after.Delivered);
-        Assert.AreEqual(InvoiceContent.Ready, after.IssuanceState);
+        Assert.AreEqual(InvoicePreparationStage.Ready, after.GetPreparationStage());
         Assert.HasCount(0, messages);
         ApplicationException denied = await Assert.ThrowsAsync<ApplicationException>(() =>
             flow.RunAsync(request.BillerID, request.InvoiceID, "synthetic-token", CancellationToken.None));
@@ -159,7 +159,7 @@ public sealed partial class StorageFlowTests
         Assert.AreEqual(JsonMarshaller.Marshall(messages[0].Value!), JsonMarshaller.Marshall(messages[1].Value!));
         Invoice stored = (await host.Services.GetRequiredService<IRepository<Invoice>>().RetrieveAsync(
             Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
-        Assert.AreEqual(InvoiceContent.Frozen, stored.IssuanceState);
+        Assert.AreEqual(InvoicePreparationStage.Frozen, stored.GetPreparationStage());
         Assert.IsNotNull(stored.Delivered);
         string html = await host.Services.GetRequiredService<HTMLFlow>().RunAsync(request.BillerID, request.InvoiceID, stored.Token!, CancellationToken.None);
         StringAssert.Contains(html, "Synthetic customer");
@@ -226,7 +226,7 @@ public sealed partial class StorageFlowTests
         Invoice stored = (await host.Services.GetRequiredService<IRepository<Invoice>>().RetrieveAsync(
             Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
         Assert.AreEqual(12650, stored.GrandTotalCents);
-        Assert.AreEqual(InvoiceContent.Frozen, stored.IssuanceState);
+        Assert.AreEqual(InvoicePreparationStage.Frozen, stored.GetPreparationStage());
         Assert.HasCount(1, messages);
     }
 

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Logging;
 using Niobium.Invoicing.Options;
@@ -59,6 +60,7 @@ public static class DependencyModule
             options?.Invoke(o);
         });
 
+        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.RegisterDomainComponents(typeof(DependencyModule));
         return builder;
     }

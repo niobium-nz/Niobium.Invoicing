@@ -69,6 +69,34 @@ For B02, a queue SDK retry is not the required durable provider schedule. Persis
 
 For B08, ten years is the product retention requirement. The proposed financial-year clock still requires the accepted AU/NZ validation before purging; the duration alone is not evidence of statutory compliance. Record legacy/version compatibility, legal holds, privacy handling and tested recovery as part of implementation. No production migration or deletion is authorized by this record.
 
+### Q29: delivery follow-through and accepted business recommendations
+
+The owner accepted the following recommendations on **2026-11-14
+(Pacific/Auckland)** after distinguishing completed Notification work from the
+unfinished overall Invoicing roadmap. They extend Q28 without reopening its
+accepted requirements.
+
+| Area | Accepted decision | Implementation boundary |
+| --- | --- | --- |
+| Uncertain notification recovery and deliberate resends | The service operator initially investigates and resolves held/uncertain submissions. Record the actor, reason, evidence and outcome; a deliberate extra copy is an audited action with a distinct operation identity. | Preserve prior submission history and suppression. Automatic retries retain their existing key, frozen payload and bounded provider window. Operator controls and resend auditing still need implementation. |
+| Legacy cancellation eligibility | Where historical payments cannot be verified, show that uncertainty and require reconciliation before allowing cancellation. | A zero balance is not proof that no payment ever occurred. Refunds/reversals cannot restore eligibility. Reconciliation must preserve its evidence and must not erase a known payment. |
+| MCP authority and sequence | Deliver read/draft tools first, then privileged actions only with explicit scopes. | Reuse Core flows and identity boundaries. The concrete sending/cancellation/payment permission matrix remains design work; this acceptance does not grant unattended agents blanket authority. |
+| Payment implementation sequence | Establish durable payment records and manual reconciliation before integrating a processor. | Retain manual overpayment and exact outstanding-balance automated collection. The first provider and merchant-account ownership still need a concrete owner decision. |
+
+The goal is implementation and verified delivery of the approved roadmap, including
+the work explicitly scheduled after MCP. Documents or a completed individual PR
+do not complete that goal. Finish live Notification recovery verification, then
+delivery confirmation/cancellation, and continue the remaining milestones under
+the standing [delivery and approval process](pr-approval-handoff.md).
+
+Do not ask again about these four recommendations, mandatory durable submission
+for every Notification tenant, the delivery definition, or the approved review/
+merge/deployment process. Bring genuinely unresolved choices with concrete
+recommendations: provider/merchant ownership, recurrence rules, and the validated
+retention clock/holds/privacy policy before destructive retention work. Production
+migrations, data writes/deletes and notification sends remain outside read-only
+production verification.
+
 ## Current discrepancies and proposed backlog
 
 Priority below is **Proposed review order**, not a committed delivery schedule. Evidence is linked to implementation; security-sensitive details are kept in private findings, not reproduced here.
