@@ -10,16 +10,34 @@ candidates or create legacy history. Wire DTOs move to Contracts with Core type
 forwarding and unchanged stored JSON. [The history guide](invoice-history.md)
 records the API, identity, cursor and compatibility boundaries.
 
-Solution and deployed-test builds pass with zero warnings/errors. All 233 unit and
-116 actual Table/component integration cases pass, with 94.41% combined authored
-application coverage after incorporating writer correction `422e5be9`. Deployed
-candidate coverage is implemented but has not run for this increment. The separate
-approver independently reproduced these results and verified an older compiled
-consumer against the forwarded types, with no findings. The source is rebased on
-writer merge `ae65fb4d2bdf42353c84ee6344640bb999e97977` without changing its tested
-contents. Feature CI, native review, independent approval and terminal production/package
-verification are still required. Soft deletion, retention/holds and tested restore
-remain unfinished B08 work.
+Initial reader head `3ed3a784e899990f92e2f43cf5c9bf957346f770` passed the build job
+and all 40 candidate deployed cases in [run 43629043886](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43629043886).
+The independent harness from writer main `ae65fb4d2bdf42353c84ee6344640bb999e97977`
+then passed 38 of 39 cases: the oversized-history request returned HTTP 500 instead
+of 400. The overall run failed. Both downloaded ZIP digests were verified; a
+successful candidate did not substitute for trusted verification. No PR was opened
+and that failed deployment was not blindly retried.
+
+Local reproduction identified excessive allocation before size rejection, without
+establishing the live HTTP 500's cause. The correction adds a model-owned lower
+bound for JSON-encoded text and line structure before copies/fingerprints, retaining
+the exact 16 MiB envelope check. Scalar line copies preserve the prior business
+JSON and exclude storage metadata. Regression coverage includes escaped/Unicode
+text, aggregate text, 100,000 short lines, unchanged existing/new/anchored state on
+rejection, excluded metadata and an accepted exact-limit snapshot. Independent
+probes confirmed 540 line/date/numeric/null/encoding combinations, byte-identical
+copies and the exact accepted boundary. They measured full-domain allocation for
+the short-line case falling from 123.70 MiB to 18.10 MiB; this is not a universal
+request-memory guarantee or evidence of the live host's failure mechanism.
+
+Both corrected Release builds pass with zero warnings/errors. All 245 unit and
+116 actual Table/component cases pass without skips, with 94.59% combined authored
+application coverage. The earlier binary-consumer probe verified the forwarded
+types. The candidate suite now includes 43 cases, with 39 in the immutable-main
+harness; fresh feature verification is required before PR creation. Native review,
+independent current-head approval and terminal production/package verification
+remain required. Soft deletion, retention/holds and tested restore remain unfinished
+B08 work.
 
 The trusted-verifier prerequisite [PR #24](https://github.com/niobium-nz/Niobium.Invoicing/pull/24)
 is delivered as `b702d8743ac1211b5b3389f630eea9768eebaa06`: production run
@@ -88,8 +106,10 @@ merged as `ae65fb4d2bdf42353c84ee6344640bb999e97977`, with the tested tree uncha
 Production run 43628431431 and job 132549432828 completed successfully. The downloaded
 report verifies the actual merge and all five approved GET-only checks; its ZIP
 SHA-256 is `51dad649c1b4acea9efb50113016550381b8b87438dbfa69bb503c45f3aca002`.
-Package run 43628431454 successfully uploaded Contracts 2.0.38 and symbols. Public
-NuGet availability remains under observation at this source checkpoint.
+Package run 43628431454 successfully uploaded Contracts 2.0.38 and symbols. The
+public NuGet package was subsequently downloaded and its repository commit matched
+the actual merge. Its SHA-256 is
+`2f1cb9d4275671ee0b986fd119a37523166e9060897bce3102d264b91a4e0a70`.
 
 This is the snapshot portion of B08. A history-reading API, soft deletion, validated
 ten-year retention clock/holds, purge policy and tested recovery remain unfinished.

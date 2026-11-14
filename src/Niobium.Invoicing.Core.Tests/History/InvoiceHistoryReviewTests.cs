@@ -104,10 +104,13 @@ public sealed class InvoiceHistoryReviewTests
     }
 
     [TestMethod]
-    [DataRow("new")]
-    [DataRow("anchored")]
-    [DataRow("legacy")]
-    public async Task Oversized_requested_history_returns_a_client_error_without_any_persistence(string state)
+    [DataRow("new", "text")]
+    [DataRow("anchored", "text")]
+    [DataRow("legacy", "text")]
+    [DataRow("new", "many")]
+    [DataRow("anchored", "many")]
+    [DataRow("legacy", "many")]
+    public async Task Oversized_requested_history_returns_a_client_error_without_any_persistence(string state, string shape)
     {
         IssuanceScenario scenario = new();
         if (state == "anchored")
@@ -120,7 +123,18 @@ public sealed class InvoiceHistoryReviewTests
         int invoiceWrites = scenario.InvoiceWrites, itemWrites = scenario.ItemWrites;
         int historyCount = scenario.History.Revisions.Count;
         string? before = scenario.Stored?.LifecycleData;
-        scenario.Request.InvoiceItems[0].Description = new String('x', 17 * 1024 * 1024);
+        if (shape == "many")
+            scenario.Request.InvoiceItems = Enumerable.Range(0, 100_000).Select(index => new InvoiceItem
+            {
+                Invoice = Invoice.ParseID(scenario.Request.InvoiceID),
+                ID = index,
+                Subject = String.Empty,
+                UnitPriceCurrency = "NZD",
+                LineTotalCurrency = "NZD",
+                Quantity = 1
+            }).ToList();
+        else
+            scenario.Request.InvoiceItems[0].Description = new String('x', 17 * 1024 * 1024);
         ApplicationException failure = await Assert.ThrowsExactlyAsync<ApplicationException>(() => scenario.RunAsync());
         Assert.AreEqual(400, failure.ErrorCode);
         Assert.AreEqual(invoiceWrites, scenario.InvoiceWrites);

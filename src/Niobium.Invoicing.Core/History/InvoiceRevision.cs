@@ -1,5 +1,10 @@
+using System.Buffers;
+using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Niobium.Invoicing.History;
 
@@ -10,6 +15,20 @@ public sealed class InvoiceRevision
     private const int PartBytes = 18 * 1024;
     private const int MaximumSnapshotBytes = 16 * 1024 * 1024;
     private static readonly JsonSerializerOptions Json = new() { MaxDepth = 32 };
+    // Every current line field is a string, integer or date. Empty strings,
+    // zero integers and a whole-second date give their shortest JSON values;
+    // cleared storage metadata remains null in every historical copy.
+    private static readonly int MinimumLineBytes = JsonSerializer.SerializeToUtf8Bytes(new InvoiceItem
+    {
+        Invoice = default,
+        ID = 0,
+        Subject = String.Empty,
+        Description = String.Empty,
+        UnitPriceCurrency = String.Empty,
+        LineTotalCurrency = String.Empty
+    }, Json).Length;
+    private static readonly PropertyInfo[] InvoiceText = TextProperties(typeof(Invoice), nameof(Invoice.Token), nameof(Invoice.ETag));
+    private static readonly PropertyInfo[] LineText = TextProperties(typeof(InvoiceItem), nameof(InvoiceItem.ETag));
 
     [EntityKey(EntityKeyKind.PartitionKey)]
     public Guid Biller
@@ -83,8 +102,12 @@ public sealed class InvoiceRevision
         ArgumentNullException.ThrowIfNull(change);
         if (invoice.Biller == Guid.Empty || invoice.Created == default || previous == Guid.Empty
             || !Enum.IsDefined(lineEvidence) || !ValidChange(change)
-            || lines.Any(line => line == null || line.Invoice != invoice.Created)
-            || lines.Select(line => line.ID).Distinct().Count() != lines.Count)
+            || lines.Any(line => line == null || line.Invoice != invoice.Created))
+            throw InvalidRepresentation();
+
+        if (ExceedsCapacity(invoice, lines))
+            return null;
+        if (lines.Select(line => line.ID).Distinct().Count() != lines.Count)
             throw InvalidRepresentation();
 
         // Copy through the public business JSON contract and explicitly remove
@@ -121,6 +144,59 @@ public sealed class InvoiceRevision
         InvoiceRevisionPart[] parts = Enumerable.Range(0, count).Select(index => InvoiceRevisionPart.Capture(
             revision, index, content.AsSpan(index * PartBytes, Math.Min(PartBytes, content.Length - index * PartBytes)))).ToArray();
         return new(revision, Array.AsReadOnly(parts));
+    }
+
+    // A lower bound on the exact envelope size, counted with the same JSON
+    // encoder in bounded scratch space. False still requires the final byte check;
+    // true proves that copying/fingerprinting cannot produce a valid snapshot.
+    internal static bool ExceedsCapacity(Invoice invoice, IReadOnlyList<InvoiceItem> lines)
+    {
+        long remaining = MaximumSnapshotBytes - (long)MinimumLineBytes * lines.Count
+            - Math.Max(0, lines.Count - 1); // Commas between line objects.
+        if (remaining < 0)
+            return true;
+        bool invoiceExceeds = TextExceedsCapacity(invoice, InvoiceText, ref remaining);
+        if (invoiceExceeds)
+            return true;
+        foreach (InvoiceItem line in lines)
+        {
+            bool lineExceeds = TextExceedsCapacity(line, LineText, ref remaining);
+            if (lineExceeds)
+                return true;
+        }
+        return false;
+    }
+
+    private static PropertyInfo[] TextProperties(Type type, params string[] excluded)
+        => type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.PropertyType == typeof(string)
+                && property.GetMethod?.IsPublic == true && property.GetIndexParameters().Length == 0
+                && !excluded.Contains(property.Name)
+                && property.GetCustomAttribute<JsonIgnoreAttribute>()?.Condition != JsonIgnoreCondition.Always)
+            .ToArray();
+
+    private static bool TextExceedsCapacity(object value, PropertyInfo[] properties, ref long remaining)
+    {
+        Span<char> buffer = stackalloc char[512];
+        JavaScriptEncoder encoder = Json.Encoder ?? JavaScriptEncoder.Default;
+        foreach (PropertyInfo property in properties)
+        {
+            ReadOnlySpan<char> input = ((string?)property.GetValue(value)).AsSpan();
+            // Each UTF-16 code unit requires at least one encoded JSON byte.
+            if (input.Length > remaining)
+                return true;
+            while (!input.IsEmpty)
+            {
+                OperationStatus status = encoder.Encode(input, buffer, out int consumed, out int written);
+                if (consumed == 0 || status is not (OperationStatus.Done or OperationStatus.DestinationTooSmall))
+                    throw InvalidRepresentation();
+                remaining -= Encoding.UTF8.GetByteCount(buffer[..written]);
+                if (remaining < 0)
+                    return true;
+                input = input[consumed..];
+            }
+        }
+        return false;
     }
 
     public StorageKey GetKey() => Key(Biller, ID);
@@ -199,12 +275,17 @@ public sealed class InvoiceRevision
         => JsonSerializer.Serialize(CopyLines(expected), Json) == JsonSerializer.Serialize(CopyLines(observed), Json);
 
     private static InvoiceItem[] CopyLines(IReadOnlyList<InvoiceItem> lines)
-        => lines.OrderBy(x => x.ID).Select(line =>
+        => lines.OrderBy(x => x.ID).Select(line => new InvoiceItem
         {
-            InvoiceItem result = JsonSerializer.Deserialize<InvoiceItem>(JsonSerializer.Serialize(line, Json), Json)!;
-            result.ETag = null;
-            result.UpdatedAt = null;
-            return result;
+            Invoice = line.Invoice,
+            ID = line.ID,
+            Subject = line.Subject,
+            Description = line.Description,
+            UnitPriceCurrency = line.UnitPriceCurrency,
+            UnitPriceCents = line.UnitPriceCents,
+            Quantity = line.Quantity,
+            LineTotalCurrency = line.LineTotalCurrency,
+            LineTotalCents = line.LineTotalCents
         }).ToArray();
 
     private static Invoice CopyBusiness(Invoice invoice)

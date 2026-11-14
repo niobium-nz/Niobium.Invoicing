@@ -18,6 +18,8 @@ public partial class InvoiceDomain
             throw Conflict("Invoice preparation is already in progress; a crashed writer requires recovery.");
         }
 
+        InvoiceItem[] existing = existingItems.ToArray();
+        RequireHistoryCapacity(current, existing);
         Invoice candidate = InvoiceContent.Copy(current);
         if (candidate.GetPreparationStage() == InvoicePreparationStage.Draft)
         {
@@ -54,8 +56,9 @@ public partial class InvoiceDomain
         {
             candidate.DueBy = null;
         }
+        RequireHistoryCapacity(candidate, items, requested: true);
         string requested = InvoiceContent.Fingerprint(candidate, items);
-        string persisted = InvoiceContent.Fingerprint(current, existingItems);
+        string persisted = InvoiceContent.Fingerprint(current, existing);
         if (InvoiceContent.IsFrozen(current))
         {
             if (requested != persisted || (current.IssuanceFingerprint != null && persisted != current.IssuanceFingerprint))
@@ -105,11 +108,13 @@ public partial class InvoiceDomain
     public async Task CompletePreparationAsync(IEnumerable<InvoiceItem> persistedItems, CancellationToken cancellationToken)
     {
         Invoice current = await GetEntityAsync(cancellationToken);
-        if (InvoiceContent.Fingerprint(current, persistedItems) != current.IssuanceFingerprint)
+        InvoiceItem[] items = persistedItems.ToArray();
+        RequireHistoryCapacity(current, items);
+        if (InvoiceContent.Fingerprint(current, items) != current.IssuanceFingerprint)
         {
             throw Conflict("Persisted items do not match the preparation checkpoint.");
         }
-        await EndPreparationAsync(InvoicePreparationStage.Ready, cancellationToken, persistedItems.ToArray());
+        await EndPreparationAsync(InvoicePreparationStage.Ready, cancellationToken, items);
     }
 
     /// <summary>Allows an exact retry after an item operation has returned a definitive failure.</summary>
@@ -143,6 +148,7 @@ public partial class InvoiceDomain
         {
             throw Conflict("Invoice items have not completed preparation.");
         }
+        RequireHistoryCapacity(current, items);
         string fingerprint = InvoiceContent.Fingerprint(current, items);
         if (current.IssuanceFingerprint != null && current.IssuanceFingerprint != fingerprint)
         {

@@ -105,6 +105,16 @@ be captured. Both the observed baseline and target are checked before any histor
 write, so rejected oversized input cannot leave a partial baseline. Values are not
 truncated. Failure to capture/verify a snapshot prevents the invoice commit.
 
+A model-owned preflight counts encoded text and a conservative minimum for each
+line's serialized structure before content copying or fingerprinting. It uses
+bounded scratch space and also catches many short lines whose combined structure
+cannot fit. A passing preflight is not proof of capacity: the complete serialized
+envelope still supplies the authoritative byte count. The representation limit,
+stored JSON and issuance fingerprint algorithm remain unchanged. Invoice/item
+comparisons and preparation/freeze paths perform the preflight before materializing
+large content. This reduces demonstrated allocation amplification; it is not a
+general memory-budget guarantee for every request shape or host configuration.
+
 HTTP issuance records the authenticated biller; private queue issuance records the
 trusted consumer authority; the operational email endpoint records Function-key
 authority. A shared Function key does not identify a human operator. Existing Core
