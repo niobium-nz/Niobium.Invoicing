@@ -1,5 +1,9 @@
 # Rich domains and repository usage
 
+Read [model names and contract ownership](model-contracts.md) for the required
+business-key naming and private representation boundary. Models own identity,
+encoding and file/wire formats; rich domains own business decisions and mutations.
+
 This investigation follows the review of
 [Notification PR #2](https://github.com/niobium-nz/Niobium.Notification/pull/2).
 Invoicing source was checked at baseline `74d7a8f877f38b943f106a8f4745c522fdb4d213`.
