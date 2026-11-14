@@ -1,8 +1,10 @@
 # Business names and model contract ownership
 
 The owner's rule of 14 November 2026 applies to all Niobium Table models.
-[The framework guide](https://github.com/niobium-nz/Niobium/blob/main/docs/model-contracts.md)
+[The framework guide at inspected revision `d63af5c`](https://github.com/niobium-nz/Niobium/blob/d63af5c1143a79da65b6da27d28305c784f5f8bc/docs/model-contracts.md)
 explains the mapper, examples, responsibility boundaries and compatibility checks.
+Recheck the implementation and resolved package before adopting guidance from a
+newer framework revision.
 
 Name properties for their actual business meaning and annotate their storage role
 with `[EntityKey(EntityKeyKind.PartitionKey)]` or
