@@ -39,6 +39,26 @@ independent current-head approval and terminal production/package verification
 remain required. Soft deletion, retention/holds and tested restore remain unfinished
 B08 work.
 
+Corrected head `7b8d255649166e817fdac234dd0efbaa9232de49` passed the local CI job,
+but [run 43632811255](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/43632811255)
+failed candidate verification. Attempt 1 passed 35/43 cases with eight 40-second
+client timeouts. One independently assessed diagnostic retry of the unchanged head
+passed 33/43, with five timeouts followed by five HTTP 502 responses. Both attempts
+first failed on the 100,000-line request; all three oversized-text cases passed.
+The retry later passed the resource-token cases. Trusted verification skipped,
+and both overall attempts failed. The five read-only checks occurred before the
+failures and do not establish recovery. Both downloaded evidence ZIP digests were
+verified; no PR or further unchanged-head retry is justified by these results.
+
+An isolated Functions host using the pinned packages and actual handler/middleware
+successfully bound the same shapes and reached a marked mock flow, but its host
+and worker together peaked near 915 MiB RSS. This excludes the client and does not
+establish a live memory kill or a production configuration. The next candidate
+adds bounded read-only test-host aggregate diagnostics, including actual instance
+memory and unversioned host events, after owned cleanup. It retains all 43 cases,
+40-second request limits, immutable-main verification and production restrictions.
+The diagnostic parser has nine local regression cases for output/injection bounds.
+
 The trusted-verifier prerequisite [PR #24](https://github.com/niobium-nz/Niobium.Invoicing/pull/24)
 is delivered as `b702d8743ac1211b5b3389f630eea9768eebaa06`: production run
 43621450032 passed all five GET checks on the actual merge, and package run

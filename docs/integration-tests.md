@@ -136,6 +136,25 @@ or query access, and never logs settings, credentials or raw telemetry. See
 [queue measurements](queue-observability.md) for exact assertions and limits.
 No workflow inputs, resources, notification sends or production checks are added.
 
+## Test-host failure diagnostics
+
+After owned-fixture cleanup, the deployed test harness writes
+`test-host-diagnostics.json` beside its TRX. It verifies the test Function App and
+its existing Application Insights destination through the workflow's Azure
+identity, reads the actual configured instance memory, and queries aggregate
+exception, worker-exit/restart, timeout and HTTP-status counts. The suite window
+and preceding two hours are separate, as are the current application version and
+other/unspecified versions. Host events need not carry the worker's version.
+
+The query returns only fixed labels and nonnegative counts. A strict parser rejects
+unexpected output; raw telemetry, exception messages, URLs, dimensions, settings
+and credentials never enter the report. Missing/query-failed diagnostics record a
+fixed failure stage and retain any independently verified memory configuration.
+Empty, sampled or delayed telemetry is not proof of health or of a failure's cause.
+Collection does not change test verdicts, retry requests, extend request timeouts
+or replace either deployed suite. This helper runs only in the test harness;
+production retains the existing five GET-only checks.
+
 ## Read-only production suite
 
 Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide records the service boundary: Invoicing owns invoice-specific integration tests, while Notification owns generic notification tests without biller/invoice fixtures.

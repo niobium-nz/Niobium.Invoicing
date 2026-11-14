@@ -36,6 +36,7 @@ public sealed partial class DeployedInvoiceTests
     [ClassInitialize]
     public static async Task Initialize(TestContext context)
     {
+        diagnosticsStarted = DateTimeOffset.UtcNow;
         Assert.AreEqual("test", Required("TEST_ENVIRONMENT"), "Only the test environment is allowed.");
         Uri endpoint = new(Required("TEST_API_URL"));
         Assert.IsTrue(endpoint.Scheme == "https" && endpoint.Host.EndsWith(".azurewebsites.net", StringComparison.Ordinal)
@@ -94,6 +95,7 @@ public sealed partial class DeployedInvoiceTests
         if (bus != null)
             await bus.DisposeAsync();
         services?.Dispose();
+        await CaptureHostDiagnostics();
         http?.Dispose();
         if (failures.Count > 0)
             throw new AggregateException("Synthetic test fixture cleanup failed.", failures);
