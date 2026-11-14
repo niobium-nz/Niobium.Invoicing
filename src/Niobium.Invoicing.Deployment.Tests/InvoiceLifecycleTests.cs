@@ -81,6 +81,42 @@ public sealed partial class DeployedInvoiceTests
         using (HttpResponseMessage edit = await Post(Request(id), Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.Conflict, edit.StatusCode);
         Assert.IsTrue((await LifecycleStatus(id)).Cancelled);
+
+        ReconcileInvoicePaymentHistoryRequest laterPayment = PaymentReview(InvoicePaymentHistory.PaymentOccurred);
+        using (HttpResponseMessage later = await LifecycleRequest(id, "payment-history/reconcile", laterPayment, Token(biller, tenant)))
+            Assert.AreEqual(HttpStatusCode.OK, later.StatusCode);
+        InvoiceLifecycleStatus corrected = await LifecycleStatus(id);
+        Assert.IsTrue(corrected.Cancelled);
+        Assert.AreEqual(InvoicePaymentHistory.PaymentOccurred, corrected.PaymentHistory);
+        Invoice correctedInvoice = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
+        Assert.AreEqual(cancellation.Operation, correctedInvoice.ReadLifecycle()!.Cancellation!.Operation);
+        CollectionAssert.AreEqual(new[] { review.Operation, laterPayment.Operation },
+            correctedInvoice.ReadLifecycle()!.Reconciliations.Select(x => x.Operation).ToArray());
+        using (HttpResponseMessage replay = await LifecycleRequest(id, "payment-history/reconcile", laterPayment, Token(biller, tenant)))
+            Assert.AreEqual(HttpStatusCode.OK, replay.StatusCode);
+        Assert.AreEqual(correctedInvoice.ETag, (await Read(id)).ETag.ToString());
+    }
+
+    [TestMethod]
+    [DataRow(InvoicePaymentHistory.NoPayments)]
+    [DataRow(InvoicePaymentHistory.PaymentOccurred)]
+    public async Task Reconciliation_defers_during_an_owned_active_preparation(InvoicePaymentHistory finding)
+    {
+        long id = await SeedInvoice(recipient: String.Empty);
+        IRepository<Invoice> repository = services.GetRequiredService<IRepository<Invoice>>();
+        Invoice owned = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
+        owned.SetPreparationStage(InvoicePreparationStage.Preparing);
+        owned.IssuanceOperation = Guid.NewGuid().ToString("N");
+        await repository.UpdateAsync([owned]);
+        string version = (await Read(id)).ETag.ToString();
+
+        using HttpResponseMessage response = await LifecycleRequest(id, "payment-history/reconcile", PaymentReview(finding), Token(biller, tenant));
+
+        Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.AreEqual(version, (await Read(id)).ETag.ToString());
+        Invoice unchanged = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
+        Assert.AreEqual(owned.IssuanceOperation, unchanged.IssuanceOperation);
+        Assert.IsEmpty(unchanged.ReadLifecycle()!.Reconciliations);
     }
 
     [TestMethod]

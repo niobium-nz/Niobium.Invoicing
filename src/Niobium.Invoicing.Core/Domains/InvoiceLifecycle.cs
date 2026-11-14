@@ -62,7 +62,10 @@ public partial class InvoiceDomain
                 throw Conflict("Reconciliation operation identity conflicts with its recorded evidence.");
             return Status(current);
         }
-        CheckActive(current);
+        if (lifecycle.Cancellation != null && request.Finding != InvoicePaymentHistory.PaymentOccurred)
+            throw Conflict("A cancelled invoice can only record newly discovered payment evidence.");
+        if (lifecycle.Cancellation == null && lifecycle.Preparation == InvoicePreparationStage.Preparing)
+            throw Conflict("Complete or recover active invoice preparation before reconciling payment history.");
         InvoicePaymentHistory history = EffectiveHistory(current, lifecycle);
         if (history == InvoicePaymentHistory.PaymentOccurred)
             throw Conflict("Recorded payment history cannot be erased or reconciled away.");

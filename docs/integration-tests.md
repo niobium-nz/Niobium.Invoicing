@@ -44,17 +44,19 @@ merge through the normal process before a lifecycle implementation can be certif
 
 ## Cancellation and historical-payment verification
 
-The lifecycle implementation adds 35 unit cases and ten component/storage cases.
-With the installed checkpoint verifier, the local suites contain 158 unit and 75
+The lifecycle implementation adds 46 unit cases and twelve component/storage cases.
+With the installed checkpoint verifier, the local suites contain 169 unit and 77
 integration cases. The latter opt into actual loopback Table storage and include
 the pinned prior-writer controls described in [invoice lifecycle](invoice-lifecycle.md).
-The combined authored application coverage is 93.23%; both solution and deployed
+The combined authored application coverage is 93.40%; both solution and deployed
 harness builds pass without warnings/errors.
 
-Seven candidate deployed cases extend the existing 28 cases: four identity modes
+Nine candidate deployed cases extend the existing 28 cases: four identity modes
 exercise all three lifecycle routes, then owned fixtures verify legacy-history
 reconciliation/cancellation/saved links, immutable historical-payment evidence and
-competing cancellation operations. Existing test cleanup removes only these owned
+competing cancellation operations. Two further cases verify that reconciliation
+defers during active preparation; the cancelled-link case also retains newly
+discovered payment evidence and both earlier audits. Existing test cleanup removes only these owned
 records. No additional notification is sent by these cases. The trusted suite from
 main retains its reviewed active-invoice checks. Production still uses only its
 five existing GET-only checks; local evidence is not a deployed pass.

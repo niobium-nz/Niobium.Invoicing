@@ -22,12 +22,23 @@ Trusted-test compatibility [PR #22](https://github.com/niobium-nz/Niobium.Invoic
 merged as `97fed2ea3257ea01558c9861838d71fab0f90f41` after verified feature run
 43601451194, completed native reviews and independent approval 5904727952. Its
 active-invoice assertions include cancellation-absence regressions. The application
-branch includes that main commit; local solution/deployed builds and all 158 unit /
-75 integration cases pass, with 93.23% combined authored application coverage. Candidate deployed tests add ownership,
+branch includes that main commit; local solution/deployed builds and all 169 unit /
+77 integration cases pass, with 93.40% combined authored application coverage. Candidate deployed tests add ownership,
 state/evidence, saved-link and competing-operation cases using existing test
 resources. Exact-head CI, native review, independent formal approval and terminal
 production/package evidence belong on the implementation PR; local tests alone do
 not establish delivered behavior.
+
+PR #23 native review identified three concurrency gaps in the initial head. The
+correction permits a later PaymentOccurred finding after cancellation while keeping
+both audits, defers new reconciliation during active non-cancelled preparation,
+and merges post-enqueue acknowledgement against a freshly loaded conditional version.
+Acknowledgement conflicts have at most three attempts; unknown outcomes propagate
+and no acknowledgement retry sends again. Eleven unit regressions include the
+original sender flow, competing writes, bounded retries and changed frozen identity;
+two actual-adapter cases verify cached-domain cancellation/payment races. Deployed
+coverage extends cancelled-history reconciliation and adds two active-claim cases.
+The new head must repeat full feature/native/formal review before merge.
 
 Notification provider receipts are implemented on its feature branch but still
 require webhook configuration and successful deployed/trusted activation. Invoicing

@@ -19,7 +19,10 @@ to zero does not remove that evidence.
 The owning biller may reconcile Unknown to NoPayments or PaymentOccurred, with an
 operation UUID, reason and evidence reference. A later discovery may change
 NoPayments to PaymentOccurred. Evidence is retained, and a recorded payment cannot
-be reconciled away. This endpoint records an accountable historical finding; it
+be reconciled away. Newly discovered payment evidence may also be recorded after
+cancellation, preserving the cancellation and earlier findings. New reconciliation
+defers while a non-cancelled invoice has an active preparation claim; it must not
+replace that claim's ETag and strand its owner. This endpoint records an accountable historical finding; it
 does not inspect a bank account or create a payment/refund transaction.
 
 Cancellation records its operation UUID, authenticated actor, reason and UTC time
@@ -33,8 +36,11 @@ payment instructions. Public token validation still applies.
 Delivery progress is separate from cancellation. The current `Delivered` column
 remains the first enqueue acknowledgement. The status endpoint exposes it as
 QueuedAt; a legacy invoice has Unknown confirmation. A new freeze records
-Delivering, never verified Delivered. A late enqueue acknowledgement may record its
-time while preserving cancellation. EmailFlow re-reads cancellation immediately
+Delivering, never verified Delivered. A late enqueue acknowledgement reloads the stored invoice and conditionally merges
+its time while preserving cancellation and payment evidence. It verifies the frozen
+token, content fingerprint and endpoint, and makes at most three conditional attempts
+when another write wins. Unknown write outcomes and final conflicts propagate;
+the acknowledgement loop never sends another message. EmailFlow re-reads cancellation immediately
 before enqueue, but a cancellation racing an already-started send cannot recall
 mail or create an atomic transaction with Service Bus. A missing recipient keeps
 the established no-send behavior.

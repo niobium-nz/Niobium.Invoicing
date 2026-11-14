@@ -142,22 +142,39 @@ public partial class InvoiceDomain(
     /// </remarks>
     public async Task OnDeliveredAsync(string token, CancellationToken cancellationToken)
     {
-        Invoice entity = await GetEntityAsync(cancellationToken);
-        if (entity.GetPreparationStage() != InvoicePreparationStage.Frozen || entity.Token != token)
+        Invoice sent = await GetEntityAsync(cancellationToken);
+        DateTimeOffset acknowledgedAt = DateTimeOffset.UtcNow;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            throw Conflict("Notification does not match the frozen invoice.");
+            // The broker has already accepted this operation. Merge that fact into
+            // current state without repeating the send or overwriting a concurrent
+            // cancellation/payment finding. Retry only conditional conflicts.
+            await ReloadAsync(cancellationToken);
+            Invoice current = await GetEntityAsync(cancellationToken);
+            if (current.GetPreparationStage() != InvoicePreparationStage.Frozen || current.Token != token
+                || current.IssuanceFingerprint != sent.IssuanceFingerprint
+                || current.IssuanceNotificationEndpoint != sent.IssuanceNotificationEndpoint)
+                throw Conflict("Notification does not match the frozen invoice.");
+            InvoiceLifecycleSnapshot lifecycle = Lifecycle(current);
+            if (current.Delivered.HasValue)
+                return;
+            RequireConditionalVersion(current);
+            Invoice next = InvoiceContent.Copy(current);
+            next.Delivered = acknowledgedAt;
+            next.StoreLifecycle(lifecycle with
+            {
+                QueuedAt = lifecycle.QueuedAt ?? acknowledgedAt
+            });
+            try
+            {
+                await PersistInvoiceAsync(next, cancellationToken);
+                return;
+            }
+            catch (ApplicationException error) when (error.ErrorCode == (int)InternalError.Conflict && attempt < 2)
+            {
+                // A fresh read on the next attempt retains the winning evidence.
+                // Unknown write responses and final conflicts propagate.
+            }
         }
-        if (entity.Delivered.HasValue)
-        {
-            return;
-        }
-        Invoice next = InvoiceContent.Copy(entity);
-        next.Delivered = DateTimeOffset.UtcNow;
-        InvoiceLifecycleSnapshot lifecycle = Lifecycle(entity);
-        next.StoreLifecycle(lifecycle with
-        {
-            QueuedAt = lifecycle.QueuedAt ?? next.Delivered
-        });
-        await PersistInvoiceAsync(next, cancellationToken);
     }
 }

@@ -82,6 +82,10 @@ internal sealed class IssuanceScenario
     {
         get; set;
     }
+    internal Func<Task>? AfterEnqueue
+    {
+        get; set;
+    }
     private int version;
 
     internal IssuanceScenario()
@@ -177,7 +181,7 @@ internal sealed class IssuanceScenario
         Mock<IMessagingBroker<NotifyCommand>> broker = new(MockBehavior.Strict);
         broker.Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
             .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, token) => { Seen(token); Messages.AddRange(messages); if (FailEnqueue) { throw new TimeoutException("Synthetic uncertain enqueue"); } })
-            .Returns(Task.CompletedTask);
+            .Returns(() => AfterEnqueue?.Invoke() ?? Task.CompletedTask);
         return new IssueFlow(new UpsertFlow(domains, ItemRepo.Object, BilleeRepo.Object, Profiles.Object),
             new EmailFlow(domains, ItemRepo.Object, broker.Object, options, NullLogger<EmailFlow>.Instance));
     }
