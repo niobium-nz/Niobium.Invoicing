@@ -12,6 +12,7 @@ using Niobium.Invoicing.Server;
 using Niobium.Messaging;
 using Niobium.Notification;
 using Niobium.Profile;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Integration.Tests;
 
@@ -40,7 +41,7 @@ public sealed partial class StorageFlowTests
         TableClientOptions options = new();
         options.Retry.MaxRetries = 0;
         tableService = new TableServiceClient(uri, new TableSharedKeyCredential("devstoreaccount1", EmulatorKey), options);
-        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee) })
+        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable })
         {
             await tableService.CreateTableAsync(prefix + table);
         }
@@ -78,7 +79,7 @@ public sealed partial class StorageFlowTests
         host?.Dispose();
         if (tableService != null)
         {
-            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee) })
+            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable })
             {
                 await tableService.DeleteTableAsync(prefix + table);
             }

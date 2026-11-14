@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Azure.Data.Tables;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Deployment.Tests;
 
@@ -56,12 +58,13 @@ public sealed partial class DeployedInvoiceTests
         IRepository<Invoice> repository = services.GetRequiredService<IRepository<Invoice>>();
         Invoice before = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
         before.Token = Guid.NewGuid().ToString("N");
-        before.SetPreparationStage(InvoicePreparationStage.Frozen);
-        await repository.UpdateAsync([before]);
+        TableEntity owned = await Read(id);
+        InvoiceCheckpoint.FreezeOwnedFixture(owned, before.Token);
+        await tables.GetTableClient(nameof(Invoice)).UpdateEntityAsync(owned, owned.ETag, TableUpdateMode.Replace);
         using (HttpResponseMessage response = await LifecycleRequest(id, "cancel", cancellation, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Invoice cancelled = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
-        InvoiceLifecycleSnapshot evidence = cancelled.ReadLifecycle()!;
+        InvoiceLifecycleSnapshot evidence = InvoiceCheckpoint.ReadEvidence(await Read(id));
         Assert.AreEqual(cancellation.Operation, evidence.Cancellation!.Operation);
         Assert.AreEqual(biller, evidence.Cancellation.Actor);
         Assert.AreEqual(cancellation.Reason, evidence.Cancellation.Reason);
@@ -89,9 +92,10 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsTrue(corrected.Cancelled);
         Assert.AreEqual(InvoicePaymentHistory.PaymentOccurred, corrected.PaymentHistory);
         Invoice correctedInvoice = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
-        Assert.AreEqual(cancellation.Operation, correctedInvoice.ReadLifecycle()!.Cancellation!.Operation);
+        InvoiceLifecycleSnapshot correctedEvidence = InvoiceCheckpoint.ReadEvidence(await Read(id));
+        Assert.AreEqual(cancellation.Operation, correctedEvidence.Cancellation!.Operation);
         CollectionAssert.AreEqual(new[] { review.Operation, laterPayment.Operation },
-            correctedInvoice.ReadLifecycle()!.Reconciliations.Select(x => x.Operation).ToArray());
+            correctedEvidence.Reconciliations.Select(x => x.Operation).ToArray());
         using (HttpResponseMessage replay = await LifecycleRequest(id, "payment-history/reconcile", laterPayment, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.OK, replay.StatusCode);
         Assert.AreEqual(correctedInvoice.ETag, (await Read(id)).ETag.ToString());
@@ -116,7 +120,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.AreEqual(version, (await Read(id)).ETag.ToString());
         Invoice unchanged = (await repository.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
         Assert.AreEqual(owned.IssuanceOperation, unchanged.IssuanceOperation);
-        Assert.IsEmpty(unchanged.ReadLifecycle()!.Reconciliations);
+        Assert.IsEmpty(InvoiceCheckpoint.ReadEvidence(await Read(id)).Reconciliations);
     }
 
     [TestMethod]
@@ -157,8 +161,9 @@ public sealed partial class DeployedInvoiceTests
             Assert.AreEqual(1, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
             int winner = Array.FindIndex(responses, r => r.StatusCode == HttpStatusCode.OK);
             Invoice stored = (await services.GetRequiredService<IRepository<Invoice>>().RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id)))!;
-            Assert.AreEqual(actions[winner].Operation, stored.ReadLifecycle()!.Cancellation!.Operation);
-            Assert.AreEqual(actions[winner].Reason, stored.ReadLifecycle()!.Cancellation!.Reason);
+            InvoiceLifecycleSnapshot evidence = InvoiceCheckpoint.ReadEvidence(await Read(id));
+            Assert.AreEqual(actions[winner].Operation, evidence.Cancellation!.Operation);
+            Assert.AreEqual(actions[winner].Reason, evidence.Cancellation!.Reason);
         }
         finally
         {

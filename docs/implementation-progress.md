@@ -928,3 +928,33 @@ Local validation: `git diff --check` passed, and every relative Markdown target 
 Baseline: main `72071c83ab0b04edae6ad97455a3423bc29db874` after PR #15. The owner clarified that Notification is an independent shared service. The prior instruction to copy Invoicing's fixture settings into Notification and discover its test sender through an `Invoice` template introduced avoidable test coupling. That request and documentation guidance are withdrawn.
 
 The configuration inventory and agent memory now keep invoice-specific end-to-end tests and existing invoice fixtures in Invoicing. Notification owns generic sender/template/recipient tests and retains its established `Tenant`/`Channel` contract; Invoicing translates biller identity only at its caller boundary. The approved Invoicing fixture inventory and active production `TEST_INVOICE_TOKEN` consumer are unchanged. This is a documentation correction with no runtime, workflow, infrastructure or package change in Invoicing. The separate Notification feature branch removes the coupled lookup and tests generic fixtures; its deployment/admin prerequisites remain separately tracked.
+
+
+## Invoice history verifier preparation (2026-11-14)
+
+Based on main `8b0e9faa1a2561486783ab886530f76313d92e5a` after PR #23. This
+prerequisite updates the independent test harness before the separately implemented
+B08 history writer changes lifecycle JSON to schema 2. It does not activate history,
+change application code or relax any deployment gate.
+
+The raw checkpoint verifier accepts only reviewed versions 1 and 2, requires the
+schema-2 revision reference, and preserves it and unrelated evidence when arranging
+an owned saved-link fixture. Lifecycle assertions independently validate the raw
+representation before materializing read-only evidence; the prior application
+codec must never rewrite a newer fixture. Unknown schemas remain rejected.
+
+After a synthetic invoice's conditional delete succeeds, cleanup queries the two
+history tables by that biller and invoice, validates every selected identity and
+version before deleting any child, and uses observed ETags. Missing tables are
+allowed only for fixtures that do not require history; permission failures are not
+masked. The loopback test proves another invoice under the same biller is retained.
+No production fixture mutation or broader client entitlement is introduced.
+
+Both Release builds passed with zero warnings/errors. All 169 unit, 92 opted-in
+local integration, 24 Python tooling and 20 Node policy cases passed with no skips.
+Combined authored line coverage is 93.40% (Contracts 97.11%, Core 92.63%, Server
+93.14%). The integration tests used a disposable loopback Table emulator that was
+stopped afterward. Feature deployment, candidate/trusted suites, native review,
+independent formal approval and terminal production/package evidence still belong
+to the exact pushed head and actual merge, and will be recorded on the PR. The
+application history increment and remaining B08 work are not complete here.

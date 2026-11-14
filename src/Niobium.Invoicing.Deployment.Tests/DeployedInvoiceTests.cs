@@ -609,6 +609,8 @@ public sealed partial class DeployedInvoiceTests
             await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
         }
         await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
+        await InvoiceHistoryFixture.RemoveAsync(tables.GetTableClient(InvoiceHistoryFixture.RevisionsTable),
+            tables.GetTableClient(InvoiceHistoryFixture.PartsTable), owned, owningBiller, id, customer);
     }
 
     private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, long? invoiceID = null)
@@ -681,7 +683,7 @@ public sealed partial class DeployedInvoiceTests
     {
         public Task<TableServiceClient> CreateClientAsync(IEnumerable<DatabasePermissions> permissions, string table, string? partition = null, CancellationToken cancellationToken = default)
         {
-            if (table is not (nameof(Invoice) or nameof(InvoiceItem)))
+            if (table is not (nameof(Invoice) or nameof(InvoiceItem) or InvoiceHistoryFixture.RevisionsTable or InvoiceHistoryFixture.PartsTable))
                 throw new InvalidOperationException("Unexpected test table.");
             return Task.FromResult(client);
         }
