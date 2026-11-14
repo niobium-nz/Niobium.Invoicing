@@ -1,5 +1,7 @@
 # Invoice preparation, replay and recovery
 
+Current cancellation/payment-history behavior and the versioned checkpoint fence are documented in [invoice lifecycle](invoice-lifecycle.md). Historical evidence below retains its original scope.
+
 B01 uses the existing biller/invoice key and Niobium's ordinary conditional save.
 It does not make the invoice row, item partitions and queue transactional. Item
 keys remain unchanged under Q16. The same invoice ID under two billers can still

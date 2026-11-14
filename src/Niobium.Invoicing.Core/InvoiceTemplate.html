@@ -448,7 +448,8 @@
                             <i class="fa fa-print t-plus-1 fa-fw fa-lg"></i> Print
                         </a>
                         <br />
-                        <span class="invoice-h2">Tax Invoice</span>
+                        <span class="invoice-h2">Tax Invoice</span><br />
+                        <strong role="status">{{INVOICE_STATUS}}</strong>
                     </span>
                     <img src="{{BILLER_LOGO}}" class="biller-logo" />
                 </div>
@@ -536,7 +537,7 @@
                         </div>
 
                         <div class="invoice-price-right">
-                            <small>TOTAL AMOUNT DUE</small>
+                            <small>{{DUE_LABEL}}</small>
                             <span class="f-w-600">{{DUE}}</span>
                         </div>
                     </div>

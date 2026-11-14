@@ -7,17 +7,18 @@ public partial class InvoiceDomain
 {
     /// <summary>Claims preparation, or recognizes an exact replay without rewriting the aggregate.</summary>
     public async Task<bool> UpdateAsync(IssueInvoiceRequest update, IEnumerable<InvoiceItem> existingItems,
-        CancellationToken cancellationToken, Billee? customer = null)
+        CancellationToken cancellationToken, Billee? customer = null, bool newInvoice = false)
     {
         Invoice current = await GetEntityAsync(cancellationToken);
         CheckState(current);
-        if (current.IssuanceState == InvoiceContent.Preparing)
+        CheckActive(current);
+        if (current.GetPreparationStage() == InvoicePreparationStage.Preparing)
         {
             throw Conflict("Invoice preparation is already in progress; a crashed writer requires recovery.");
         }
 
         Invoice candidate = InvoiceContent.Copy(current);
-        if (candidate.IssuanceState == null)
+        if (candidate.GetPreparationStage() == InvoicePreparationStage.Draft)
         {
             // Legacy stored values are the only available historical defaults; do not fetch new profile values.
             candidate.IssuanceDefaultParticulars = current.Particulars;
@@ -62,16 +63,36 @@ public partial class InvoiceDomain
             }
             return false;
         }
-        if (current.IssuanceState == InvoiceContent.Retryable && requested != current.IssuanceFingerprint)
+        if (current.GetPreparationStage() == InvoicePreparationStage.Retryable && requested != current.IssuanceFingerprint)
         {
             throw Conflict("Incomplete item preparation must be recovered with the same content.");
         }
-        if (current.IssuanceState == InvoiceContent.Ready && requested == current.IssuanceFingerprint && persisted == requested)
+        if (current.GetPreparationStage() == InvoicePreparationStage.Ready && requested == current.IssuanceFingerprint && persisted == requested)
         {
             return false;
         }
 
-        candidate.IssuanceState = InvoiceContent.Preparing;
+        InvoiceLifecycleSnapshot lifecycle = Lifecycle(current);
+        if (newInvoice)
+        {
+            if (!String.IsNullOrWhiteSpace(current.ETag) || current.Timestamp != null || current.IssuanceState != null)
+                throw Conflict("An existing invoice cannot be classified as a new payment history.");
+            lifecycle = lifecycle with
+            {
+                PaymentHistory = InvoicePaymentHistory.NoPayments,
+                Delivery = InvoiceDeliveryState.NotRequested
+            };
+        }
+        if (current.SettledCents != 0 || candidate.SettledCents != 0)
+            lifecycle = lifecycle with
+            {
+                PaymentHistory = InvoicePaymentHistory.PaymentOccurred,
+                PaymentObservedAt = lifecycle.PaymentObservedAt ?? DateTimeOffset.UtcNow
+            };
+        candidate.StoreLifecycle(lifecycle with
+        {
+            Preparation = InvoicePreparationStage.Preparing
+        });
         candidate.IssuanceFingerprint = requested;
         candidate.IssuanceOperation = Guid.NewGuid().ToString("N");
         await PersistInvoiceAsync(candidate, cancellationToken);
@@ -86,21 +107,22 @@ public partial class InvoiceDomain
         {
             throw Conflict("Persisted items do not match the preparation checkpoint.");
         }
-        await EndPreparationAsync(InvoiceContent.Ready, cancellationToken);
+        await EndPreparationAsync(InvoicePreparationStage.Ready, cancellationToken);
     }
 
     /// <summary>Allows an exact retry after an item operation has returned a definitive failure.</summary>
-    public Task FailPreparationAsync(CancellationToken cancellationToken) => EndPreparationAsync(InvoiceContent.Retryable, cancellationToken);
+    public Task FailPreparationAsync(CancellationToken cancellationToken) => EndPreparationAsync(InvoicePreparationStage.Retryable, cancellationToken);
 
-    private async Task EndPreparationAsync(string state, CancellationToken cancellationToken)
+    private async Task EndPreparationAsync(InvoicePreparationStage state, CancellationToken cancellationToken)
     {
         Invoice current = await GetEntityAsync(cancellationToken);
-        if (current.IssuanceState != InvoiceContent.Preparing || string.IsNullOrWhiteSpace(current.IssuanceOperation))
+        if (current.GetPreparationStage() != InvoicePreparationStage.Preparing || string.IsNullOrWhiteSpace(current.IssuanceOperation))
         {
             throw Conflict("The preparation claim is no longer held.");
         }
         Invoice next = InvoiceContent.Copy(current);
-        next.IssuanceState = state;
+        CheckActive(current);
+        next.SetPreparationStage(state);
         next.IssuanceOperation = null;
         await PersistInvoiceAsync(next, cancellationToken);
     }
@@ -110,7 +132,8 @@ public partial class InvoiceDomain
     {
         Invoice current = await GetEntityAsync(cancellationToken);
         CheckState(current);
-        if (!InvoiceContent.IsFrozen(current) && current.IssuanceState != InvoiceContent.Ready)
+        CheckActive(current);
+        if (!InvoiceContent.IsFrozen(current) && current.GetPreparationStage() != InvoicePreparationStage.Ready)
         {
             throw Conflict("Invoice items have not completed preparation.");
         }
@@ -119,17 +142,23 @@ public partial class InvoiceDomain
         {
             throw Conflict("Persisted invoice items do not match the prepared content.");
         }
-        if (current.IssuanceState == InvoiceContent.Frozen && !string.IsNullOrWhiteSpace(current.Token) &&
+        if (current.GetPreparationStage() == InvoicePreparationStage.Frozen && !string.IsNullOrWhiteSpace(current.Token) &&
             !string.IsNullOrWhiteSpace(current.IssuanceNotificationEndpoint))
         {
             return current.Token;
         }
         Invoice next = InvoiceContent.Copy(current);
         next.Token = string.IsNullOrWhiteSpace(current.Token) ? current.BuildAccessToken(salt) : current.Token;
-        next.IssuanceState = InvoiceContent.Frozen;
+        InvoiceLifecycleSnapshot lifecycle = Lifecycle(current);
+        next.StoreLifecycle(lifecycle with
+        {
+            Preparation = InvoicePreparationStage.Frozen,
+            Delivery = lifecycle.ConfirmedDeliveredAt == null ? InvoiceDeliveryState.Delivering : InvoiceDeliveryState.Delivered,
+            NotificationRequestedAt = lifecycle.NotificationRequestedAt ?? DateTimeOffset.UtcNow,
+        });
         next.IssuanceFingerprint = fingerprint;
         next.IssuanceOperation = null;
-        if (current.IssuanceState == null)
+        if (current.GetPreparationStage() == InvoicePreparationStage.Draft)
         {
             next.IssuanceDefaultParticulars = current.Particulars;
             next.IssuanceDefaultReference = current.Reference;
@@ -174,10 +203,7 @@ public partial class InvoiceDomain
 
     private static void CheckState(Invoice invoice)
     {
-        if (invoice.IssuanceState is not (null or InvoiceContent.Preparing or InvoiceContent.Retryable or InvoiceContent.Ready or InvoiceContent.Frozen))
-        {
-            throw Conflict("Invoice preparation version is not supported.");
-        }
+        _ = Lifecycle(invoice);
     }
 
     private static void ApplyCustomer(Invoice invoice, Billee customer)

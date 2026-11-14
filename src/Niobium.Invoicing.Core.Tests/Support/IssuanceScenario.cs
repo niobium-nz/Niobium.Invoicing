@@ -74,6 +74,10 @@ internal sealed class IssuanceScenario
     {
         get; set;
     }
+    internal Action? BeforeInvoiceRead
+    {
+        get; set;
+    }
     internal Action? BeforeInvoiceUpdate
     {
         get; set;
@@ -102,7 +106,7 @@ internal sealed class IssuanceScenario
         BilleeRepo.Setup(p => p.RetrieveAsync(Billee.BuildPartitionKey(biller), Billee.BuildRowKey(billee), It.IsAny<IList<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string _, string __, IList<string>? ___, CancellationToken token) => { Seen(token); return MissingBillee ? null : Billee; });
         InvoiceRepo.Setup(p => p.RetrieveAsync(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(id), It.IsAny<IList<string>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string _, string __, IList<string>? ___, CancellationToken token) => { Seen(token); return Stored == null ? null : Copy(Stored); });
+            .ReturnsAsync((string _, string __, IList<string>? ___, CancellationToken token) => { Seen(token); BeforeInvoiceRead?.Invoke(); return Stored == null ? null : Copy(Stored); });
         InvoiceRepo.Setup(p => p.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), It.IsAny<bool>(), null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((IEnumerable<Invoice> values, bool replace, DateTimeOffset? _, CancellationToken token) =>
             {
@@ -179,6 +183,13 @@ internal sealed class IssuanceScenario
     }
 
     internal Task RunAsync(Billee? embedded = null, CancellationToken cancellationToken = default) => CreateFlow().RunAsync(Request, embedded, cancellationToken);
+
+    internal InvoiceDomain Domain()
+    {
+        InvoiceDomain domain = new(Microsoft.Extensions.Options.Options.Create(Options), new(() => InvoiceRepo.Object), []);
+        domain.Initialize(Invoice.BuildPartitionKey(Request.BillerID), Invoice.BuildRowKey(Request.InvoiceID));
+        return domain;
+    }
     internal static T Copy<T>(T value) => value is Invoice invoice ? (T)(object)InvoiceContent.Copy(invoice) : JsonMarshaller.Unmarshall<T>(JsonMarshaller.Marshall(value!));
 
     private IEnumerable<Invoice> Persist(Invoice input)

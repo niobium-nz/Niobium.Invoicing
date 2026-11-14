@@ -1,5 +1,7 @@
 # Domain and data model
 
+Current cancellation/payment-history behavior and the versioned checkpoint fence are documented in [invoice lifecycle](invoice-lifecycle.md). Historical evidence below retains its original scope.
+
 ## Money, tax and settlement
 
 Observed arithmetic is in [Contracts.InvoiceExtensions](../src/Niobium.Invoicing.Contracts/InvoiceExtensions.cs) and [InvoiceDomain.UpdateAsync](../src/Niobium.Invoicing.Core/Domains/InvoicePreparation.cs):

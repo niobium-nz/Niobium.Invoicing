@@ -1,5 +1,42 @@
 # Research plan implementation
 
+## Cancellation and historical eligibility implementation: 2026-11-14
+
+The original research plan remains unchanged. Q29 records the accepted operator,
+legacy-history, MCP and payment implementation recommendations. The overall roadmap
+remains active, including the work scheduled after MCP.
+
+Notification [PR #9](https://github.com/niobium-nz/Niobium.Notification/pull/9)
+completed the live B02 recovery proof. Its production run
+[43592105122](https://github.com/niobium-nz/Niobium.Notification/actions/runs/43592105122)
+succeeded on actual merge `d34bffbc49b980d6c1c372f90a57c21846eccad4`.
+The downloaded GET-only report ZIP matched SHA-256
+`885a69f58365bea432853c41a60bbefc69c638820cbacbb279a20e6bc1269e40`.
+Package run 43592105110 succeeded and correctly skipped unchanged Contracts.
+This supersedes historical optional-cohort/live-proof prerequisites below.
+
+The current Invoicing feature implements conditional cancellation, historical
+payment reconciliation, preserved cancelled links and atomic actor/reason/operation
+evidence. [The lifecycle guide](invoice-lifecycle.md) describes the code and limits.
+Trusted-test compatibility [PR #22](https://github.com/niobium-nz/Niobium.Invoicing/pull/22)
+merged as `97fed2ea3257ea01558c9861838d71fab0f90f41` after verified feature run
+43601451194, completed native reviews and independent approval 5904727952. Its
+active-invoice assertions include cancellation-absence regressions. The application
+branch includes that main commit; local solution/deployed builds and all 158 unit /
+75 integration cases pass, with 93.23% combined authored application coverage. Candidate deployed tests add ownership,
+state/evidence, saved-link and competing-operation cases using existing test
+resources. Exact-head CI, native review, independent formal approval and terminal
+production/package evidence belong on the implementation PR; local tests alone do
+not establish delivered behavior.
+
+Notification provider receipts are implemented on its feature branch but still
+require webhook configuration and successful deployed/trusted activation. Invoicing
+has not yet consumed the published receipt contract. Payment transactions, complete
+B08 historical snapshots/retention/recovery, operator recovery/resend controls,
+templates, MCP and the remaining original-plan work are not completed by this
+cancellation increment.
+
+
 ## B02 / B07 concurrent recovery evidence: 2026-11-14
 
 This continuation starts from Invoicing main

@@ -6,7 +6,7 @@ namespace Niobium.Invoicing;
 /// Persisted invoice snapshot with biller/customer details, amounts and enqueue-related delivery
 /// metadata.
 /// </summary>
-public class Invoice
+public partial class Invoice
 {
     /// <summary>
     /// Maximum characters retained in generated payment particulars.

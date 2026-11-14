@@ -66,6 +66,10 @@ public class EmailFlow(
 
         parameters.Add(nameof(InvoiceItem).ToSnakeCaseUpper(), items.Select(item => item.BuildTemplateParameters().ToDictionary()).ToArray());
 
+        bool permitted = await domain.CanQueueNotificationAsync(token, cancellationToken);
+        if (!permitted)
+            return;
+
         await broker.EnqueueAsync(new MessagingEntry<NotifyCommand>
         {
             ID = entity.GetFullID(),

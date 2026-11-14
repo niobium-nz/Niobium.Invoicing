@@ -70,7 +70,8 @@ public class UpsertFlow(
 
         InvoiceItem[] existing = await itemRepo.GetAsync(InvoiceItem.BuildPartitionKey(request.InvoiceID),
             cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
-        if (!await domain.UpdateAsync(request, existing, cancellationToken, billee))
+        bool changed = await domain.UpdateAsync(request, existing, cancellationToken, billee, newInvoice: stored == null);
+        if (!changed)
         {
             return;
         }

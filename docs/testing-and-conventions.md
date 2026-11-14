@@ -1,5 +1,7 @@
 # Testing, conventions and change recipes
 
+Current cancellation/payment-history behavior and the versioned checkpoint fence are documented in [invoice lifecycle](invoice-lifecycle.md). Historical evidence below retains its original scope.
+
 ## Executable evidence
 
 The 2026-11-12 exporter-verification follow-up passed 123 unit and 51 local

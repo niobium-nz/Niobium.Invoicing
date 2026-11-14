@@ -135,14 +135,14 @@ public sealed class HttpBoundaryTests
         InvoiceItems = []
     };
 
-    private static PrincipalParser Parser() => new(Microsoft.Extensions.Options.Options.Create(new IdentityServiceOptions
+    internal static PrincipalParser Parser() => new(Microsoft.Extensions.Options.Options.Create(new IdentityServiceOptions
     {
         AccessTokenSecret = Secret,
         AccessTokenIssuer = Issuer,
         AccessTokenAudience = Audience
     }));
 
-    private static string Token(IEnumerable<Claim> claims, string? invalid = null)
+    internal static string Token(IEnumerable<Claim> claims, string? invalid = null)
     {
         DateTime expires = invalid == "expiry" ? DateTime.UtcNow.AddHours(-1) : DateTime.UtcNow.AddHours(1);
         SecurityTokenDescriptor descriptor = new()

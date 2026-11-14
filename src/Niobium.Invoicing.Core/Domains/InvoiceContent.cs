@@ -7,12 +7,8 @@ namespace Niobium.Invoicing.Domains;
 
 internal static class InvoiceContent
 {
-    internal const string Preparing = "preparing-v1";
-    internal const string Retryable = "retryable-v1";
-    internal const string Ready = "ready-v1";
-    internal const string Frozen = "frozen-v1";
 
-    internal static bool IsFrozen(Invoice invoice) => invoice.IssuanceState == Frozen ||
+    internal static bool IsFrozen(Invoice invoice) => invoice.GetPreparationStage() == InvoicePreparationStage.Frozen ||
         invoice.Delivered.HasValue || !string.IsNullOrWhiteSpace(invoice.Token);
 
     internal static Invoice Copy(Invoice source)
@@ -79,5 +75,5 @@ internal static class InvoiceContent
         left.IssuanceDefaultParticulars == right.IssuanceDefaultParticulars &&
         left.IssuanceDefaultReference == right.IssuanceDefaultReference &&
         left.IssuanceDefaultPaymentInstructions == right.IssuanceDefaultPaymentInstructions &&
-        left.IssuanceNotificationEndpoint == right.IssuanceNotificationEndpoint;
+        left.IssuanceNotificationEndpoint == right.IssuanceNotificationEndpoint && left.LifecycleData == right.LifecycleData;
 }

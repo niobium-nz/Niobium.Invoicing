@@ -1,5 +1,7 @@
 # Security and privacy boundaries
 
+Current cancellation/payment-history behavior and the versioned checkpoint fence are documented in [invoice lifecycle](invoice-lifecycle.md). Historical evidence below retains its original scope.
+
 This page records controls and assumptions, not a security certification. Detailed suspected weaknesses remain in private discovery findings pending disclosure/remediation decisions; they are not reproduced as exploit instructions. Do not infer production readiness from passing unit tests.
 
 ## Identity and trust boundaries

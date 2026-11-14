@@ -59,6 +59,16 @@ public partial class InvoiceDomain(
         htmlTemplate ??= await R.GetEmbededResourceAsStringAsync(Constants.InvoiceTemplateResourceName, cancellationToken)
             ?? throw new ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
         Dictionary<string, string> parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
+        InvoiceLifecycleSnapshot lifecycle = Lifecycle(entity);
+        bool cancelled = lifecycle.Cancellation != null;
+        parameters["INVOICE_STATUS"] = cancelled ? "Cancelled" : String.Empty;
+        parameters["DUE_LABEL"] = cancelled ? "CANCELLED INVOICE" : "TOTAL AMOUNT DUE";
+        if (cancelled)
+        {
+            parameters["DUE"] = "Not payable";
+            parameters["PAYMENT_INSTRUCTIONS"] = "This invoice is cancelled. No payment is requested.";
+            parameters["DUE_BY"] = String.Empty;
+        }
         parameters["BILLER_LOGO"] = HtmlTemplate.ImageUrl(entity.BillerLogo);
         parameters["CONTACT_EMAIL_HREF"] = HtmlTemplate.ContactUrl("mailto", entity.ContactEmailAddress);
         parameters["CONTACT_PHONE_HREF"] = HtmlTemplate.ContactUrl("tel", entity.ContactPhoneNumber);
@@ -79,6 +89,8 @@ public partial class InvoiceDomain(
     public async Task<string> EnsureAccessTokenAsync(string salt, CancellationToken cancellationToken)
     {
         Invoice entity = await GetEntityAsync(cancellationToken);
+        CheckState(entity);
+        CheckActive(entity);
         if (!string.IsNullOrWhiteSpace(entity.Token))
         {
             return entity.Token;
@@ -131,7 +143,7 @@ public partial class InvoiceDomain(
     public async Task OnDeliveredAsync(string token, CancellationToken cancellationToken)
     {
         Invoice entity = await GetEntityAsync(cancellationToken);
-        if (entity.IssuanceState != InvoiceContent.Frozen || entity.Token != token)
+        if (entity.GetPreparationStage() != InvoicePreparationStage.Frozen || entity.Token != token)
         {
             throw Conflict("Notification does not match the frozen invoice.");
         }
@@ -141,6 +153,11 @@ public partial class InvoiceDomain(
         }
         Invoice next = InvoiceContent.Copy(entity);
         next.Delivered = DateTimeOffset.UtcNow;
+        InvoiceLifecycleSnapshot lifecycle = Lifecycle(entity);
+        next.StoreLifecycle(lifecycle with
+        {
+            QueuedAt = lifecycle.QueuedAt ?? next.Delivered
+        });
         await PersistInvoiceAsync(next, cancellationToken);
     }
 }

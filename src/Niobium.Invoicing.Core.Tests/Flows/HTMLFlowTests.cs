@@ -162,7 +162,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             Guid issuer = Guid.NewGuid();
             Invoice invoice = MakeInvoice(issuer, Guid.NewGuid());
             invoice.Token = frozen ? "synthetic-saved-link-token" : null;
-            invoice.IssuanceState = frozen ? InvoiceContent.Frozen : InvoiceContent.Ready;
+            invoice.IssuanceState = frozen ? "frozen-v1" : "ready-v1";
             invoice.Delivered = frozen ? DateTimeOffset.UtcNow : null;
             invoice.Terms = "<script>literal</script>";
             Invoice before = InvoiceContent.Copy(invoice);

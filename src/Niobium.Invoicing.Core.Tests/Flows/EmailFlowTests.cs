@@ -52,7 +52,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             invoice.ETag ??= "fixture-initial";
             if (invoice.Token == null)
             {
-                invoice.IssuanceState = InvoiceContent.Ready;
+                invoice.IssuanceState = "ready-v1";
                 invoice.IssuanceFingerprint = InvoiceContent.Fingerprint(invoice, items);
             }
             int storageVersion = 0;
@@ -345,6 +345,14 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             (await arranged.domain.BuildHTMLAsync("0123456789abcdef", CancellationToken.None)).Should().Contain(entity.BillerName);
         }
 
+        private static IEnumerable<Invoice> SavedReadback(Mock<IRepository<Invoice>> repository, IEnumerable<Invoice> models)
+        {
+            Invoice persisted = InvoiceContent.Copy(models.Single());
+            repository.Setup(r => r.RetrieveAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<string>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => InvoiceContent.Copy(persisted));
+            return [persisted];
+        }
+
         [TestMethod]
         public async Task New_token_is_saved_before_enqueue_and_delivery_status_afterwards()
         {
@@ -361,7 +369,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
                     savedToken = saved.Token;
                     steps.Add(saved.Delivered == null ? "token saved" : "status saved");
                 })
-                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) => models);
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) => SavedReadback(arranged.invoiceRepo, models));
             arranged.broker
                 .Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
                 .Callback<IEnumerable<MessagingEntry<NotifyCommand>>, CancellationToken>((messages, _) =>
@@ -396,7 +404,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             arranged.broker.Verify(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()), Times.Never);
             arranged.invoiceRepo
                 .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) => models);
+                .ReturnsAsync((IEnumerable<Invoice> models, bool _, bool _, CancellationToken _) => SavedReadback(arranged.invoiceRepo, models));
 
             await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);
 
@@ -419,7 +427,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
                     versions.Add(pending.ETag);
                     Invoice saved = InvoiceContent.Copy(pending);
                     saved.ETag = $"saved-version-{versions.Count}";
-                    return new[] { saved };
+                    return SavedReadback(arranged.invoiceRepo, [saved]);
                 });
 
             await arranged.flow.RunAsync(issuer, entity.GetID(), CancellationToken.None);

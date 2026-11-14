@@ -42,6 +42,23 @@ pipeline definitions, production routes, credentials or review protections. The
 preparation PR must pass the existing candidate and trusted deployed suites and
 merge through the normal process before a lifecycle implementation can be certified.
 
+## Cancellation and historical-payment verification
+
+The lifecycle implementation adds 35 unit cases and ten component/storage cases.
+With the installed checkpoint verifier, the local suites contain 158 unit and 75
+integration cases. The latter opt into actual loopback Table storage and include
+the pinned prior-writer controls described in [invoice lifecycle](invoice-lifecycle.md).
+The combined authored application coverage is 93.23%; both solution and deployed
+harness builds pass without warnings/errors.
+
+Seven candidate deployed cases extend the existing 28 cases: four identity modes
+exercise all three lifecycle routes, then owned fixtures verify legacy-history
+reconciliation/cancellation/saved links, immutable historical-payment evidence and
+competing cancellation operations. Existing test cleanup removes only these owned
+records. No additional notification is sent by these cases. The trusted suite from
+main retains its reviewed active-invoice checks. Production still uses only its
+five existing GET-only checks; local evidence is not a deployed pass.
+
 ## Run locally
 
 Use a disposable Table-only Azurite process. The task used installed Azurite with
