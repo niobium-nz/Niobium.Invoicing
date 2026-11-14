@@ -29,10 +29,11 @@ partial checkpoint; it does not simulate a network timeout or prove safe takeove
 
 The deployed harness independently recognizes the existing preparation checkpoints
 and the reviewed additive `lifecycle-v1` representation in `LifecycleData` version
-1. It still requires the exact expected preparation stage. Unknown versions,
+1. It still requires the exact expected preparation stage and an active invoice
+without cancellation evidence. Unknown versions,
 malformed data and mismatched legacy/new columns fail verification. The synthetic
 saved-link fixture preserves lifecycle evidence instead of replacing its checkpoint
-with an older representation. Twelve local harness cases exercise both supported
+with an older representation. Fourteen local harness cases exercise both supported
 formats, rejection boundaries and preservation of unrelated fixture fields.
 
 This change prepares the immutable-main verifier for the subsequent cancellation

@@ -17,11 +17,16 @@ internal static class InvoiceCheckpoint
     private const string LifecycleColumn = "LifecycleData";
     private const string LifecycleCheckpoint = "lifecycle-v1";
 
-    internal static PreparationCheckpoint Read(TableEntity invoice)
+    internal static PreparationCheckpoint ReadActive(TableEntity invoice)
     {
         string? checkpoint = invoice.GetString(nameof(Invoice.IssuanceState));
         if (checkpoint == LifecycleCheckpoint)
-            return (PreparationCheckpoint)ReadLifecycle(invoice)["Preparation"]!.GetValue<int>();
+        {
+            JsonObject lifecycle = ReadLifecycle(invoice);
+            if (lifecycle["Cancellation"] != null)
+                throw Invalid();
+            return (PreparationCheckpoint)lifecycle["Preparation"]!.GetValue<int>();
+        }
         if (invoice.ContainsKey(LifecycleColumn))
             throw Invalid();
         return checkpoint switch
@@ -39,13 +44,11 @@ internal static class InvoiceCheckpoint
     // unrelated column and all lifecycle evidence while arranging a saved-link view.
     internal static void FreezeOwnedFixture(TableEntity invoice, string token)
     {
-        if (Read(invoice) != PreparationCheckpoint.Ready || String.IsNullOrWhiteSpace(token))
+        if (ReadActive(invoice) != PreparationCheckpoint.Ready || String.IsNullOrWhiteSpace(token))
             throw Invalid();
         if (invoice.GetString(nameof(Invoice.IssuanceState)) == LifecycleCheckpoint)
         {
             JsonObject lifecycle = ReadLifecycle(invoice);
-            if (lifecycle["Cancellation"] != null)
-                throw Invalid();
             lifecycle["Preparation"] = (int)PreparationCheckpoint.Frozen;
             lifecycle["WriteID"] = Guid.NewGuid().ToString("N");
             invoice[LifecycleColumn] = lifecycle.ToJsonString();

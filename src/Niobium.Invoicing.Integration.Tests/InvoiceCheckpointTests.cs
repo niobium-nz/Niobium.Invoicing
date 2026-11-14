@@ -13,10 +13,10 @@ public sealed class InvoiceCheckpointTests
     public void KnownRepresentations_PreserveStateAssertionsAndOwnedFixtureEvidence(bool lifecycle)
     {
         TableEntity invoice = Fixture(lifecycle);
-        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(invoice));
+        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.ReadActive(invoice));
         string? before = invoice.GetString("LifecycleData");
         InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-link-token");
-        Assert.AreEqual(PreparationCheckpoint.Frozen, InvoiceCheckpoint.Read(invoice));
+        Assert.AreEqual(PreparationCheckpoint.Frozen, InvoiceCheckpoint.ReadActive(invoice));
         Assert.AreEqual("synthetic-link-token", invoice.GetString(nameof(Invoice.Token)));
         Assert.AreEqual("unchanged", invoice.GetString("UnrelatedColumn"));
         if (lifecycle)
@@ -78,7 +78,28 @@ public sealed class InvoiceCheckpointTests
         }
         if (corruption is "future-version" or "unknown-preparation" or "missing-write" or "bad-shape")
             invoice["LifecycleData"] = data.ToJsonString();
-        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.Read(invoice));
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.ReadActive(invoice));
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-link-token"));
+        Assert.IsFalse(invoice.ContainsKey(nameof(Invoice.Token)));
+    }
+
+    [TestMethod]
+    [DataRow(3)]
+    [DataRow(4)]
+    public void CancelledReadyOrFrozenRow_CannotSatisfyActiveIssuanceAssertions(int preparation)
+    {
+        TableEntity invoice = Fixture(true);
+        JsonObject data = JsonNode.Parse(invoice.GetString("LifecycleData")!)!.AsObject();
+        data["Preparation"] = preparation;
+        data["Cancellation"] = new JsonObject
+        {
+            ["Operation"] = Guid.NewGuid().ToString(),
+            ["Actor"] = Guid.NewGuid().ToString(),
+            ["Reason"] = "Synthetic cancellation",
+            ["At"] = "2026-11-14T12:00:00Z",
+        };
+        invoice["LifecycleData"] = data.ToJsonString();
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.ReadActive(invoice));
         Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-link-token"));
         Assert.IsFalse(invoice.ContainsKey(nameof(Invoice.Token)));
     }
