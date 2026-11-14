@@ -1,6 +1,7 @@
 using Azure;
 using Azure.Data.Tables;
 using Microsoft.Extensions.DependencyInjection;
+using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.History;
 using Niobium.Invoicing.Testing;
@@ -9,6 +10,39 @@ namespace Niobium.Invoicing.Integration.Tests;
 
 public sealed partial class StorageFlowTests
 {
+    [TestMethod]
+    public async Task Legacy_token_history_matches_the_actual_saved_lifecycle_before_subsequent_reconciliation()
+    {
+        IssueInvoiceRequest request = await NewRequest();
+        Biller owner = profiles[(request.Tenant, request.BillerID)];
+        Billee customer = (await host!.Services.GetRequiredService<IRepository<Billee>>().RetrieveAsync(request.BillerID.ToString(), request.BilleeID.ToString()))!;
+        IRepository<Invoice> invoices = host.Services.GetRequiredService<IRepository<Invoice>>();
+        await invoices.CreateAsync([Invoice.BuildNew(request.InvoiceID, owner, customer)]);
+        var domains = host.Services.GetRequiredService<IDomainRepository<InvoiceDomain, Invoice>>();
+        InvoiceDomain domain = await domains.GetAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID), forceLoad: true);
+        await domain.EnsureAccessTokenAsync("synthetic-legacy-history-key", default);
+        Invoice tokenSaved = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        var entries = await History(tokenSaved);
+        Assert.AreEqual(2, entries.Count);
+        Assert.AreEqual(InvoiceChangeKind.AccessTokenSaved, entries[0].Revision.ReadChange().Kind);
+        Assert.IsNotNull(entries[0].Snapshot.Lifecycle);
+        Assert.IsTrue(InvoiceRevision.MatchesInvoice(entries[0].Snapshot, tokenSaved));
+        InvoiceLifecycleFlow flow = host.Services.GetRequiredService<InvoiceLifecycleFlow>();
+        await flow.ReconcileAsync(request.BillerID, request.InvoiceID, request.Tenant,
+            new()
+            {
+                Operation = Guid.NewGuid(),
+                Finding = InvoicePaymentHistory.NoPayments,
+                Reason = "Synthetic review",
+                Evidence = "Synthetic legacy evidence"
+            });
+        Invoice reconciled = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        entries = await History(reconciled);
+        CollectionAssert.AreEqual(new[] { InvoiceChangeKind.PaymentHistoryReconciled, InvoiceChangeKind.AccessTokenSaved, InvoiceChangeKind.ObservedBaseline },
+            entries.Select(entry => entry.Revision.ReadChange().Kind).ToArray());
+        Assert.IsTrue(InvoiceRevision.MatchesInvoice(entries[0].Snapshot, reconciled));
+    }
+
     [TestMethod]
     public async Task Large_history_snapshots_round_trip_across_the_frameworks_Table_batch_boundary()
     {

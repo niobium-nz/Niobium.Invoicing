@@ -56,7 +56,9 @@ characters. When it is omitted, the domain records the operation description,
 without claiming that description was supplied by a person.
 
 The first mutation of a legacy invoice records its observed baseline, not invented
-earlier history. If a direct writer changes invoice state outside this domain, the
+earlier history. The target lifecycle state is initialized before taking the new
+snapshot, including first-time token creation; the original observed baseline still
+retains its pre-lifecycle representation. If a direct writer changes invoice state outside this domain, the
 next domain mutation records the observed difference as unattributed and retains
 the preceding chain. Its time is the observation time; intermediate external
 changes cannot be reconstructed. Direct storage privileges can bypass application

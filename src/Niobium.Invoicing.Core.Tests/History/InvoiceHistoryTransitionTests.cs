@@ -8,6 +8,39 @@ namespace Niobium.Invoicing.Core.Tests.History;
 public sealed class InvoiceHistoryTransitionTests
 {
     [TestMethod]
+    public async Task First_legacy_token_creation_captures_the_committed_lifecycle_without_inventing_an_external_change()
+    {
+        IssuanceScenario scenario = new();
+        scenario.Stored = Invoice.BuildNew(scenario.Request.InvoiceID, scenario.Biller, scenario.Billee);
+        scenario.Stored.ETag = "synthetic-legacy";
+        Assert.IsNull(scenario.Stored.ReadLifecycle());
+        await scenario.Domain().EnsureAccessTokenAsync(scenario.Options.InvoiceTokenSecretSalt, default);
+        IReadOnlyList<InvoiceRevision> tokenHistory = scenario.History.Committed(scenario.Stored);
+        Assert.AreEqual(2, tokenHistory.Count);
+        Assert.AreEqual(InvoiceChangeKind.AccessTokenSaved, tokenHistory[0].ReadChange().Kind);
+        InvoiceRevisionSnapshot tokenSnapshot = scenario.History.Snapshot(tokenHistory[0]);
+        Assert.IsNotNull(tokenSnapshot.Lifecycle);
+        Assert.AreEqual(InvoicePaymentHistory.Unknown, tokenSnapshot.Lifecycle.PaymentHistory);
+        Assert.IsTrue(InvoiceRevision.MatchesInvoice(tokenSnapshot, scenario.Stored));
+        Assert.IsNull(tokenSnapshot.Invoice.Token);
+        Assert.IsNull(scenario.History.Snapshot(tokenHistory[1]).Lifecycle,
+            "The observed legacy baseline must still describe its original representation.");
+        await scenario.Domain().ReconcilePaymentHistoryAsync(scenario.Request.Tenant, scenario.Request.BillerID,
+            new()
+            {
+                Operation = Guid.NewGuid(),
+                Finding = InvoicePaymentHistory.NoPayments,
+                Reason = "Synthetic review",
+                Evidence = "Synthetic legacy evidence"
+            },
+            DateTimeOffset.UtcNow);
+        IReadOnlyList<InvoiceRevision> reconciled = scenario.History.Committed(scenario.Stored);
+        CollectionAssert.AreEqual(new[] { InvoiceChangeKind.PaymentHistoryReconciled, InvoiceChangeKind.AccessTokenSaved, InvoiceChangeKind.ObservedBaseline },
+            reconciled.Select(entry => entry.ReadChange().Kind).ToArray());
+        Assert.IsTrue(InvoiceRevision.MatchesInvoice(scenario.History.Snapshot(reconciled[0]), scenario.Stored));
+    }
+
+    [TestMethod]
     public async Task Creation_and_edit_retain_earlier_lines_amounts_and_actor_while_exact_replay_adds_nothing()
     {
         IssuanceScenario scenario = new();

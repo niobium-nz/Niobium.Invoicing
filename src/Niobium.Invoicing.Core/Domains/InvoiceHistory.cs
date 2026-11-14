@@ -32,6 +32,9 @@ public partial class InvoiceDomain
         }
         if (kind is InvoiceChangeKind.PreparationStarted or InvoiceChangeKind.PreparationCompleted && historyOrigin?.Reason != null)
             reason = historyOrigin.Reason;
+        // A legacy row first acquires lifecycle state with this commit. Capture
+        // that target state before ReferenceHistory adds only the verified link.
+        next.StoreLifecycle(Lifecycle(next));
         Invoice current = await GetEntityAsync(cancellationToken);
         Guid? previous = current.ReadLifecycle()?.HistoryRevision;
         InvoiceRevisionSnapshot? priorSnapshot = null;

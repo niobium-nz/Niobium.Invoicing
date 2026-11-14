@@ -20,7 +20,7 @@ describes the invoice-reference commit point, failure behavior, proposed versus
 verified lines, legacy observed baselines and old-writer fencing. No current key,
 legacy link or historical total is migrated.
 
-Local solution and deployed-test builds passed. All 205 unit and 112 opted-in local
+Local solution and deployed-test builds passed. All 206 unit and 113 opted-in local
 integration cases passed with 94.27% combined authored application line coverage.
 The 24 Python tooling and 20 Node policy cases also pass. A local Bicep compile
 could not restore the unchanged AVM modules because the workspace proxy returned
@@ -29,6 +29,11 @@ An actual-adapter regression also verifies snapshots spanning more than one
 100-operation Table batch and an unchanged invoice/history on exact replay.
 New deployed coverage checks multipart snapshots, authenticated attribution,
 retained previous lines/totals and exact replays through real test HTTP/storage.
+Independent source review found that first-time token creation on a legacy invoice
+captured history before initializing its target lifecycle state. The domain now
+initializes that state before capture; unit and actual Table regressions verify a
+matching committed snapshot and no invented external-change baseline on the next
+legitimate reconciliation.
 The independent trusted verifier must be delivered before this schema-2 application
 can pass trusted CI. Exact-head feature, native/formal review and production/package
 results remain required before this increment is described as delivered.
