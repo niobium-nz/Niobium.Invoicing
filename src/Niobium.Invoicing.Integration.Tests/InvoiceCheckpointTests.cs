@@ -52,7 +52,7 @@ public sealed class InvoiceCheckpointTests
                 invoice[nameof(Invoice.IssuanceState)] = "lifecycle-v2";
                 break;
             case "future-version":
-                data["Version"] = 2;
+                data["Version"] = 3;
                 break;
             case "unknown-preparation":
                 data["Preparation"] = 99;
@@ -116,6 +116,51 @@ public sealed class InvoiceCheckpointTests
         invoice[nameof(Invoice.IssuanceState)] = "preparing-v1";
         Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-link-token"));
         Assert.IsFalse(invoice.ContainsKey(nameof(Invoice.Token)));
+    }
+
+    [TestMethod]
+    public void Reviewed_history_is_readable_but_cannot_be_frozen_without_its_history_transition()
+    {
+        TableEntity invoice = Fixture(true);
+        JsonObject data = JsonNode.Parse(invoice.GetString("LifecycleData")!)!.AsObject();
+        Guid revision = Guid.NewGuid();
+        data["Version"] = 2;
+        data["HistoryRevision"] = revision.ToString();
+        string raw = data.ToJsonString();
+        invoice["LifecycleData"] = raw;
+        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.ReadActive(invoice));
+        Assert.AreEqual(revision, InvoiceCheckpoint.ReadHistoryReference(invoice));
+        Assert.AreEqual(InvoicePreparationStage.Ready, InvoiceCheckpoint.ReadEvidence(invoice).Preparation);
+        int columns = invoice.Count;
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-token"));
+        Assert.AreEqual(columns, invoice.Count);
+        Assert.AreEqual(raw, invoice.GetString("LifecycleData"));
+        Assert.IsFalse(invoice.ContainsKey(nameof(Invoice.Token)));
+    }
+
+    [TestMethod]
+    [DataRow(1, "unexpected")]
+    [DataRow(2, "missing")]
+    [DataRow(2, "empty")]
+    [DataRow(2, "malformed")]
+    [DataRow(2, "wrong-type")]
+    public void HistoryRepresentation_RejectsMissingOrIncompatibleReferences(int version, string corruption)
+    {
+        TableEntity invoice = Fixture(true);
+        JsonObject data = JsonNode.Parse(invoice.GetString("LifecycleData")!)!.AsObject();
+        data["Version"] = version;
+        if (corruption != "missing")
+            data["HistoryRevision"] = corruption switch
+            {
+                "empty" => JsonValue.Create(Guid.Empty.ToString()),
+                "malformed" => JsonValue.Create("not-a-revision"),
+                "wrong-type" => JsonValue.Create(42),
+                _ => JsonValue.Create(Guid.NewGuid().ToString())
+            };
+        invoice["LifecycleData"] = data.ToJsonString();
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.ReadActive(invoice));
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.ReadEvidence(invoice));
+        Assert.ThrowsExactly<InvalidOperationException>(() => InvoiceCheckpoint.FreezeOwnedFixture(invoice, "synthetic-token"));
     }
 
     private static TableEntity Fixture(bool lifecycle)

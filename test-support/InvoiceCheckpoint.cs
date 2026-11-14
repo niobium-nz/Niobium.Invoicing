@@ -6,7 +6,7 @@ using Azure.Data.Tables;
 namespace Niobium.Invoicing.Testing;
 
 // This independent verifier deliberately does not call the candidate's model codec.
-// It accepts only the reviewed legacy and lifecycle-v1 preparation representations.
+// It accepts only reviewed legacy checkpoints and lifecycle schema versions 1/2.
 internal enum PreparationCheckpoint
 {
     Draft = 0, Preparing = 1, Retryable = 2, Ready = 3, Frozen = 4
@@ -17,13 +17,30 @@ internal static class InvoiceCheckpoint
     private const string LifecycleColumn = "LifecycleData";
     private const string LifecycleCheckpoint = "lifecycle-v1";
 
-    internal static PreparationCheckpoint ReadActive(TableEntity invoice)
+    // Read-only DTO materialization follows independent representation validation;
+    // never invoke a candidate model's codec or use this DTO to rewrite storage.
+    internal static InvoiceLifecycleSnapshot ReadEvidence(TableEntity invoice)
+        => JsonSerializer.Deserialize<InvoiceLifecycleSnapshot>(ReadLifecycle(invoice).ToJsonString()) ?? throw Invalid();
+
+    internal static PreparationCheckpoint ReadActive(TableEntity invoice) => ReadPreparation(invoice, true);
+
+    internal static Guid? ReadHistoryReference(TableEntity invoice)
+    {
+        _ = ReadPreparation(invoice, false); // Cancelled fixtures still require complete representation validation.
+        if (invoice.GetString(nameof(Invoice.IssuanceState)) != LifecycleCheckpoint)
+            return null;
+        JsonObject lifecycle = ReadLifecycle(invoice);
+        return lifecycle["Version"]!.GetValue<int>() == 2
+            ? Guid.ParseExact(lifecycle["HistoryRevision"]!.GetValue<string>(), "D") : null;
+    }
+
+    private static PreparationCheckpoint ReadPreparation(TableEntity invoice, bool requireActive)
     {
         string? checkpoint = invoice.GetString(nameof(Invoice.IssuanceState));
         if (checkpoint == LifecycleCheckpoint)
         {
             JsonObject lifecycle = ReadLifecycle(invoice);
-            if (lifecycle["Cancellation"] != null)
+            if (requireActive && lifecycle["Cancellation"] != null)
                 throw Invalid();
             return (PreparationCheckpoint)lifecycle["Preparation"]!.GetValue<int>();
         }
@@ -40,11 +57,12 @@ internal static class InvoiceCheckpoint
         };
     }
 
-    // Used only on a newly created, owned synthetic test invoice. Preserve every
-    // unrelated column and all lifecycle evidence while arranging a saved-link view.
+    // Only unanchored synthetic legacy fixtures can be arranged without a history
+    // transition. Never alter a schema-2 row or detach its committed revision.
     internal static void FreezeOwnedFixture(TableEntity invoice, string token)
     {
-        if (ReadActive(invoice) != PreparationCheckpoint.Ready || String.IsNullOrWhiteSpace(token))
+        Guid? history = ReadHistoryReference(invoice);
+        if (history.HasValue || ReadActive(invoice) != PreparationCheckpoint.Ready || String.IsNullOrWhiteSpace(token))
             throw Invalid();
         if (invoice.GetString(nameof(Invoice.IssuanceState)) == LifecycleCheckpoint)
         {
@@ -60,16 +78,24 @@ internal static class InvoiceCheckpoint
 
     private static JsonObject ReadLifecycle(TableEntity invoice)
     {
+        if (invoice.GetString(nameof(Invoice.IssuanceState)) != LifecycleCheckpoint)
+            throw Invalid();
         string? raw = invoice.GetString(LifecycleColumn);
         if (String.IsNullOrWhiteSpace(raw) || Encoding.UTF8.GetByteCount(raw) > 32 * 1024)
             throw Invalid();
         try
         {
             JsonObject? lifecycle = JsonNode.Parse(raw, documentOptions: new JsonDocumentOptions { MaxDepth = 16 }) as JsonObject;
-            if (lifecycle == null || lifecycle["Version"]?.GetValue<int>() != 1
+            if (lifecycle == null || lifecycle["Version"] is not JsonValue schema || !schema.TryGetValue<int>(out int version)
+                || version is not (1 or 2)
                 || lifecycle["Preparation"] is not JsonValue stage || !stage.TryGetValue<int>(out int preparation)
                 || !Enum.IsDefined((PreparationCheckpoint)preparation)
                 || !Guid.TryParseExact(lifecycle["WriteID"]?.GetValue<string>(), "N", out Guid write) || write == Guid.Empty)
+                throw Invalid();
+            if (version == 1 && lifecycle["HistoryRevision"] != null)
+                throw Invalid();
+            if (version == 2 && (!Guid.TryParseExact(lifecycle["HistoryRevision"]?.GetValue<string>(), "D", out Guid revision)
+                || revision == Guid.Empty))
                 throw Invalid();
             return lifecycle;
         }

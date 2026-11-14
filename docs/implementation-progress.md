@@ -928,3 +928,45 @@ Local validation: `git diff --check` passed, and every relative Markdown target 
 Baseline: main `72071c83ab0b04edae6ad97455a3423bc29db874` after PR #15. The owner clarified that Notification is an independent shared service. The prior instruction to copy Invoicing's fixture settings into Notification and discover its test sender through an `Invoice` template introduced avoidable test coupling. That request and documentation guidance are withdrawn.
 
 The configuration inventory and agent memory now keep invoice-specific end-to-end tests and existing invoice fixtures in Invoicing. Notification owns generic sender/template/recipient tests and retains its established `Tenant`/`Channel` contract; Invoicing translates biller identity only at its caller boundary. The approved Invoicing fixture inventory and active production `TEST_INVOICE_TOKEN` consumer are unchanged. This is a documentation correction with no runtime, workflow, infrastructure or package change in Invoicing. The separate Notification feature branch removes the coupled lookup and tests generic fixtures; its deployment/admin prerequisites remain separately tracked.
+
+
+## Invoice history verifier preparation (2026-11-14)
+
+Based on main `8b0e9faa1a2561486783ab886530f76313d92e5a` after PR #23. This
+prerequisite updates the independent test harness before the separately implemented
+B08 history writer changes lifecycle JSON to schema 2. It does not activate history,
+change application code or relax any deployment gate.
+
+The raw checkpoint verifier accepts only reviewed versions 1 and 2, requires the
+schema-2 revision reference, and reads lifecycle evidence without an older codec
+rewriting a newer fixture. Unknown schemas remain rejected. A schema-2 row cannot
+be synthetically frozen: that material transition must use its history writer.
+Saved-link/debug fixtures are instead fully seeded legacy frozen snapshots, with
+owned lines, totals and token, before any HTTP mutation. Real reconciliation and
+cancellation then use the deployed application; existing email/queue cases still
+exercise the actual current freeze path.
+
+Cleanup validates every root representation and all selected child identities
+before invoking an awaited callback that conditionally deletes the owned invoice.
+A schema-2 reference must identify a selected revision, and every part must refer
+to a selected revision. Unmatched or foreign references stop cleanup and remain
+for investigation; incomplete pre-manifest candidates are not guessed safe to
+remove. The callback uses the
+observed parent ETag, and failed or uncertain parent deletion preserves all history.
+Only after success are child rows deleted with their observed ETags. Queries are
+scoped to the biller and invoice; missing tables are allowed only for unanchored
+fixtures, and permission failures propagate. Actual Table tests cover a missing
+advertised revision, a stale parent, foreign/unmatched part references and retention of another invoice under the same
+biller. No production fixture mutation or client entitlement is introduced.
+
+Revised local verification passed both Release builds with zero warnings/errors,
+169 unit and 105 opted-in actual Table/component cases with no skips, and 93.40%
+application coverage. The 24 Python and 20 Node tooling checks remain unchanged.
+
+PR #24 native review and the separate approver identified missing-reference,
+unsupported-root and inconsistent-freeze gaps in initial head `00ee1e8`. These are
+corrected above and have dedicated regressions. Its earlier successful deployed
+run does not validate the revised head. Local and new exact-head feature evidence,
+native re-review, separate formal decision and terminal production/package results
+will be recorded on the PR before delivery is claimed. The application history
+increment and remaining B08 work are not complete here.

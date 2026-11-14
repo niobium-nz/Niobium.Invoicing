@@ -363,20 +363,15 @@ public sealed partial class DeployedInvoiceTests
     [DataRow(true)]
     public async Task Function_key_debug_view_preserves_storage_and_public_link_policy(bool frozen)
     {
-        long id = await SeedInvoice(recipient: string.Empty);
+        long id = await SeedInvoice(recipient: string.Empty, legacyFrozen: frozen);
         IssueInvoiceRequest invoice = Request(id);
-        using HttpResponseMessage issued = await Post(invoice, Token(biller, tenant));
-        Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
-        TableEntity before = await Read(id);
-        string? linkToken = null;
-        if (frozen)
+        if (!frozen)
         {
-            // Owned synthetic fixture: exercise a frozen invoice without sending another notification.
-            linkToken = Guid.NewGuid().ToString("N");
-            InvoiceCheckpoint.FreezeOwnedFixture(before, linkToken);
-            await tables.GetTableClient(nameof(Invoice)).UpdateEntityAsync(before, before.ETag, TableUpdateMode.Merge);
-            before = await Read(id);
+            using HttpResponseMessage issued = await Post(invoice, Token(biller, tenant));
+            Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
         }
+        TableEntity before = await Read(id);
+        string? linkToken = before.GetString(nameof(Invoice.Token));
         string itemFilter = TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}");
         List<string> itemVersions = [];
         await foreach (TableEntity item in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(itemFilter))
@@ -602,16 +597,23 @@ public sealed partial class DeployedInvoiceTests
     {
         TableEntity owned = await Read(id, owningBiller);
         Assert.IsTrue(owned.GetGuid(nameof(Invoice.Billee)) == customer, "Refusing to delete an unrelated invoice.");
-        TableClient items = tables.GetTableClient(nameof(InvoiceItem));
-        await foreach (TableEntity item in items.QueryAsync<TableEntity>(TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}")))
-        {
-            Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)), "Refusing to delete an unrelated item.");
-            await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
-        }
-        await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
+        await InvoiceHistoryFixture.RemoveAsync(tables.GetTableClient(InvoiceHistoryFixture.RevisionsTable),
+            tables.GetTableClient(InvoiceHistoryFixture.PartsTable), owned, owningBiller, id, customer, async () =>
+            {
+                TableClient items = tables.GetTableClient(nameof(InvoiceItem));
+                List<TableEntity> ownedItems = [];
+                await foreach (TableEntity item in items.QueryAsync<TableEntity>(TableClient.CreateQueryFilter($"PartitionKey eq {InvoiceItem.BuildPartitionKey(id)}")))
+                {
+                    Assert.AreEqual(itemSubject, item.GetString(nameof(InvoiceItem.Subject)), "Refusing to delete an unrelated item.");
+                    ownedItems.Add(item);
+                }
+                await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
+                foreach (TableEntity item in ownedItems)
+                    await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
+            });
     }
 
-    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, long? invoiceID = null)
+    private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, long? invoiceID = null, bool legacyFrozen = false)
     {
         long id = invoiceID ?? Invoice.ParseID(DateTimeOffset.UtcNow.AddMilliseconds(invoices.Count));
         await foreach (TableEntity _ in tables.GetTableClient(nameof(InvoiceItem)).QueryAsync<TableEntity>(
@@ -630,9 +632,23 @@ public sealed partial class DeployedInvoiceTests
             Culture = "en-NZ",
             TimeZone = "Pacific/Auckland"
         }, Customer(owningBiller, recipient));
+        InvoiceItem[] lines = legacyFrozen ? Request(id).InvoiceItems.ToArray() : [];
+        if (legacyFrozen)
+        {
+            // An explicitly pre-history snapshot, fully arranged before any HTTP
+            // mutation. Never change the state of an existing history-linked row.
+            invoice.IssuanceState = "frozen-v1";
+            invoice.Token = Guid.NewGuid().ToString("N");
+            invoice.Terms = Request(id).Terms;
+            foreach (InvoiceItem line in lines)
+                line.LineTotalCents = line.FigureLineTotalCents();
+            invoice.GrandTotalCents = invoice.FigureGrandTotalCents(lines);
+        }
         await services.GetRequiredService<IRepository<Invoice>>().CreateAsync([invoice]);
         // A rejected or uncertain creation must never claim a pre-existing row for cleanup.
         invoices.Add((owningBiller, id));
+        if (legacyFrozen)
+            await services.GetRequiredService<IRepository<InvoiceItem>>().CreateAsync(lines);
         return id;
     }
 
@@ -681,7 +697,7 @@ public sealed partial class DeployedInvoiceTests
     {
         public Task<TableServiceClient> CreateClientAsync(IEnumerable<DatabasePermissions> permissions, string table, string? partition = null, CancellationToken cancellationToken = default)
         {
-            if (table is not (nameof(Invoice) or nameof(InvoiceItem)))
+            if (table is not (nameof(Invoice) or nameof(InvoiceItem) or InvoiceHistoryFixture.RevisionsTable or InvoiceHistoryFixture.PartsTable))
                 throw new InvalidOperationException("Unexpected test table.");
             return Task.FromResult(client);
         }
