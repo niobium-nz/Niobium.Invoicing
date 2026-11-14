@@ -1,3 +1,4 @@
+using Niobium.Invoicing.History;
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Microsoft.AspNetCore.Http;
@@ -80,13 +81,13 @@ public sealed class TransportEntryTests
             InvoiceItems = []
         };
         Mock<UpsertFlow> upsert = new(MockBehavior.Strict, null!, null!, null!, null!);
-        upsert.Setup(x => x.RunAsync(It.Is<IssueInvoiceRequest>(r => r.BilleeID == customer.ID), It.Is<Billee?>(b => b!.ID == customer.ID), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        upsert.Setup(x => x.RunAsync(It.Is<IssueInvoiceRequest>(r => r.BilleeID == customer.ID), It.Is<Billee?>(b => b!.ID == customer.ID), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         Mock<EmailFlow> email = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
         using ServiceProvider services = new ServiceCollection().AddInvoiceQueueTelemetry(new ConfigurationBuilder().Build()).BuildServiceProvider();
         IssueInvoiceCommandConsumer consumer = new(new IssueFlow(upsert.Object, email.Object), NullLogger<IssueInvoiceCommandConsumer>.Instance, services.GetRequiredService<InvoiceQueueTelemetry>());
         ServiceBusReceivedMessage message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: new BinaryData(JsonMarshaller.Marshall(command)), contentType: "application/json", messageId: "synthetic");
         await consumer.Run(message, CancellationToken.None);
-        upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()), Times.Once);
+        upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.TrustedQueue && origin.Actor == nameof(IssueInvoiceCommandConsumer)), It.IsAny<CancellationToken>()), Times.Once);
         email.VerifyNoOtherCalls();
     }
 }

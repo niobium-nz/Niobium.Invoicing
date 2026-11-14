@@ -6,6 +6,7 @@ using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.Options;
 using System.Text.Encodings.Web;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Core.Tests.Flows
 {
@@ -50,12 +51,25 @@ namespace Niobium.Invoicing.Core.Tests.Flows
             Mock<IDomainRepository<InvoiceDomain, Invoice>> invoiceDomainRepo = new(MockBehavior.Strict);
             Mock<IDomainRepository<InvoiceItemDomain, InvoiceItem>> itemDomainRepo = new(MockBehavior.Strict);
             Mock<ILogger<HTMLFlow>> logger = new();
+            Mock<IRepository<InvoiceItem>> historyItems = new(MockBehavior.Strict);
+            historyItems.Setup(r => r.GetAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>()))
+                .Returns(() => YieldAsync(items.ToArray()));
 
             // Real invoice domain with mocked infra
-            InvoiceDomain invDomain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>());
+            InvoiceDomain invDomain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>(),
+                new HistoryScenario().Domains(), historyItems.Object, TimeProvider.System);
             string pk = Invoice.BuildPartitionKey(invoice.Biller);
             string rk = Invoice.BuildRowKey(invoice.GetID());
             invDomain.Initialize(pk, rk);
+            int persistedVersion = 0;
+            IEnumerable<Invoice> Persist(IEnumerable<Invoice> values)
+            {
+                Invoice saved = values.Single();
+                foreach (var field in EntityMappingHelper.GetMapping(typeof(Invoice)).Values)
+                    field.SetValue(invoice, field.GetValue(saved));
+                invoice.ETag = "html-fixture-" + (++persistedVersion).ToString();
+                return [invoice];
+            }
 
             // invoice repository behavior for domain load
             invoiceRepo
@@ -66,10 +80,10 @@ namespace Niobium.Invoicing.Core.Tests.Flows
                 .ReturnsAsync(invoice);
             invoiceRepo
                 .Setup(r => r.UpdateAsync(It.IsAny<IEnumerable<Invoice>>(), true, false, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IEnumerable<Invoice> e, bool _, bool __, CancellationToken ___) => e);
+                .ReturnsAsync((IEnumerable<Invoice> e, bool _, bool __, CancellationToken ___) => Persist(e));
             invoiceRepo
                 .Setup(r => r.CreateAsync(It.IsAny<IEnumerable<Invoice>>(), false, null, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IEnumerable<Invoice> e, bool _, DateTimeOffset? __, CancellationToken ___) => e);
+                .ReturnsAsync((IEnumerable<Invoice> e, bool _, DateTimeOffset? __, CancellationToken ___) => Persist(e));
 
             // Domain repository returns the real domain for GetAsync and ensures it's initialized
             invoiceDomainRepo

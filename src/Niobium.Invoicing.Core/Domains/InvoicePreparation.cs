@@ -1,5 +1,6 @@
 using Azure;
 using System.Net;
+using Niobium.Invoicing.History;
 
 namespace Niobium.Invoicing.Domains;
 
@@ -95,7 +96,8 @@ public partial class InvoiceDomain
         });
         candidate.IssuanceFingerprint = requested;
         candidate.IssuanceOperation = Guid.NewGuid().ToString("N");
-        await PersistInvoiceAsync(candidate, cancellationToken);
+        await PersistWithHistoryAsync(candidate, InvoiceChangeKind.PreparationStarted, "Invoice preparation requested",
+            items, InvoiceLineEvidence.Proposed, cancellationToken: cancellationToken);
         return true;
     }
 
@@ -107,13 +109,14 @@ public partial class InvoiceDomain
         {
             throw Conflict("Persisted items do not match the preparation checkpoint.");
         }
-        await EndPreparationAsync(InvoicePreparationStage.Ready, cancellationToken);
+        await EndPreparationAsync(InvoicePreparationStage.Ready, cancellationToken, persistedItems.ToArray());
     }
 
     /// <summary>Allows an exact retry after an item operation has returned a definitive failure.</summary>
     public Task FailPreparationAsync(CancellationToken cancellationToken) => EndPreparationAsync(InvoicePreparationStage.Retryable, cancellationToken);
 
-    private async Task EndPreparationAsync(InvoicePreparationStage state, CancellationToken cancellationToken)
+    private async Task EndPreparationAsync(InvoicePreparationStage state, CancellationToken cancellationToken,
+        IReadOnlyList<InvoiceItem>? items = null)
     {
         Invoice current = await GetEntityAsync(cancellationToken);
         if (current.GetPreparationStage() != InvoicePreparationStage.Preparing || string.IsNullOrWhiteSpace(current.IssuanceOperation))
@@ -124,7 +127,10 @@ public partial class InvoiceDomain
         CheckActive(current);
         next.SetPreparationStage(state);
         next.IssuanceOperation = null;
-        await PersistInvoiceAsync(next, cancellationToken);
+        await PersistWithHistoryAsync(next, state == InvoicePreparationStage.Ready
+            ? InvoiceChangeKind.PreparationCompleted : InvoiceChangeKind.PreparationFailed,
+            state == InvoicePreparationStage.Ready ? "Invoice preparation completed" : "Invoice preparation failed with a confirmed storage rejection",
+            items, items == null ? InvoiceLineEvidence.Proposed : InvoiceLineEvidence.Verified, cancellationToken: cancellationToken);
     }
 
     /// <summary>Freezes verified persisted content and saves its link before any enqueue attempt.</summary>
@@ -169,7 +175,8 @@ public partial class InvoiceDomain
         {
             throw new InvalidOperationException("An invoice link endpoint is required before freezing notification content.");
         }
-        await PersistInvoiceAsync(next, cancellationToken);
+        await PersistWithHistoryAsync(next, InvoiceChangeKind.Frozen, "Invoice content frozen for notification",
+            items, InvoiceLineEvidence.Verified, cancellationToken: cancellationToken);
         return next.Token;
     }
 

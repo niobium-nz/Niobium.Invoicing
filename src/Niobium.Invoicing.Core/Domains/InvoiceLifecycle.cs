@@ -1,3 +1,5 @@
+using Niobium.Invoicing.History;
+
 namespace Niobium.Invoicing.Domains;
 
 public partial class InvoiceDomain
@@ -39,7 +41,8 @@ public partial class InvoiceDomain
         });
         // State and actor/reason/operation evidence are one conditional invoice
         // write. A failure cannot commit cancellation without its audit record.
-        await PersistInvoiceAsync(next, cancellationToken);
+        await PersistWithHistoryAsync(next, InvoiceChangeKind.Cancelled, reason,
+            authority: InvoiceChangeAuthority.AuthenticatedBiller, actor: actor.ToString(), cancellationToken: cancellationToken);
         return Status(await GetEntityAsync(cancellationToken));
     }
 
@@ -78,7 +81,8 @@ public partial class InvoiceDomain
             PaymentHistory = request.Finding,
             Reconciliations = [.. lifecycle.Reconciliations, new(request.Operation, actor, request.Finding, reason, evidence, now.ToUniversalTime())],
         });
-        await PersistInvoiceAsync(next, cancellationToken);
+        await PersistWithHistoryAsync(next, InvoiceChangeKind.PaymentHistoryReconciled, reason,
+            authority: InvoiceChangeAuthority.AuthenticatedBiller, actor: actor.ToString(), cancellationToken: cancellationToken);
         return Status(await GetEntityAsync(cancellationToken));
     }
 

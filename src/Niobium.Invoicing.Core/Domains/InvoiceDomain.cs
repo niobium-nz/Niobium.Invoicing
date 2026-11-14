@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Options;
 using Niobium.Invoicing.Options;
+using Niobium.Invoicing.History;
 
 namespace Niobium.Invoicing.Domains;
 
@@ -13,7 +14,10 @@ namespace Niobium.Invoicing.Domains;
 public partial class InvoiceDomain(
     IOptions<BillingOptions> config,
     Lazy<IRepository<Invoice>> repo,
-    IEnumerable<IDomainEventHandler<IDomain<Invoice>>> eventHandlers)
+    IEnumerable<IDomainEventHandler<IDomain<Invoice>>> eventHandlers,
+    IDomainRepository<InvoiceHistoryDomain, InvoiceRevision> history,
+    IRepository<InvoiceItem> historyItems,
+    TimeProvider clock)
       : GenericDomain<Invoice>(repo, eventHandlers)
 {
     /// <summary>
@@ -96,18 +100,11 @@ public partial class InvoiceDomain(
             return entity.Token;
         }
 
-        string? previousToken = entity.Token;
         string token = entity.BuildAccessToken(salt);
-        entity.Token = token;
-        try
-        {
-            await SaveAsync(cancellationToken: cancellationToken);
-        }
-        catch
-        {
-            entity.Token = previousToken;
-            throw;
-        }
+        Invoice next = InvoiceContent.Copy(entity);
+        next.Token = token;
+        await PersistWithHistoryAsync(next, InvoiceChangeKind.AccessTokenSaved,
+            "Invoice access token saved", cancellationToken: cancellationToken);
         return token;
     }
 
@@ -167,7 +164,8 @@ public partial class InvoiceDomain(
             });
             try
             {
-                await PersistInvoiceAsync(next, cancellationToken);
+                await PersistWithHistoryAsync(next, InvoiceChangeKind.NotificationQueued,
+                    "Notification accepted by the queue", cancellationToken: cancellationToken);
                 return;
             }
             catch (ApplicationException error) when (error.ErrorCode == (int)InternalError.Conflict && attempt < 2)

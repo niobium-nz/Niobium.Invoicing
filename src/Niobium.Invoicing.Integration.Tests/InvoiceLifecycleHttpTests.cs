@@ -7,6 +7,7 @@ using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.Options;
 using Niobium.Invoicing.Server;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Integration.Tests;
 
@@ -58,7 +59,11 @@ public sealed class InvoiceLifecycleHttpTests
                 return new[] { InvoiceContent.Copy(saved) };
             });
         Lazy<IRepository<Invoice>> lazy = new(() => storage.Object);
-        GenericDomainRepository<InvoiceDomain, Invoice> domains = new(() => new(Microsoft.Extensions.Options.Options.Create(new BillingOptions { InvoiceTokenSecretSalt = "synthetic-test-salt", GetInvoiceEndpoint = "https://invoice.example.test" }), lazy, []), lazy);
+        HistoryScenario history = new();
+        Mock<IRepository<InvoiceItem>> items = new(MockBehavior.Strict);
+        items.Setup(r => r.GetAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).Returns(EmptyLines());
+        GenericDomainRepository<InvoiceDomain, Invoice> domains = new(() => new(Microsoft.Extensions.Options.Options.Create(new BillingOptions { InvoiceTokenSecretSalt = "synthetic-test-salt", GetInvoiceEndpoint = "https://invoice.example.test" }), lazy, [],
+            history.Domains(), items.Object, TimeProvider.System), lazy);
         InvoiceLifecycleFunctions handler = new(new(domains, TimeProvider.System));
         HttpRequest request = await Request(biller, tenant);
         Assert.AreEqual(InvoicePaymentHistory.Unknown, ((InvoiceLifecycleStatus)((OkObjectResult)await handler.GetInvoiceStatus(request, biller, invoice, default)).Value!).PaymentHistory);
@@ -85,6 +90,12 @@ public sealed class InvoiceLifecycleHttpTests
         HttpRequest foreignGroup = await Request(biller, Guid.NewGuid());
         ApplicationException forbidden = await Assert.ThrowsExactlyAsync<ApplicationException>(() => handler.GetInvoiceStatus(foreignGroup, biller, invoice, default));
         Assert.AreEqual(403, forbidden.ErrorCode);
+    }
+
+    private static async IAsyncEnumerable<InvoiceItem> EmptyLines()
+    {
+        await Task.CompletedTask;
+        yield break;
     }
 
     private static async Task<HttpRequest> Request(Guid biller, Guid tenant, string scenario = "valid")

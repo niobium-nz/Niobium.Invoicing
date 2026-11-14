@@ -40,7 +40,7 @@ public sealed partial class InvoiceLifecycleTests
                 raw = new string(' ', 32769);
                 break;
             case "version":
-                data["Version"] = 2;
+                data["Version"] = InvoiceLifecycleSnapshot.CurrentVersion + 1;
                 break;
             case "preparation":
                 data["Preparation"] = 99;

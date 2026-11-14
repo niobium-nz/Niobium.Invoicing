@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Niobium.Invoicing.Flows;
+using Niobium.Invoicing.History;
 using Niobium.Platform;
 using System.Security.Claims;
 using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
@@ -78,7 +79,7 @@ public class NewInvoice(IssueFlow flow)
         }
 
         request.NotifyBillee = false;
-        await flow.RunAsync(request, null, cancellationToken);
+        await flow.RunAsync(request, null, new(InvoiceChangeAuthority.AuthenticatedBiller, user.ToString()), cancellationToken);
         return new OkResult();
     }
 }

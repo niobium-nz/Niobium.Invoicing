@@ -1,3 +1,4 @@
+using Niobium.Invoicing.History;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -76,7 +77,7 @@ public sealed class HttpBoundaryTests
         IActionResult result = await handler.Run(context.Request, request, CancellationToken.None);
         await result.ExecuteResultAsync(new ActionContext(context, new RouteData(), new ActionDescriptor()));
         Assert.AreEqual(expected, context.Response.StatusCode);
-        upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.IsAny<CancellationToken>()), Times.Never);
+        upsert.Verify(x => x.RunAsync(It.IsAny<IssueInvoiceRequest>(), It.IsAny<Billee?>(), It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.AuthenticatedBiller), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [TestMethod]
@@ -97,7 +98,7 @@ public sealed class HttpBoundaryTests
         IssueInvoiceRequest request = Request();
         request.NotifyBillee = true;
         Mock<UpsertFlow> upsert = new(MockBehavior.Strict, null!, null!, null!, null!);
-        upsert.Setup(x => x.RunAsync(request, null, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        upsert.Setup(x => x.RunAsync(request, null, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.AuthenticatedBiller), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         Mock<EmailFlow> email = new(MockBehavior.Strict, null!, null!, null!, null!, null!);
         DefaultHttpContext context = new()
         {
@@ -106,7 +107,7 @@ public sealed class HttpBoundaryTests
         IActionResult result = await new NewInvoice(new IssueFlow(upsert.Object, email.Object)).Run(context.Request, request, CancellationToken.None);
         Assert.IsInstanceOfType<OkResult>(result);
         Assert.IsFalse(request.NotifyBillee);
-        upsert.Verify(x => x.RunAsync(request, null, It.IsAny<CancellationToken>()), Times.Once);
+        upsert.Verify(x => x.RunAsync(request, null, It.Is<InvoiceChangeOrigin?>(origin => origin != null && origin.Authority == InvoiceChangeAuthority.AuthenticatedBiller), It.IsAny<CancellationToken>()), Times.Once);
         email.VerifyNoOtherCalls();
     }
 

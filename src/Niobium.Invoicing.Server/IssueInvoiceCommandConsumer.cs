@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Niobium.Invoicing.Flows;
+using Niobium.Invoicing.History;
 using Niobium.Messaging.ServiceBus;
 using Niobium.Platform.ServiceBus;
 
@@ -53,6 +54,7 @@ public class IssueInvoiceCommandConsumer(IssueFlow flow, ILogger<IssueInvoiceCom
             throw new InvalidOperationException(err);
         }
 
-        await flow.RunAsync(command, command.Billee, cancellationToken);
+        await flow.RunAsync(command, command.Billee,
+            new(InvoiceChangeAuthority.TrustedQueue, nameof(IssueInvoiceCommandConsumer)), cancellationToken);
     }
 }

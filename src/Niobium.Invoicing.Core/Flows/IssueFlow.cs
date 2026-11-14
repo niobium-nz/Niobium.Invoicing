@@ -1,3 +1,5 @@
+using Niobium.Invoicing.History;
+
 namespace Niobium.Invoicing.Flows;
 
 /// <summary>
@@ -18,12 +20,22 @@ public class IssueFlow(UpsertFlow upsert, EmailFlow email) : IFlow
     /// An upsert failure prevents the notification call; a later failure does not roll back earlier
     /// persistence.
     /// </remarks>
-    public async Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
+    public Task RunAsync(IssueInvoiceRequest request, Billee? billee, CancellationToken cancellationToken)
+        => RunAsync(request, billee, null, cancellationToken);
+
+    public async Task RunAsync(IssueInvoiceRequest request, Billee? billee, InvoiceChangeOrigin? origin,
+        CancellationToken cancellationToken)
     {
-        await upsert.RunAsync(request, billee, cancellationToken);
+        if (origin == null)
+            await upsert.RunAsync(request, billee, cancellationToken);
+        else
+            await upsert.RunAsync(request, billee, origin, cancellationToken);
         if (request.NotifyBillee)
         {
-            await email.RunAsync(request.BillerID, request.InvoiceID, cancellationToken);
+            if (origin == null)
+                await email.RunAsync(request.BillerID, request.InvoiceID, cancellationToken);
+            else
+                await email.RunAsync(request.BillerID, request.InvoiceID, origin, cancellationToken);
         }
     }
 }

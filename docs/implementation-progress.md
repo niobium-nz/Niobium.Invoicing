@@ -1,5 +1,60 @@
 # Research plan implementation
 
+## B08 committed snapshot implementation: 2026-11-14
+
+Invoicing [PR #23](https://github.com/niobium-nz/Niobium.Invoicing/pull/23) is
+delivered as `8b0e9faa1a2561486783ab886530f76313d92e5a`. Feature run 43607155583
+passed, native review completed, and independent approval 5905234801 covered its
+exact head. Production run 43608750098 succeeded with all five GET-only checks on
+the actual merge. Its downloaded report ZIP matched SHA-256
+`eda86adc7f42486458a95df180ea15a5bd2c746be904e3f0c1c6710efe166393`.
+Package run 43608750148 published Contracts 2.0.36; the public package was downloaded
+and its repository commit verified. This closes the cancellation increment's
+pending delivery language below, not the full roadmap.
+
+The next application increment records immutable invoice and line snapshots with
+actor, reason and time. Rich domains own the transitions and commit ordering;
+business-named models privately own keys, serialization and digest. The existing
+Niobium repositories perform persistence. [The history guide](invoice-history.md)
+describes the invoice-reference commit point, failure behavior, proposed versus
+verified lines, legacy observed baselines and old-writer fencing. No current key,
+legacy link or historical total is migrated.
+
+Local solution and deployed-test builds passed. All 219 unit and 115 opted-in local
+integration cases passed with 94.41% combined authored application line coverage.
+The 24 Python tooling and 20 Node policy cases also pass. A local Bicep compile
+could not restore the unchanged AVM modules because the workspace proxy returned
+HTTP 403 for the public registry. Actual provisioning and candidate/trusted testing
+subsequently succeeded on the initial PR #25 head; changed heads must repeat it.
+An actual-adapter regression also verifies snapshots spanning more than one
+100-operation Table batch and an unchanged invoice/history on exact replay.
+New deployed coverage checks multipart snapshots, authenticated attribution,
+retained previous lines/totals and exact replays through real test HTTP/storage.
+Independent source review found that first-time token creation on a legacy invoice
+captured history before initializing its target lifecycle state. The domain now
+initializes that state before capture; unit and actual Table regressions verify a
+matching committed snapshot and no invented external-change baseline on the next
+legitimate reconciliation.
+The independent trusted verifier was delivered in PR #24 as
+`b702d8743ac1211b5b3389f630eea9768eebaa06`, with terminal production and package
+verification. Initial PR #25 head `96c5115a` passed feature run 43622719859 with
+38 candidate and 37 trusted deployed cases. Native review and independent review
+5906266568 then identified three issues: item-only drift, unhandled snapshot size
+and a current-model lifecycle downgrade. The correction reads/compares observed
+lines while preserving proposed/partial-write semantics, returns domain-level
+400/409 size failures before history persistence, and prevents removing an existing
+history anchor. Thirteen unit boundary cases, two actual-adapter cases and additional
+deployed drift/oversize checks cover these corrections. The first regression run
+reproduced nine failures before the implementation fix.
+The corrected head must repeat feature/native/formal verification. Production and
+Contracts publication remain required before this increment is delivered.
+
+This is the snapshot portion of B08. A history-reading API, soft deletion, validated
+ten-year retention clock/holds, purge policy and tested recovery remain unfinished.
+Notification receipts still need the separately requested provider/environment
+configuration; Invoicing delivery projection cannot consume an unpublished contract.
+The accepted payment, operator, template, MCP and post-MCP work remains active.
+
 ## Cancellation and historical eligibility implementation: 2026-11-14
 
 The original research plan remains unchanged. Q29 records the accepted operator,

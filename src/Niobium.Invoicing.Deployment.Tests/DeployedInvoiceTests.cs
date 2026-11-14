@@ -313,6 +313,7 @@ public sealed partial class DeployedInvoiceTests
         TableEntity saved = await Read(id, referenceBiller);
         Assert.AreEqual(PreparationCheckpoint.Frozen, InvoiceCheckpoint.ReadActive(saved));
         Assert.IsTrue(saved.ContainsKey(nameof(Invoice.Delivered)), "Manual sending must persist its enqueue acknowledgement.");
+        await AssertNotificationHistory(referenceBiller, id);
         Assert.IsTrue(saved.GetString(nameof(Invoice.RecipientEmail)) == recipient, "Only the approved test mailbox may receive this notification.");
         string? token = saved.GetString(nameof(Invoice.Token));
         Assert.IsFalse(string.IsNullOrWhiteSpace(token));
