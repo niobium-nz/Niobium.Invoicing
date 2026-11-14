@@ -103,6 +103,12 @@ public sealed class InvoiceRevision
 
     public static Prepared Capture(Invoice invoice, IReadOnlyList<InvoiceItem> lines,
         InvoiceLineEvidence lineEvidence, InvoiceChange change, Guid? previous = null)
+        => CaptureWithinCapacity(invoice, lines, lineEvidence, change, previous) ?? throw InvalidRepresentation();
+
+    // The model owns the serialized size. The domain chooses the application
+    // response for an oversized request or an existing row that cannot be captured.
+    internal static Prepared? CaptureWithinCapacity(Invoice invoice, IReadOnlyList<InvoiceItem> lines,
+        InvoiceLineEvidence lineEvidence, InvoiceChange change, Guid? previous = null)
     {
         ArgumentNullException.ThrowIfNull(invoice);
         ArgumentNullException.ThrowIfNull(lines);
@@ -116,13 +122,7 @@ public sealed class InvoiceRevision
         // Copy through the public business JSON contract and explicitly remove
         // credentials/transport metadata. The original aggregate is never mutated.
         Invoice copy = CopyBusiness(invoice);
-        InvoiceItem[] itemCopies = lines.OrderBy(x => x.ID).Select(line =>
-        {
-            InvoiceItem result = JsonSerializer.Deserialize<InvoiceItem>(JsonSerializer.Serialize(line, Json), Json)!;
-            result.ETag = null;
-            result.UpdatedAt = null;
-            return result;
-        }).ToArray();
+        InvoiceItem[] itemCopies = CopyLines(lines);
         InvoiceRevisionLifecycle? historyLifecycle = CopyLifecycle(invoice);
         InvoiceRevisionSnapshot snapshot = new(copy, invoice.GetPreparationStage(), historyLifecycle, lineEvidence, itemCopies);
         Guid id = Guid.NewGuid();
@@ -133,7 +133,7 @@ public sealed class InvoiceRevision
         Envelope envelope = new(CurrentVersion, invoice.Biller, id, invoice.Created.ToUniversalTime(), previous, normalized, snapshot);
         byte[] content = JsonSerializer.SerializeToUtf8Bytes(envelope, Json);
         if (content.Length > MaximumSnapshotBytes)
-            throw InvalidRepresentation();
+            return null;
         int count = (content.Length + PartBytes - 1) / PartBytes;
         InvoiceRevision revision = new()
         {
@@ -226,6 +226,18 @@ public sealed class InvoiceRevision
         => snapshot.Preparation == invoice.GetPreparationStage()
             && JsonSerializer.Serialize(snapshot.Invoice, Json) == JsonSerializer.Serialize(CopyBusiness(invoice), Json)
             && JsonSerializer.Serialize(snapshot.Lifecycle, Json) == JsonSerializer.Serialize(CopyLifecycle(invoice), Json);
+
+    public static bool MatchesLines(IReadOnlyList<InvoiceItem> expected, IReadOnlyList<InvoiceItem> observed)
+        => JsonSerializer.Serialize(CopyLines(expected), Json) == JsonSerializer.Serialize(CopyLines(observed), Json);
+
+    private static InvoiceItem[] CopyLines(IReadOnlyList<InvoiceItem> lines)
+        => lines.OrderBy(x => x.ID).Select(line =>
+        {
+            InvoiceItem result = JsonSerializer.Deserialize<InvoiceItem>(JsonSerializer.Serialize(line, Json), Json)!;
+            result.ETag = null;
+            result.UpdatedAt = null;
+            return result;
+        }).ToArray();
 
     private static Invoice CopyBusiness(Invoice invoice)
     {

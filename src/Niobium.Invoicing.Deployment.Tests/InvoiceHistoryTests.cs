@@ -1,4 +1,5 @@
 using System.Net;
+using Azure.Data.Tables;
 using Microsoft.Extensions.DependencyInjection;
 using Niobium.Invoicing.History;
 
@@ -44,6 +45,42 @@ public sealed partial class DeployedInvoiceTests
             Assert.AreEqual(HttpStatusCode.OK, replay.StatusCode);
         Assert.AreEqual(version, (await Read(id)).ETag.ToString());
         Assert.AreEqual(5, (await ReadHistory(id)).Count);
+
+        // Mutate only this test's owned item, leaving the invoice version intact.
+        IRepository<InvoiceItem> items = services.GetRequiredService<IRepository<InvoiceItem>>();
+        InvoiceItem[] persisted = await items.GetAsync(InvoiceItem.BuildPartitionKey(id)).ToArrayAsync();
+        persisted[0].Quantity = 9;
+        await items.UpdateAsync(persisted);
+        Assert.AreEqual(version, (await Read(id)).ETag.ToString());
+        using (HttpResponseMessage reconciled = await LifecycleRequest(id, "payment-history/reconcile",
+            PaymentReview(InvoicePaymentHistory.NoPayments), Token(biller, tenant)))
+            Assert.AreEqual(HttpStatusCode.OK, reconciled.StatusCode);
+        var observed = await ReadHistory(id);
+        Assert.AreEqual(7, observed.Count);
+        Assert.AreEqual(InvoiceChangeKind.ObservedBaseline, observed[1].Revision.ReadChange().Kind);
+        Assert.AreEqual(InvoiceChangeAuthority.UnattributedCoreCaller, observed[1].Revision.ReadChange().Authority);
+        Assert.AreEqual(9, observed[0].Snapshot.Lines.Single().Quantity);
+        Assert.AreEqual(9, observed[1].Snapshot.Lines.Single().Quantity);
+        Assert.AreEqual(2, observed[2].Snapshot.Lines.Single().Quantity);
+        Assert.AreEqual(InvoiceLineEvidence.Observed, observed[0].Snapshot.LineEvidence);
+    }
+
+    [TestMethod]
+    public async Task Oversized_history_request_returns_http_bad_request_without_creating_an_observed_baseline()
+    {
+        long id = await SeedInvoice(recipient: String.Empty);
+        TableEntity before = await Read(id);
+        IssueInvoiceRequest request = Request(id);
+        request.InvoiceItems[0].Description = new String('x', 17 * 1024 * 1024);
+        using HttpResponseMessage response = await Post(request, Token(biller, tenant));
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        TableEntity after = await Read(id);
+        Assert.AreEqual(before.ETag, after.ETag);
+        Assert.IsFalse(after.ContainsKey(nameof(Invoice.LifecycleData)));
+        foreach (string table in new[] { nameof(InvoiceRevision), nameof(InvoiceRevisionPart) })
+            await foreach (TableEntity unused in tables.GetTableClient(table).QueryAsync<TableEntity>(
+                TableClient.CreateQueryFilter($"PartitionKey eq {biller.ToString()} and InvoiceCreated eq {Invoice.ParseID(id)}")))
+                Assert.Fail("Rejected oversized input must not leave any history revision or part.");
     }
 
     private static async Task AssertNotificationHistory(Guid owner, long id)

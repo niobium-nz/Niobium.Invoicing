@@ -44,6 +44,49 @@ public sealed partial class StorageFlowTests
     }
 
     [TestMethod]
+    public async Task Actual_item_only_changes_are_retained_as_observed_history_before_cancellation()
+    {
+        IssueInvoiceRequest request = await NewRequest();
+        await host!.Services.GetRequiredService<IssueFlow>().RunAsync(request, null, default);
+        IRepository<Invoice> invoices = host.Services.GetRequiredService<IRepository<Invoice>>();
+        Invoice before = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        IRepository<InvoiceItem> items = host.Services.GetRequiredService<IRepository<InvoiceItem>>();
+        InvoiceItem[] rows = await items.GetAsync(InvoiceItem.BuildPartitionKey(request.InvoiceID)).ToArrayAsync();
+        rows[0].Quantity = 9;
+        await items.UpdateAsync(rows);
+        Invoice untouched = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        Assert.AreEqual(before.ETag, untouched.ETag);
+        await host.Services.GetRequiredService<InvoiceLifecycleFlow>().CancelAsync(request.BillerID, request.InvoiceID, request.Tenant,
+            new() { Operation = Guid.NewGuid(), Reason = "Synthetic cancellation after external line edit" });
+        Invoice after = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        var entries = await History(after);
+        Assert.AreEqual(4, entries.Count);
+        Assert.AreEqual(InvoiceChangeKind.ObservedBaseline, entries[1].Revision.ReadChange().Kind);
+        Assert.AreEqual(InvoiceChangeAuthority.UnattributedCoreCaller, entries[1].Revision.ReadChange().Authority);
+        Assert.AreEqual(9, entries[0].Snapshot.Lines[0].Quantity);
+        Assert.AreEqual(9, entries[1].Snapshot.Lines[0].Quantity);
+        Assert.AreEqual(InvoiceLineEvidence.Observed, entries[0].Snapshot.LineEvidence);
+        Assert.AreEqual(1, entries[2].Snapshot.Lines[0].Quantity);
+        Assert.AreEqual(before.ReadLifecycle()!.HistoryRevision, entries[1].Revision.Previous);
+    }
+
+    [TestMethod]
+    public async Task Current_model_rejects_downgrade_of_a_reloaded_table_invoice_without_losing_its_history()
+    {
+        IssueInvoiceRequest request = await NewRequest();
+        await host!.Services.GetRequiredService<IssueFlow>().RunAsync(request, null, default);
+        IRepository<Invoice> invoices = host.Services.GetRequiredService<IRepository<Invoice>>();
+        Invoice before = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        string lifecycle = before.LifecycleData!;
+        Assert.ThrowsExactly<InvalidOperationException>(() => before.StoreLifecycle(InvoiceLifecycleSnapshot.Create(InvoicePreparationStage.Ready)));
+        Assert.AreEqual(lifecycle, before.LifecycleData);
+        Invoice after = (await invoices.RetrieveAsync(Invoice.BuildPartitionKey(request.BillerID), Invoice.BuildRowKey(request.InvoiceID)))!;
+        Assert.AreEqual(before.ETag, after.ETag);
+        Assert.AreEqual(lifecycle, after.LifecycleData);
+        Assert.AreEqual(2, (await History(after)).Count);
+    }
+
+    [TestMethod]
     public async Task Large_history_snapshots_round_trip_across_the_frameworks_Table_batch_boundary()
     {
         IssueInvoiceRequest request = await NewRequest();

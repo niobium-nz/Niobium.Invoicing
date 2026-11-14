@@ -20,11 +20,12 @@ describes the invoice-reference commit point, failure behavior, proposed versus
 verified lines, legacy observed baselines and old-writer fencing. No current key,
 legacy link or historical total is migrated.
 
-Local solution and deployed-test builds passed. All 206 unit and 113 opted-in local
-integration cases passed with 94.27% combined authored application line coverage.
+Local solution and deployed-test builds passed. All 219 unit and 115 opted-in local
+integration cases passed with 94.41% combined authored application line coverage.
 The 24 Python tooling and 20 Node policy cases also pass. A local Bicep compile
 could not restore the unchanged AVM modules because the workspace proxy returned
-HTTP 403 for the public registry; actual feature provisioning remains required.
+HTTP 403 for the public registry. Actual provisioning and candidate/trusted testing
+subsequently succeeded on the initial PR #25 head; changed heads must repeat it.
 An actual-adapter regression also verifies snapshots spanning more than one
 100-operation Table batch and an unchanged invoice/history on exact replay.
 New deployed coverage checks multipart snapshots, authenticated attribution,
@@ -34,9 +35,19 @@ captured history before initializing its target lifecycle state. The domain now
 initializes that state before capture; unit and actual Table regressions verify a
 matching committed snapshot and no invented external-change baseline on the next
 legitimate reconciliation.
-The independent trusted verifier must be delivered before this schema-2 application
-can pass trusted CI. Exact-head feature, native/formal review and production/package
-results remain required before this increment is described as delivered.
+The independent trusted verifier was delivered in PR #24 as
+`b702d8743ac1211b5b3389f630eea9768eebaa06`, with terminal production and package
+verification. Initial PR #25 head `96c5115a` passed feature run 43622719859 with
+38 candidate and 37 trusted deployed cases. Native review and independent review
+5906266568 then identified three issues: item-only drift, unhandled snapshot size
+and a current-model lifecycle downgrade. The correction reads/compares observed
+lines while preserving proposed/partial-write semantics, returns domain-level
+400/409 size failures before history persistence, and prevents removing an existing
+history anchor. Thirteen unit boundary cases, two actual-adapter cases and additional
+deployed drift/oversize checks cover these corrections. The first regression run
+reproduced nine failures before the implementation fix.
+The corrected head must repeat feature/native/formal verification. Production and
+Contracts publication remain required before this increment is delivered.
 
 This is the snapshot portion of B08. A history-reading API, soft deletion, validated
 ten-year retention clock/holds, purge policy and tested recovery remain unfinished.

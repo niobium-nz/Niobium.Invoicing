@@ -44,31 +44,46 @@ public partial class InvoiceDomain
             priorSnapshot = await prior.ReadSnapshotAsync(cancellationToken);
         }
 
-        // Existing rows have no invented pre-rollout audit. Capture the observed
-        // baseline, explicitly unattributed, when first entering history or when
-        // an external/direct writer has changed data outside the audited domain.
+        // Observe the actual lines even when invoice fields have not changed.
+        // ETags and timestamps do not constitute a business-content change.
+        InvoiceItem[] observed = await historyItems.GetAsync(InvoiceItem.BuildPartitionKey(current.GetID()),
+            cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
+        bool sameLines = priorSnapshot != null && InvoiceRevision.MatchesLines(priorSnapshot.Lines, observed);
+        bool pendingLines = priorSnapshot?.LineEvidence == InvoiceLineEvidence.Proposed
+            && current.GetPreparationStage() is InvoicePreparationStage.Preparing or InvoicePreparationStage.Retryable;
         bool stored = !String.IsNullOrWhiteSpace(current.ETag) || current.Timestamp != null;
-        bool unexplained = priorSnapshot != null && !InvoiceRevision.MatchesInvoice(priorSnapshot, current);
+        bool unexplained = priorSnapshot != null && (!InvoiceRevision.MatchesInvoice(priorSnapshot, current)
+            || (!sameLines && !pendingLines));
+        InvoiceRevision.Prepared? baseline = null;
         if (stored && (priorSnapshot == null || unexplained))
         {
-            InvoiceItem[] observed = await historyItems.GetAsync(InvoiceItem.BuildPartitionKey(current.GetID()),
-                cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
-            InvoiceRevision.Prepared baseline = InvoiceRevision.Capture(current, observed, InvoiceLineEvidence.Observed,
+            baseline = InvoiceRevision.CaptureWithinCapacity(current, observed, InvoiceLineEvidence.Observed,
                 new(InvoiceChangeKind.ObservedBaseline, InvoiceChangeAuthority.UnattributedCoreCaller,
                     "Observed storage state", unexplained ? "Observed change outside the invoice history writer" : "First observed pre-history invoice state",
-                    clock.GetUtcNow()), previous);
-            await RecordRevisionAsync(baseline, cancellationToken);
+                    clock.GetUtcNow()), previous)
+                ?? throw Conflict("Existing invoice history exceeds the supported snapshot size.");
             previous = baseline.Revision.ID;
-            priorSnapshot = baseline.Revision.ReadSnapshot(baseline.Parts);
         }
         if (lines == null)
         {
-            lines = priorSnapshot?.Lines ?? await historyItems.GetAsync(InvoiceItem.BuildPartitionKey(current.GetID()),
-                cancellationToken: cancellationToken).ToArrayAsync(cancellationToken);
-            lineEvidence = priorSnapshot?.LineEvidence ?? InvoiceLineEvidence.Observed;
+            // A failed preparation retains its proposed contents, not a claim that
+            // partial item writes completed. Cancellation records what was observed.
+            bool retainProposal = kind == InvoiceChangeKind.PreparationFailed && pendingLines;
+            lines = retainProposal ? priorSnapshot!.Lines : observed;
+            lineEvidence = retainProposal ? InvoiceLineEvidence.Proposed
+                : baseline == null && sameLines && !pendingLines ? priorSnapshot!.LineEvidence : InvoiceLineEvidence.Observed;
         }
-        InvoiceRevision.Prepared prepared = InvoiceRevision.Capture(next, lines, lineEvidence,
-            new(kind, authority, actor, reason, clock.GetUtcNow()), previous);
+        else if (lineEvidence == InvoiceLineEvidence.Verified && !InvoiceRevision.MatchesLines(lines, observed))
+            throw Conflict("Invoice lines changed before their history could be verified.");
+        InvoiceRevision.Prepared prepared = InvoiceRevision.CaptureWithinCapacity(next, lines, lineEvidence,
+            new(kind, authority, actor, reason, clock.GetUtcNow()), previous)
+            ?? throw (kind == InvoiceChangeKind.PreparationStarted
+                ? BadRequest("Requested invoice history exceeds the supported snapshot size.")
+                : Conflict("Existing invoice history exceeds the supported snapshot size."));
+        // Validate both captures before writing any history, including an observed
+        // baseline. An oversized request leaves invoice, items and history unchanged.
+        if (baseline != null)
+            await RecordRevisionAsync(baseline, cancellationToken);
         await RecordRevisionAsync(prepared, cancellationToken);
         next.ReferenceHistory(prepared.Revision.ID);
         // The only commit point: a conditional invoice update references already

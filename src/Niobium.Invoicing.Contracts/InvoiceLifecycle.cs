@@ -157,6 +157,9 @@ public partial class Invoice
         ArgumentNullException.ThrowIfNull(snapshot);
         if (!snapshot.HasSupportedRepresentation() || !Enum.IsDefined(snapshot.Preparation))
             throw InvalidLifecycle();
+        InvoiceLifecycleSnapshot? current = ReadLifecycle();
+        if (current?.HistoryRevision != null && snapshot.HistoryRevision == null)
+            throw InvalidLifecycle();
         string serialized = JsonSerializer.Serialize(snapshot.CaptureWrite(), LifecycleJson);
         if (Encoding.UTF8.GetByteCount(serialized) > MaximumLifecycleBytes)
             throw InvalidLifecycle();

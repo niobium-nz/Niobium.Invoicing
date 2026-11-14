@@ -21,6 +21,16 @@ enumerating all rows for an invoice would incorrectly include abandoned candidat
 No history operation overwrites or deletes an existing revision. Automatic removal
 of orphan candidates is not implemented or authorized by this change.
 
+Before committing another mutation, the domain reads the current item rows and
+compares their business content, ignoring storage versions/timestamps. An item-only
+change on a stable invoice receives an unattributed observed baseline and the next
+snapshot contains the observed lines. Proposed lines during Preparing/Retryable
+are not proof that item writes completed: expected partial writes are not labeled
+external changes. Failed preparation retains the proposal; cancellation captures
+the lines actually observed. A supplied Verified set must still match the fresh
+read. These observations do not create an atomic transaction across invoice/items.
+
+
 Preparation-start records contain the proposed lines and explicitly say Proposed.
 Preparation-completed records contain the lines read and verified after persistence
 and say Verified. Failed preparation retains its Proposed record. This does not
@@ -44,8 +54,12 @@ Table SDK implementation or new framework package is needed.
 Snapshots preserve business invoice/line values, preparation state and lifecycle
 evidence. They exclude link credentials and storage ETags/timestamps. They are an
 audit format, not a backup format for restoring live worker checkpoints. Snapshots
-are bounded to 16 MiB and use bounded scalar parts within Table limits. Failure to
-capture/verify a snapshot prevents the corresponding invoice commit.
+are bounded to 16 MiB of the complete serialized envelope and use bounded scalar
+parts within Table limits. The model owns that representation limit; the domain
+returns 400 for an oversized requested update and 409 when existing state cannot
+be captured. Both the observed baseline and target are checked before any history
+write, so rejected oversized input cannot leave a partial baseline. Values are not
+truncated. Failure to capture/verify a snapshot prevents the invoice commit.
 
 HTTP issuance records the authenticated biller; private queue issuance records the
 trusted consumer authority; the operational email endpoint records Function-key
@@ -69,7 +83,9 @@ invariants and are not removed by this work.
 The existing `lifecycle-v1` checkpoint retains its physical name. Lifecycle JSON
 schema 2 adds the model-owned `HistoryRevision` reference. Schema 1 remains readable
 without a history reference. The domain advances to schema 2 only when referencing
-a verified revision; a schema-1 row with a history reference is invalid. The actual
+a verified revision; a schema-1 row with a history reference is invalid. The current
+model also rejects storing an unanchored lifecycle over an anchored invoice before
+mutating its serialized value, preserving the chain and old-writer fence. The actual
 prior schema-1 model/domain is pinned in the integration suite. Its unsafe control
 demonstrates lost references, while schema 2 rejects its replace-mode writes.
 
