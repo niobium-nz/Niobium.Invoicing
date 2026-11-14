@@ -10,6 +10,8 @@ public sealed partial class StorageFlowTests
     [DataRow("valid")]
     [DataRow("missing-revision")]
     [DataRow("stale-parent")]
+    [DataRow("foreign-part")]
+    [DataRow("unmatched-part")]
     public async Task History_fixture_cleanup_preserves_ownership_and_rejects_missing_evidence_or_stale_parent(string mode)
     {
         Guid biller = Guid.NewGuid(), customer = Guid.NewGuid();
@@ -17,7 +19,8 @@ public sealed partial class StorageFlowTests
         TableClient invoices = tableService!.GetTableClient(prefix + nameof(Invoice));
         TableClient revisions = tableService.GetTableClient(prefix + InvoiceHistoryFixture.RevisionsTable);
         TableClient parts = tableService.GetTableClient(prefix + InvoiceHistoryFixture.PartsTable);
-        Guid first = Guid.NewGuid(), second = Guid.NewGuid();
+        Guid first = Guid.NewGuid(), second = Guid.NewGuid(), unmatched = Guid.NewGuid();
+        Guid firstPartRevision = mode == "foreign-part" ? second : mode == "unmatched-part" ? unmatched : first;
         TableEntity owned = new(Invoice.BuildPartitionKey(biller), Invoice.BuildRowKey(invoice))
         {
             [nameof(Invoice.Billee)] = customer,
@@ -39,7 +42,7 @@ public sealed partial class StorageFlowTests
             {
                 ["Version"] = 1,
                 ["InvoiceCreated"] = Invoice.ParseID(id),
-                ["Revision"] = revision,
+                ["Revision"] = revision == first ? firstPartRevision : revision,
                 ["Content"] = "synthetic-body-not-needed-for-cleanup"
             });
         }
@@ -50,7 +53,7 @@ public sealed partial class StorageFlowTests
             () => invoices.DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag));
         if (mode != "valid")
         {
-            if (mode == "missing-revision")
+            if (mode != "stale-parent")
                 await Assert.ThrowsExactlyAsync<InvalidOperationException>(cleanup);
             else
             {
@@ -59,7 +62,7 @@ public sealed partial class StorageFlowTests
             }
             TableEntity retained = (await invoices.GetEntityAsync<TableEntity>(owned.PartitionKey, owned.RowKey)).Value;
             Assert.AreEqual(customer, retained.GetGuid(nameof(Invoice.Billee)));
-            Assert.AreEqual(first, (await parts.GetEntityAsync<TableEntity>(biller.ToString(), first.ToString("N") + ".opaque")).Value.GetGuid("Revision"));
+            Assert.AreEqual(firstPartRevision, (await parts.GetEntityAsync<TableEntity>(biller.ToString(), first.ToString("N") + ".opaque")).Value.GetGuid("Revision"));
             Assert.AreEqual(second, (await parts.GetEntityAsync<TableEntity>(biller.ToString(), second.ToString("N") + ".opaque")).Value.GetGuid("Revision"));
             return;
         }

@@ -26,7 +26,9 @@ internal static class InvoiceHistoryFixture
         List<TableEntity> revisionRows = await ReadAsync(revisions, owned.PartitionKey, created, false, expected, cancellationToken);
         List<TableEntity> partRows = await ReadAsync(parts, owned.PartitionKey, created, true, expected || revisionRows.Count > 0, cancellationToken);
 
-        if (referenced.HasValue && !revisionRows.Any(row => Guid.ParseExact(row.RowKey, "D") == referenced.Value))
+        HashSet<Guid> selected = revisionRows.Select(row => Guid.ParseExact(row.RowKey, "D")).ToHashSet();
+        if ((referenced.HasValue && !selected.Contains(referenced.Value))
+            || partRows.Any(row => !selected.Contains(row.GetGuid("Revision")!.Value)))
             throw Invalid();
 
         // The caller deletes its owned lines and observed parent with conditional

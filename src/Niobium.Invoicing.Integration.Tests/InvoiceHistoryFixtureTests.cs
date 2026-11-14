@@ -62,6 +62,7 @@ public sealed class InvoiceHistoryFixtureTests
     [DataRow("version")]
     [DataRow("etag")]
     [DataRow("revision")]
+    [DataRow("foreign-revision")]
     public async Task Unowned_or_unsupported_child_prevents_all_history_deletions(string corruption)
     {
         TableEntity root = Row(false), part = Row(true);
@@ -82,9 +83,15 @@ public sealed class InvoiceHistoryFixtureTests
             case "revision":
                 part["Revision"] = Guid.Empty;
                 break;
+            case "foreign-revision":
+                part["Revision"] = Guid.NewGuid();
+                break;
         }
         Mock<TableClient> roots = Table(root), parts = Table(part);
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => InvoiceHistoryFixture.RemoveAsync(roots.Object, parts.Object, Owned(), biller, invoice, customer, () => Task.CompletedTask));
+        bool parentDeleted = false;
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => InvoiceHistoryFixture.RemoveAsync(roots.Object, parts.Object, Owned(), biller, invoice, customer,
+            () => { parentDeleted = true; return Task.CompletedTask; }));
+        Assert.IsFalse(parentDeleted);
         roots.Verify(t => t.DeleteEntityAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ETag>(), It.IsAny<CancellationToken>()), Times.Never);
         parts.Verify(t => t.DeleteEntityAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ETag>(), It.IsAny<CancellationToken>()), Times.Never);
     }

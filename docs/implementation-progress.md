@@ -948,16 +948,19 @@ exercise the actual current freeze path.
 
 Cleanup validates every root representation and all selected child identities
 before invoking an awaited callback that conditionally deletes the owned invoice.
-A schema-2 reference must identify a selected revision. The callback uses the
+A schema-2 reference must identify a selected revision, and every part must refer
+to a selected revision. Unmatched or foreign references stop cleanup and remain
+for investigation; incomplete pre-manifest candidates are not guessed safe to
+remove. The callback uses the
 observed parent ETag, and failed or uncertain parent deletion preserves all history.
 Only after success are child rows deleted with their observed ETags. Queries are
 scoped to the biller and invoice; missing tables are allowed only for unanchored
 fixtures, and permission failures propagate. Actual Table tests cover a missing
-advertised revision, a stale parent and retention of another invoice under the same
+advertised revision, a stale parent, foreign/unmatched part references and retention of another invoice under the same
 biller. No production fixture mutation or client entitlement is introduced.
 
 Revised local verification passed both Release builds with zero warnings/errors,
-169 unit and 102 opted-in actual Table/component cases with no skips, and 93.40%
+169 unit and 105 opted-in actual Table/component cases with no skips, and 93.40%
 application coverage. The 24 Python and 20 Node tooling checks remain unchanged.
 
 PR #24 native review and the separate approver identified missing-reference,
