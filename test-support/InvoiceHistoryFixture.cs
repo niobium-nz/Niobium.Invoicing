@@ -54,7 +54,7 @@ internal static class InvoiceHistoryFixture
                 cancellationToken: cancellationToken))
             {
                 if (result.Count >= 10000 || row.PartitionKey != biller || row.GetDateTimeOffset("InvoiceCreated") != invoice
-                    || row.GetInt32("Version") != 1 || !Conditional(row) || String.IsNullOrWhiteSpace(row.RowKey))
+                    || (part ? row.GetInt32("Version") != 1 : row.GetInt32("Version") is not (1 or 2)) || !Conditional(row) || String.IsNullOrWhiteSpace(row.RowKey))
                     throw Invalid();
                 if (part)
                 {

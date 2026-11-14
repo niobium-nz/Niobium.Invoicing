@@ -36,9 +36,12 @@ public sealed class InvoiceHistoryFixtureTests
     }
 
     [TestMethod]
-    public async Task Cleanup_scopes_both_queries_to_the_owned_invoice_and_uses_observed_versions()
+    [DataRow(1)]
+    [DataRow(2)]
+    public async Task Cleanup_scopes_both_queries_to_the_owned_invoice_and_uses_observed_versions(int version)
     {
         TableEntity root = Row(false), part = Row(true);
+        root["Version"] = version;
         Mock<TableClient> roots = Table(root), parts = Table(part);
         bool parentDeleted = false;
         await InvoiceHistoryFixture.RemoveAsync(roots.Object, parts.Object, Anchored(), biller, invoice, customer, () =>
@@ -60,6 +63,7 @@ public sealed class InvoiceHistoryFixtureTests
     [DataRow("biller")]
     [DataRow("invoice")]
     [DataRow("version")]
+    [DataRow("root-version")]
     [DataRow("etag")]
     [DataRow("revision")]
     [DataRow("foreign-revision")]
@@ -73,6 +77,9 @@ public sealed class InvoiceHistoryFixtureTests
                 break;
             case "invoice":
                 part["InvoiceCreated"] = Invoice.ParseID(invoice).AddDays(1);
+                break;
+            case "root-version":
+                root["Version"] = 3;
                 break;
             case "version":
                 part["Version"] = 2;

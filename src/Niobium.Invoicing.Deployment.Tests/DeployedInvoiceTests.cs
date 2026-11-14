@@ -600,7 +600,9 @@ public sealed partial class DeployedInvoiceTests
     {
         TableEntity owned = await Read(id, owningBiller);
         Assert.IsTrue(owned.GetGuid(nameof(Invoice.Billee)) == customer, "Refusing to delete an unrelated invoice.");
-        await InvoiceHistoryFixture.RemoveAsync(tables.GetTableClient(InvoiceHistoryFixture.RevisionsTable),
+        await InvoicePaymentFixture.RemoveAsync(tables.GetTableClient(InvoicePaymentFixture.PaymentsTable),
+            tables.GetTableClient(InvoicePaymentFixture.PostingsTable), tables.GetTableClient(InvoicePaymentIndexFixture.Table),
+            owned, owningBiller, id, customer, () => InvoiceHistoryFixture.RemoveAsync(tables.GetTableClient(InvoiceHistoryFixture.RevisionsTable),
             tables.GetTableClient(InvoiceHistoryFixture.PartsTable), owned, owningBiller, id, customer, async () =>
             {
                 TableClient items = tables.GetTableClient(nameof(InvoiceItem));
@@ -613,7 +615,7 @@ public sealed partial class DeployedInvoiceTests
                 await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
                 foreach (TableEntity item in ownedItems)
                     await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
-            });
+            }));
     }
 
     private static async Task<long> SeedInvoice(Guid? issuer = null, Guid? group = null, string? recipient = null, long? invoiceID = null, bool legacyFrozen = false)

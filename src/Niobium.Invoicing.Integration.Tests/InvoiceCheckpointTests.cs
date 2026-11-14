@@ -52,7 +52,7 @@ public sealed class InvoiceCheckpointTests
                 invoice[nameof(Invoice.IssuanceState)] = "lifecycle-v2";
                 break;
             case "future-version":
-                data["Version"] = 3;
+                data["Version"] = 4;
                 break;
             case "unknown-preparation":
                 data["Preparation"] = 99;
