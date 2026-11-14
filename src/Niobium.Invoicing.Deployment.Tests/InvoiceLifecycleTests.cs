@@ -23,6 +23,7 @@ public sealed partial class DeployedInvoiceTests
         foreach ((string suffix, object? body) in new (string, object?)[]
         {
             ("status", null),
+            ("history", null),
             ("cancel", new CancelInvoiceRequest { Operation = Guid.NewGuid(), Reason = "Synthetic cancellation" }),
             ("payment-history/reconcile", PaymentReview(InvoicePaymentHistory.NoPayments)),
         })

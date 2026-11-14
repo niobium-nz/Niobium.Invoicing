@@ -10,6 +10,22 @@ namespace Niobium.Invoicing.Server;
 
 public sealed class InvoiceLifecycleFunctions(InvoiceLifecycleFlow flow)
 {
+    [Function(nameof(GetInvoiceHistory))]
+    public async Task<IActionResult> GetInvoiceHistory(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "{issuer}/invoices/{invoice}/history")] HttpRequest request,
+        Guid issuer, long invoice, CancellationToken cancellationToken)
+    {
+        request.HttpContext.Response.Headers.CacheControl = "no-store";
+        IActionResult? rejection = Authorize(request, issuer, invoice, out Guid tenant);
+        if (rejection != null)
+            return rejection;
+        var values = request.Query["cursor"];
+        if (values.Count > 1)
+            return new BadRequestResult();
+        string? cursor = values.Count == 0 ? null : values.ToString();
+        return new OkObjectResult(await flow.GetHistoryAsync(issuer, invoice, tenant, cursor, cancellationToken));
+    }
+
     [Function(nameof(GetInvoiceStatus))]
     public async Task<IActionResult> GetInvoiceStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "{issuer}/invoices/{invoice}/status")] HttpRequest request,

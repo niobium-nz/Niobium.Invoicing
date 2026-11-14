@@ -1,5 +1,34 @@
 # Research plan implementation
 
+## Authenticated history reader implementation: 2026-11-14
+
+The next local increment exposes committed invoice/line history to the owning
+biller through an authenticated GET route. The domain follows verified predecessor
+references; bounded, expiring continuations preserve a page position across new
+edits and reject cross-invoice reuse. Reads never write, send, scan abandoned
+candidates or create legacy history. Wire DTOs move to Contracts with Core type
+forwarding and unchanged stored JSON. [The history guide](invoice-history.md)
+records the API, identity, cursor and compatibility boundaries.
+
+Solution and deployed-test builds pass with zero warnings/errors. All 233 unit and
+116 actual Table/component integration cases pass, with 94.41% combined authored
+application coverage after incorporating writer correction `422e5be9`. Deployed
+candidate coverage is implemented but has not run for this increment. The separate
+approver independently reproduced these results and verified an older compiled
+consumer against the forwarded types, with no findings. The source is rebased on
+writer merge `ae65fb4d2bdf42353c84ee6344640bb999e97977` without changing its tested
+contents. Feature CI, native review, independent approval and terminal production/package
+verification are still required. Soft deletion, retention/holds and tested restore
+remain unfinished B08 work.
+
+The trusted-verifier prerequisite [PR #24](https://github.com/niobium-nz/Niobium.Invoicing/pull/24)
+is delivered as `b702d8743ac1211b5b3389f630eea9768eebaa06`: production run
+43621450032 passed all five GET checks on the actual merge, and package run
+43621449958 correctly skipped unchanged Contracts. The downloaded report and
+[terminal evidence](https://github.com/niobium-nz/Niobium.Invoicing/pull/24#issuecomment-6881551491)
+were verified. The separate history-writing application's production verification
+is recorded below; it does not certify this new reader increment.
+
 ## B08 committed snapshot implementation: 2026-11-14
 
 Invoicing [PR #23](https://github.com/niobium-nz/Niobium.Invoicing/pull/23) is
@@ -46,8 +75,21 @@ lines while preserving proposed/partial-write semantics, returns domain-level
 history anchor. Thirteen unit boundary cases, two actual-adapter cases and additional
 deployed drift/oversize checks cover these corrections. The first regression run
 reproduced nine failures before the implementation fix.
-The corrected head must repeat feature/native/formal verification. Production and
-Contracts publication remain required before this increment is delivered.
+Corrected head `422e5be96a03479f9025a3c27167a424255d258d` then passed feature run
+43626303603: 219 unit, 115 Table/component, 39 candidate and 37 trusted deployed
+cases, plus all five read-only checks in both deployed reports. Downloaded candidate
+and trusted ZIP digests matched their published values. Native code/security review
+completed, all three findings were resolved, and independent review 5906488222 by
+`5he11` approved that exact head. Readiness passed; its early PR-event attempt was
+retried once after feature prerequisites completed.
+
+[PR #25](https://github.com/niobium-nz/Niobium.Invoicing/pull/25) was protected-squash
+merged as `ae65fb4d2bdf42353c84ee6344640bb999e97977`, with the tested tree unchanged.
+Production run 43628431431 and job 132549432828 completed successfully. The downloaded
+report verifies the actual merge and all five approved GET-only checks; its ZIP
+SHA-256 is `51dad649c1b4acea9efb50113016550381b8b87438dbfa69bb503c45f3aca002`.
+Package run 43628431454 successfully uploaded Contracts 2.0.38 and symbols. Public
+NuGet availability remains under observation at this source checkpoint.
 
 This is the snapshot portion of B08. A history-reading API, soft deletion, validated
 ten-year retention clock/holds, purge policy and tested recovery remain unfinished.

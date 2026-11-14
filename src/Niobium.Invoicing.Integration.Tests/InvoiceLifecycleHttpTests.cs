@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Flows;
+using Niobium.Invoicing.History;
 using Niobium.Invoicing.Options;
 using Niobium.Invoicing.Server;
 using Niobium.Invoicing.Testing;
@@ -30,6 +31,7 @@ public sealed class InvoiceLifecycleHttpTests
         IActionResult[] results =
         [
             await handler.GetInvoiceStatus(request, biller, invoice, default),
+            await handler.GetInvoiceHistory(request, biller, invoice, default),
             await handler.CancelInvoice(request, biller, invoice, new(), default),
             await handler.ReconcileInvoicePaymentHistory(request, biller, invoice, new(), default),
         ];
@@ -68,6 +70,13 @@ public sealed class InvoiceLifecycleHttpTests
         HttpRequest request = await Request(biller, tenant);
         Assert.AreEqual(InvoicePaymentHistory.Unknown, ((InvoiceLifecycleStatus)((OkObjectResult)await handler.GetInvoiceStatus(request, biller, invoice, default)).Value!).PaymentHistory);
         Assert.AreEqual("no-store", request.HttpContext.Response.Headers.CacheControl.ToString());
+        InvoiceHistoryPage emptyHistory = (InvoiceHistoryPage)((OkObjectResult)await handler.GetInvoiceHistory(request, biller, invoice, default)).Value!;
+        Assert.IsNull(emptyHistory.Entry);
+        Assert.IsNull(emptyHistory.Continuation);
+        Assert.AreEqual(0, writes);
+        request.QueryString = new("?cursor=one&cursor=two");
+        Assert.IsInstanceOfType<BadRequestResult>(await handler.GetInvoiceHistory(request, biller, invoice, default));
+        request.QueryString = default;
         Assert.IsInstanceOfType<BadRequestResult>(await handler.CancelInvoice(request, biller, invoice, null, default));
         Assert.IsInstanceOfType<BadRequestResult>(await handler.ReconcileInvoicePaymentHistory(request, biller, invoice, null, default));
         var reconciled = (OkObjectResult)await handler.ReconcileInvoicePaymentHistory(request, biller, invoice,
@@ -87,9 +96,18 @@ public sealed class InvoiceLifecycleHttpTests
             }, default);
         Assert.IsTrue(((InvoiceLifecycleStatus)cancelled.Value!).Cancelled);
         Assert.AreEqual(2, writes);
+        InvoiceHistoryPage historyPage = (InvoiceHistoryPage)((OkObjectResult)await handler.GetInvoiceHistory(request, biller, invoice, default)).Value!;
+        Assert.AreEqual(InvoiceChangeKind.Cancelled, historyPage.Entry!.Change.Kind);
+        Assert.IsNotNull(historyPage.Continuation);
+        request.QueryString = new("?cursor=" + historyPage.Continuation);
+        InvoiceHistoryPage older = (InvoiceHistoryPage)((OkObjectResult)await handler.GetInvoiceHistory(request, biller, invoice, default)).Value!;
+        Assert.AreEqual(InvoiceChangeKind.PaymentHistoryReconciled, older.Entry!.Change.Kind);
+        Assert.AreEqual(2, writes);
         HttpRequest foreignGroup = await Request(biller, Guid.NewGuid());
         ApplicationException forbidden = await Assert.ThrowsExactlyAsync<ApplicationException>(() => handler.GetInvoiceStatus(foreignGroup, biller, invoice, default));
         Assert.AreEqual(403, forbidden.ErrorCode);
+        ApplicationException historyDenied = await Assert.ThrowsExactlyAsync<ApplicationException>(() => handler.GetInvoiceHistory(foreignGroup, biller, invoice, default));
+        Assert.AreEqual(403, historyDenied.ErrorCode);
     }
 
     private static async IAsyncEnumerable<InvoiceItem> EmptyLines()

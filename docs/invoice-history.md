@@ -1,10 +1,54 @@
 # Committed invoice history
 
-This implementation work addresses the snapshot portion of Q28/B08. It is not yet
-delivered. Soft deletion, a customer history-reading API, a validated retention
+This implementation work addresses snapshots and authenticated history reading
+within Q28/B08. Exact-head delivery evidence is recorded in the implementation
+ledger and PRs. Soft deletion, a validated retention
 deadline and tested backup/restore remain separate work. Ten years is the accepted
 retention duration; no automatic expiry, purge, migration or production fixture is
 introduced here.
+
+## Authenticated history reading
+
+`GET /{issuer}/invoices/{invoice}/history` requires the authenticated owning biller
+and the invoice's management group, like the lifecycle status route. A saved
+recipient link or Function key does not grant access. Responses use `no-store`.
+An invoice without recorded history returns an empty page; reading never creates
+an observed baseline or changes the invoice, lines, history or notification state.
+
+The response contains one `entry` with its revision ID, change attribution and
+verified invoice/line snapshot, plus an optional opaque `continuation`. Supply that
+value as `?cursor=...` to read the next older change. One snapshot per response
+bounds the payload even at the existing 16 MiB snapshot limit. Each manifest and
+all its parts are validated before returning evidence. No storage ETag, saved
+invoice-link credential or raw Table key is added to the response contract.
+
+The first page follows the current invoice's committed reference. Subsequent pages
+follow only the verified predecessor chain. They never discover revisions by
+scanning tables or accepting an arbitrary revision ID. A new edit does not shift
+an already issued continuation into the newer chain; restart without a cursor to
+see the latest revision. Abandoned candidates remain invisible.
+
+`InvoiceHistoryCursor` privately owns its representation and HMAC. It binds the
+continuation to biller, management group, invoice and predecessor, and expires it
+after thirty minutes. It uses the existing `BillingOptions.InvoiceTokenSecretSalt`
+with a distinct cryptographic purpose; no new environment setting is required.
+Secret rotation invalidates temporary continuations. It does not alter stored
+public invoice links. A cursor is never authentication: every request rechecks the
+current invoice owner. Invalid, expired or cross-invoice continuations return 400
+and the caller can restart from the latest history. Missing/corrupt committed
+evidence fails instead of returning a partial snapshot.
+
+The history response and existing snapshot/change DTOs live in Contracts. Core
+forwards the earlier type identities for binary compatibility; namespace, JSON
+names, persisted schema and history digest representation stay unchanged. Storage
+models retain private representation responsibilities in Core, and the invoice
+domain retains ownership/chain rules. The flow and HTTP handler coordinate them.
+
+Local tests cover cursor binding/expiry, ownership, orphan exclusion, concurrent
+edits, missing parts and read-only actual Table pagination. Candidate deployed
+tests exercise the authenticated route and earlier pages on the real test host.
+The production allowlist remains the same five GET-only checks and does not add
+history browsing or test fixtures.
 
 ## Commit and failure behavior
 
@@ -94,14 +138,15 @@ account. Generic Bicep takes `storageTableNames`; names remain defaults in
 `infra/main.bicepparam`. Overrides must retain the required existing and new tables.
 No new client SAS grant or broader storage entitlement is added.
 
-The immutable-main test harness must first understand schema 2, reject direct
-synthetic freezes of history-linked rows, and arrange legacy saved-link fixtures
+The immutable-main test harness installed by PR #24 understands schema 2, rejects direct
+synthetic freezes of history-linked rows, and arranges legacy saved-link fixtures
 before any HTTP mutation. Cleanup validates the root representation and referenced
 revision and every part/revision relationship before conditionally deleting its
 owned parent, then history with observed ETags. Failed or uncertain parent deletion
 preserves history; unmatched or incomplete candidates remain for investigation. That preparatory
-change is required before the history application can satisfy trusted verification.
-It does not activate history in production or substitute for candidate evidence.
+change was delivered before the history application in PR #25 satisfied trusted
+verification. Its installation did not substitute for the application's own
+candidate evidence and production verification.
 
 Local tests cover snapshots spanning the pinned adapter's 100-operation Table
 batch boundary, interrupted history writes, rejected invoice commits, prior
