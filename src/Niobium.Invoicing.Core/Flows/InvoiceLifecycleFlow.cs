@@ -3,7 +3,7 @@ using Niobium.Invoicing.History;
 
 namespace Niobium.Invoicing.Flows;
 
-public sealed class InvoiceLifecycleFlow(IDomainRepository<InvoiceDomain, Invoice> invoices, TimeProvider clock) : IFlow
+public sealed partial class InvoiceLifecycleFlow(IDomainRepository<InvoiceDomain, Invoice> invoices, TimeProvider clock) : IFlow
 {
     public async Task<InvoiceHistoryPage> GetHistoryAsync(Guid biller, long invoice, Guid tenant, string? continuation = null,
         CancellationToken cancellationToken = default)

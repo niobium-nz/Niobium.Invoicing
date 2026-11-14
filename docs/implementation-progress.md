@@ -1134,3 +1134,35 @@ run does not validate the revised head. Local and new exact-head feature evidenc
 native re-review, separate formal decision and terminal production/package results
 will be recorded on the PR before delivery is claimed. The application history
 increment and remaining B08 work are not complete here.
+
+## Manual payment application candidate (2026-11-14)
+
+Q28/Q29 authorize durable manual records before a processor. This candidate adds
+owner-authenticated receipt/reversal operations, exact retries, committed balances
+and operation reads. A conditional invoice write anchors immutable receipts,
+postings, an operation index and history; abandoned candidates are not payment
+effects. Models own representation, rich domains own business rules, and the
+existing framework repositories persist annotated business keys. See the
+[payment contract and rollout](invoice-payments.md).
+
+Partial/full reversals cannot exceed the original unreversed receipt. Overpayment
+is allowed. A payment permanently prevents subsequent cancellation even after a
+full reversal; a late real receipt preserves an existing cancellation. Saved links,
+frozen issuance settlement and notification payloads remain unchanged. Live HTML
+uses the committed balance. No money is moved, refund initiated, processor called
+or notification enqueued by these operations.
+
+Local verification currently passes 305 unit and 165 actual Table/component
+cases with no skips and 94.10% combined authored application line coverage. Both
+Release builds are clean. Seven deployed payment cases compile, covering real
+identity rejection, receipt/reversal replay, frozen links and competing operations;
+they still require execution against this candidate. Independent source review
+also exercised bounded index paths and insertion-order invariants. These checks
+are not a formal GitHub approval or proof of production delivery.
+
+The separately delivered raw verifier and old-writer fence must be present in
+immutable main before application activation. Candidate/trusted deployed suites,
+native review, separate current-head approval, protected merge and terminal
+production/package verification remain required. Production checks retain only
+the configured existing invoice and five approved GET routes. Exact delivery
+results belong on the application PR; the wider roadmap remains active.

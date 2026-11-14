@@ -3,9 +3,12 @@
 Q28 permits cancellation at any delivery stage before any payment has occurred.
 Q29 requires reconciliation when legacy payment history is unknown. This increment
 implements those rules in `InvoiceDomain`, with authenticated HTTP access through
-`InvoiceLifecycleFlow` and `InvoiceLifecycleFunctions`. Provider-confirmed delivery,
-durable payment transactions and the complete B08 version-history store remain
-separate work. The [delivery ledger](implementation-progress.md) records verification;
+`InvoiceLifecycleFlow` and `InvoiceLifecycleFunctions`. The
+[manual payment candidate](invoice-payments.md) records receipts/reversals and
+preserves permanent payment evidence. [Committed history](invoice-history.md)
+covers material changes and authenticated browsing. Provider-confirmed delivery
+and the remaining retention/restore controls are separate work.
+The [delivery ledger](implementation-progress.md) records verification;
 source presence alone does not establish a production release.
 
 ## Business behavior
@@ -105,8 +108,10 @@ invariants; this protocol does not authorize their use or a production migration
 The installed 4.0.60 adapter can omit the returned write ETag. The existing read-back
 check now compares the opaque lifecycle column as well as all prior persisted
 content. A model-owned write identity distinguishes otherwise identical writes.
-State and its small bounded audit are one row update; the surrounding invoice items,
-message publication and future historical snapshots are not a single transaction.
+State and its small bounded audit are one row update. Immutable history and
+payment candidates are written and verified first; only the invoice's conditional
+reference commits them. Invoice items and message publication remain separate
+operations, without a cross-table/message transaction.
 
 ## Evidence and remaining work
 
@@ -122,8 +127,11 @@ Production verification retains its five existing GET-only checks.
 
 This snapshot holds at most two reconciliation findings and one cancellation audit.
 It is not the full ten-year B08 invoice/line history, legal hold, soft-delete or
-recovery implementation. Durable payment records and manual payment reconciliation
-remain the approved next payment work. The separate Notification receipt contract
+recovery implementation. The manual payment candidate adds schema 3 with real
+history and payment references, fencing prior schema-2 writers before they can
+discard the new representation. Receipt and reversal rules, verification limits
+and delivery state are documented in [manual payments](invoice-payments.md).
+The separate Notification receipt contract
 must be published and consumed before Invoicing can project authenticated recipient
 mail-server acceptance. No provider-submission or enqueue observation is presented
 as that confirmation.

@@ -116,6 +116,8 @@ public partial class InvoiceDomain
                     || lifecycle.Reconciliations[1].Finding != InvoicePaymentHistory.PaymentOccurred))
             || (lifecycle.PaymentHistory == InvoicePaymentHistory.Unknown && lifecycle.Reconciliations.Count != 0)
             || (lifecycle.Delivery == InvoiceDeliveryState.Delivered && lifecycle.ConfirmedDeliveredAt == null)
+            || (lifecycle.Payments != null && (lifecycle.PaymentHistory != InvoicePaymentHistory.PaymentOccurred
+                || lifecycle.PaymentObservedAt == null))
             || (lifecycle.Cancellation != null && !ValidCancellation(lifecycle.Cancellation)))
             throw Conflict("Invoice lifecycle state is not supported.");
         return lifecycle;

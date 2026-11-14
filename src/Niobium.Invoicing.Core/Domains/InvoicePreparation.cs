@@ -50,6 +50,10 @@ public partial class InvoiceDomain
         candidate.TaxCents = totals.Tax;
         candidate.GrandTotalCents = totals.GrandTotal;
         candidate.SettledCents = update.Settled.Cents;
+        InvoicePaymentPosition? payments = Lifecycle(current).Payments;
+        if (payments != null && (candidate.SettledCents != current.SettledCents
+            || candidate.GrandTotalCurrency != payments.Currency))
+            throw Conflict("Recorded payments require their original opening settlement and currency.");
 
         // A replay does not migrate an already-frozen historical invoice that lacks a due date.
         if (InvoiceContent.IsFrozen(current) && update.DueBy == null && current.DueBy == null)

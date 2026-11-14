@@ -11,7 +11,8 @@ namespace Niobium.Invoicing.History;
 /// <summary>An immutable historical revision. Only a reference committed on its invoice makes it history.</summary>
 public sealed class InvoiceRevision
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
+    private const int LegacyVersion = 1;
     private const int PartBytes = 18 * 1024;
     private const int MaximumSnapshotBytes = 16 * 1024 * 1024;
     private static readonly JsonSerializerOptions Json = new() { MaxDepth = 32 };
@@ -95,7 +96,7 @@ public sealed class InvoiceRevision
     // The model owns the serialized size. The domain chooses the application
     // response for an oversized request or an existing row that cannot be captured.
     internal static Prepared? CaptureWithinCapacity(Invoice invoice, IReadOnlyList<InvoiceItem> lines,
-        InvoiceLineEvidence lineEvidence, InvoiceChange change, Guid? previous = null)
+        InvoiceLineEvidence lineEvidence, InvoiceChange change, Guid? previous = null, InvoicePaymentPosition? payments = null)
     {
         ArgumentNullException.ThrowIfNull(invoice);
         ArgumentNullException.ThrowIfNull(lines);
@@ -114,21 +115,24 @@ public sealed class InvoiceRevision
         // credentials/transport metadata. The original aggregate is never mutated.
         Invoice copy = CopyBusiness(invoice);
         InvoiceItem[] itemCopies = CopyLines(lines);
-        InvoiceRevisionLifecycle? historyLifecycle = CopyLifecycle(invoice);
+        InvoiceRevisionLifecycle? historyLifecycle = CopyLifecycle(invoice, payments);
+        if (change.Kind is InvoiceChangeKind.PaymentReceived or InvoiceChangeKind.PaymentReversed && historyLifecycle?.Payments == null)
+            throw InvalidRepresentation();
+        int version = historyLifecycle?.Payments == null ? LegacyVersion : CurrentVersion;
         InvoiceRevisionSnapshot snapshot = new(copy, invoice.GetPreparationStage(), historyLifecycle, lineEvidence, itemCopies);
         Guid id = Guid.NewGuid();
         InvoiceChange normalized = change with
         {
             At = change.At.ToUniversalTime()
         };
-        Envelope envelope = new(CurrentVersion, invoice.Biller, id, invoice.Created.ToUniversalTime(), previous, normalized, snapshot);
+        Envelope envelope = new(version, invoice.Biller, id, invoice.Created.ToUniversalTime(), previous, normalized, snapshot);
         byte[] content = JsonSerializer.SerializeToUtf8Bytes(envelope, Json);
         if (content.Length > MaximumSnapshotBytes)
             return null;
         int count = (content.Length + PartBytes - 1) / PartBytes;
         InvoiceRevision revision = new()
         {
-            Version = CurrentVersion,
+            Version = version,
             Biller = invoice.Biller,
             ID = id,
             InvoiceCreated = invoice.Created.ToUniversalTime(),
@@ -251,6 +255,8 @@ public sealed class InvoiceRevision
                 || envelope.Snapshot.Invoice.Created != InvoiceCreated || envelope.Snapshot.Invoice.Token != null
                 || envelope.Snapshot.Invoice.ETag != null || envelope.Snapshot.Invoice.Timestamp != null
                 || !Enum.IsDefined(envelope.Snapshot.Preparation) || !Enum.IsDefined(envelope.Snapshot.LineEvidence)
+                || (Version == LegacyVersion ? envelope.Snapshot.Lifecycle?.Payments != null
+                    : !ValidPayments(envelope.Snapshot.Lifecycle?.Payments))
                 || envelope.Snapshot.Lines == null
                 || envelope.Snapshot.Lines.Any(line => line == null || line.Invoice != InvoiceCreated || line.ETag != null || line.UpdatedAt != null)
                 || envelope.Snapshot.Lines.Select(line => line.ID).Distinct().Count() != envelope.Snapshot.Lines.Count)
@@ -302,23 +308,34 @@ public sealed class InvoiceRevision
         return copy;
     }
 
-    private static InvoiceRevisionLifecycle? CopyLifecycle(Invoice invoice)
+    private static InvoiceRevisionLifecycle? CopyLifecycle(Invoice invoice, InvoicePaymentPosition? proposedPayments = null)
     {
         InvoiceLifecycleSnapshot? lifecycle = invoice.ReadLifecycle();
+        if (proposedPayments != null && lifecycle == null)
+            throw InvalidRepresentation();
+        InvoicePaymentPosition? payments = proposedPayments ?? lifecycle?.Payments;
         return lifecycle == null ? null : new(lifecycle.PaymentHistory, lifecycle.PaymentObservedAt,
             lifecycle.Reconciliations, lifecycle.Cancellation, lifecycle.Delivery, lifecycle.NotificationRequestedAt,
-            lifecycle.QueuedAt, lifecycle.ConfirmedDeliveredAt);
+            lifecycle.QueuedAt, lifecycle.ConfirmedDeliveredAt)
+        {
+            Payments = payments == null ? null : new(payments.Operation, payments.Currency,
+                payments.OpeningSettledCents, payments.SettledCents, payments.Sequence)
+        };
     }
 
     private void ValidateHeader()
     {
-        if (Version != CurrentVersion || Biller == Guid.Empty || ID == Guid.Empty || InvoiceCreated == default
+        if (Version is not (LegacyVersion or CurrentVersion) || Biller == Guid.Empty || ID == Guid.Empty || InvoiceCreated == default
             || Previous == Guid.Empty || Previous == ID || PartCount < 1
             || PartCount > (MaximumSnapshotBytes + PartBytes - 1) / PartBytes
             || String.IsNullOrEmpty(ContentDigest) || ContentDigest.Length != 64 || !ContentDigest.All(Uri.IsHexDigit)
             || !ValidChange(new((InvoiceChangeKind)ChangeCode, (InvoiceChangeAuthority)AuthorityCode, Actor, Reason, RecordedAt)))
             throw InvalidRepresentation();
     }
+
+    private static bool ValidPayments(InvoiceRevisionPayments? payments)
+        => payments != null && payments.Operation != Guid.Empty && payments.Entries > 0
+            && payments.Currency is { Length: 3 } && payments.Currency.All(c => c is >= 'A' and <= 'Z');
 
     private static bool ValidChange(InvoiceChange change)
         => Enum.IsDefined(change.Kind) && Enum.IsDefined(change.Authority) && change.At != default

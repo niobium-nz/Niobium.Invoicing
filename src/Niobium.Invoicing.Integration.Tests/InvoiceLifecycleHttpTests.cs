@@ -34,6 +34,10 @@ public sealed class InvoiceLifecycleHttpTests
             await handler.GetInvoiceHistory(request, biller, invoice, default),
             await handler.CancelInvoice(request, biller, invoice, new(), default),
             await handler.ReconcileInvoicePaymentHistory(request, biller, invoice, new(), default),
+            await handler.GetInvoicePaymentBalance(request, biller, invoice, default),
+            await handler.GetInvoicePayment(request, biller, invoice, Guid.NewGuid(), default),
+            await handler.RecordInvoicePayment(request, biller, invoice, new(), default),
+            await handler.ReverseInvoicePayment(request, biller, invoice, new(), default),
         ];
         foreach (IActionResult result in results)
             Assert.AreEqual(status, ((StatusCodeResult)result).StatusCode);
@@ -65,7 +69,7 @@ public sealed class InvoiceLifecycleHttpTests
         Mock<IRepository<InvoiceItem>> items = new(MockBehavior.Strict);
         items.Setup(r => r.GetAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).Returns(EmptyLines());
         GenericDomainRepository<InvoiceDomain, Invoice> domains = new(() => new(Microsoft.Extensions.Options.Options.Create(new BillingOptions { InvoiceTokenSecretSalt = "synthetic-test-salt", GetInvoiceEndpoint = "https://invoice.example.test" }), lazy, [],
-            history.Domains(), items.Object, TimeProvider.System), lazy);
+            history.Domains(), items.Object, TimeProvider.System, new PaymentScenario().Payments.Object, new PaymentScenario().Postings.Object, new PaymentScenario().Index.Object), lazy);
         InvoiceLifecycleFunctions handler = new(new(domains, TimeProvider.System));
         HttpRequest request = await Request(biller, tenant);
         Assert.AreEqual(InvoicePaymentHistory.Unknown, ((InvoiceLifecycleStatus)((OkObjectResult)await handler.GetInvoiceStatus(request, biller, invoice, default)).Value!).PaymentHistory);

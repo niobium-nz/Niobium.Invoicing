@@ -1,10 +1,13 @@
+using System.Text.Json.Serialization;
+
 namespace Niobium.Invoicing.History;
 
 public enum InvoiceChangeKind
 {
     ObservedBaseline = 0, PreparationStarted = 1, PreparationCompleted = 2,
     PreparationFailed = 3, Frozen = 4, Cancelled = 5,
-    PaymentHistoryReconciled = 6, NotificationQueued = 7, AccessTokenSaved = 8
+    PaymentHistoryReconciled = 6, NotificationQueued = 7, AccessTokenSaved = 8,
+    PaymentReceived = 9, PaymentReversed = 10
 }
 
 public enum InvoiceChangeAuthority
@@ -27,7 +30,17 @@ public sealed record InvoiceChangeOrigin(InvoiceChangeAuthority Authority, strin
 public sealed record InvoiceRevisionLifecycle(InvoicePaymentHistory PaymentHistory, DateTimeOffset? PaymentObservedAt,
     IReadOnlyList<InvoicePaymentHistoryDecision> Reconciliations, InvoiceCancellation? Cancellation,
     InvoiceDeliveryState Delivery, DateTimeOffset? NotificationRequestedAt, DateTimeOffset? QueuedAt,
-    DateTimeOffset? ConfirmedDeliveredAt);
+    DateTimeOffset? ConfirmedDeliveredAt)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public InvoiceRevisionPayments? Payments
+    {
+        get; init;
+    }
+}
+
+public sealed record InvoiceRevisionPayments(Guid Operation, string Currency,
+    long OpeningSettledCents, long SettledCents, long Entries);
 
 public sealed record InvoiceRevisionSnapshot(Invoice Invoice, InvoicePreparationStage Preparation,
     InvoiceRevisionLifecycle? Lifecycle, InvoiceLineEvidence LineEvidence, IReadOnlyList<InvoiceItem> Lines);

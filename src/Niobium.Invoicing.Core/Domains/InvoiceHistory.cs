@@ -23,8 +23,11 @@ public partial class InvoiceDomain
     private async Task PersistWithHistoryAsync(Invoice next, InvoiceChangeKind kind, string reason,
         IReadOnlyList<InvoiceItem>? lines = null, InvoiceLineEvidence lineEvidence = InvoiceLineEvidence.Observed,
         InvoiceChangeAuthority authority = InvoiceChangeAuthority.UnattributedCoreCaller, string actor = "InvoiceDomain",
-        CancellationToken cancellationToken = default)
+        InvoicePaymentPosition? payments = null, CancellationToken cancellationToken = default)
     {
+        bool paymentChange = kind is InvoiceChangeKind.PaymentReceived or InvoiceChangeKind.PaymentReversed;
+        if ((payments != null) != paymentChange)
+            throw Conflict("A payment change requires its verified payment position.");
         if (authority == InvoiceChangeAuthority.UnattributedCoreCaller && historyOrigin != null)
         {
             authority = historyOrigin.Authority;
@@ -79,7 +82,7 @@ public partial class InvoiceDomain
         else if (lineEvidence == InvoiceLineEvidence.Verified && !InvoiceRevision.MatchesLines(lines, observed))
             throw Conflict("Invoice lines changed before their history could be verified.");
         InvoiceRevision.Prepared prepared = InvoiceRevision.CaptureWithinCapacity(next, lines, lineEvidence,
-            new(kind, authority, actor, reason, clock.GetUtcNow()), previous)
+            new(kind, authority, actor, reason, clock.GetUtcNow()), previous, payments)
             ?? throw (kind == InvoiceChangeKind.PreparationStarted
                 ? BadRequest("Requested invoice history exceeds the supported snapshot size.")
                 : Conflict("Existing invoice history exceeds the supported snapshot size."));
@@ -89,6 +92,10 @@ public partial class InvoiceDomain
             await RecordRevisionAsync(baseline, cancellationToken);
         await RecordRevisionAsync(prepared, cancellationToken);
         next.ReferenceHistory(prepared.Revision.ID);
+        // The proposed payment snapshot was encoded separately. Never make an
+        // unanchored schema-3 invoice readable, even during in-memory preparation.
+        if (payments != null)
+            next.ReferencePayments(payments);
         // The only commit point: a conditional invoice update references already
         // verified immutable records. Failed competing writes leave unreferenced
         // candidates, which readers never discover by scanning the history table.

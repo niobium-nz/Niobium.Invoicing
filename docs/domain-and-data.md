@@ -2,6 +2,11 @@
 
 Current cancellation/payment-history behavior and the versioned checkpoint fence are documented in [invoice lifecycle](invoice-lifecycle.md). Historical evidence below retains its original scope.
 
+The [manual payment candidate](invoice-payments.md) adds immutable receipt,
+posting and operation-index models. Their annotated `Biller`/`ID` properties map
+to Table keys; each model privately owns its hash, serialized layout and routing.
+The invoice domain owns payment/reversal rules and the conditional commit.
+
 ## Money, tax and settlement
 
 Observed arithmetic is in [Contracts.InvoiceExtensions](../src/Niobium.Invoicing.Contracts/InvoiceExtensions.cs) and [InvoiceDomain.UpdateAsync](../src/Niobium.Invoicing.Core/Domains/InvoicePreparation.cs):
@@ -19,6 +24,14 @@ displayed due cents = max(grand total cents - SettledCents, 0)
 **Q09 clarification:** tax-inclusive means the final HTML grand total includes tax. It does not mean tax must be backed out of `UnitPriceCents`. For a synthetic line of 10,000 cents, quantity 1 and rate 1500, current subtotal is 10,000, tax 1,500 and final total 11,500 cents. This is consistent with that clarification. Biller-level 0% represents exemption in this product, not a universal statement about legal tax classifications.
 
 `Settled` is not a payment transaction: nonzero amounts must match the invoice currency, and zero is currency-neutral. Its cents are copied without payment reconciliation. Manual bank-transfer overpayment is allowed by intended policy (Q03); due display clamps at zero. Automated collection for the exact outstanding balance is planned. Detailed rounding, fractional quantities and negative/credit policy remain [U01](decisions-and-risks.md#accepted-unknowns).
+
+For an invoice with a committed payment position, live HTML and the balance API
+use that position's settlement instead of the frozen `SettledCents` column.
+The original column becomes the observed opening amount and cannot be changed by
+an ordinary edit while the ledger exists. New receipts/reversals retain their
+operation, actor and evidence in immutable records. Only the invoice's conditional
+reference makes a posting and index root committed; scanning receipt rows would
+also expose abandoned candidates and must not determine a balance.
 
 ## Identifiers, tables and mapping
 

@@ -66,6 +66,17 @@ IssueInvoiceRequest request = new()
 
 HTTP issuance credentials are `Authorization: Bearer <ACCESS_TOKEN>`; never embed real tokens in examples. The manual email route instead requires `x-functions-key: <FUNCTION_KEY>`. Example public link shape: `https://invoice.example.invalid/<BILLER_GUID>/invoices/<INVOICE_ID>?token=<LINK_TOKEN>`.
 
+## Manual payment records
+
+The payment candidate adds owner-authenticated `POST /{issuer}/invoices/{invoice}/payments`,
+`POST /{issuer}/invoices/{invoice}/payments/reversals`, and read-only
+`GET /{issuer}/invoices/{invoice}/payments/balance` and
+`GET /{issuer}/invoices/{invoice}/payments/{operation}`. See the
+[manual payment contract and rollout](invoice-payments.md#application-candidate-manual-receipt-api)
+for exact retry, reversal, opening-balance, authorization and verification limits.
+These routes record evidence; they do not move money or send notifications.
+Production verification retains its existing five GET checks.
+
 ## Manual debug email
 
 Q26 restores the historical `EmailInvoice` function, which the owner referred to as SendEmail. Call `GET /email/<BILLER_GUID>/invoices/<INVOICE_ID>` on the intended environment, with its existing Functions key in the `x-functions-key` header. There is no `/api` prefix, request body or recipient override. The invoice ID uses the existing reverse-timestamp encoding. Keep the key out of URLs, logs and saved examples. A bearer token alone does not authorize this route.
