@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Niobium.Invoicing.Server/Niobium.Invoicing.Server.csproj" />
+    <Compile Include="../../test-support/InvoiceCheckpoint.cs" Link="Support/InvoiceCheckpoint.cs" />
   </ItemGroup>
 </Project>

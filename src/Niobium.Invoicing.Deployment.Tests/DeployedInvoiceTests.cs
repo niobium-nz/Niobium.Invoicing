@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Niobium.Database.StorageTable;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Deployment.Tests;
 
@@ -122,7 +123,7 @@ public sealed partial class DeployedInvoiceTests
             Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
         TableEntity saved = await Read(id);
         Assert.AreEqual(11500L, saved.GetInt64(nameof(Invoice.GrandTotalCents)));
-        Assert.AreEqual("ready-v1", saved.GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(saved));
         Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Token)));
         using (HttpResponseMessage replay = await Post(request, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.OK, replay.StatusCode);
@@ -168,14 +169,14 @@ public sealed partial class DeployedInvoiceTests
         await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
         await Eventually(async () => (await Read(id)).GetInt64(nameof(Invoice.GrandTotalCents)) == 11500L, "The real queue consumer did not persist the invoice.");
         TableEntity saved = await Read(id);
-        Assert.AreEqual("ready-v1", saved.GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(saved));
         Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Token)));
         Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Delivered)));
         // Observe a second completed processing cycle without competing with the real notification consumer.
         command.InvoiceItems[0].Quantity = 2;
         await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
         await Eventually(async () => (await Read(id)).GetInt64(nameof(Invoice.GrandTotalCents)) == 23000L, "The real queue consumer did not persist the update.");
-        Assert.AreEqual("ready-v1", (await Read(id)).GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(await Read(id)));
     }
 
     [TestMethod]
@@ -205,7 +206,7 @@ public sealed partial class DeployedInvoiceTests
         });
         await Eventually(async () => (await Read(id, sender)).ContainsKey(nameof(Invoice.Delivered)), "The real notification enqueue was not acknowledged.");
         TableEntity saved = await Read(id, sender);
-        Assert.AreEqual("frozen-v1", saved.GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(PreparationCheckpoint.Frozen, InvoiceCheckpoint.Read(saved));
         Assert.IsTrue(saved.GetString(nameof(Invoice.RecipientEmail)) == recipient, "The stored recipient must match the approved test mailbox.");
         string? token = saved.GetString(nameof(Invoice.Token));
         Assert.IsFalse(string.IsNullOrWhiteSpace(token));
@@ -249,7 +250,7 @@ public sealed partial class DeployedInvoiceTests
             else
             {
                 await IssueReferenceInvoice(request);
-                Assert.AreEqual("ready-v1", (await Read(id)).GetString(nameof(Invoice.IssuanceState)));
+                Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(await Read(id)));
             }
             Assert.AreEqual(trackedCount, invoices.Count, "Only successfully issued references are retained; failed seeds are already cleaned.");
         }
@@ -299,7 +300,7 @@ public sealed partial class DeployedInvoiceTests
         using HttpResponseMessage issued = await Post(invoice, Token(referenceBiller, group));
         Assert.AreEqual(HttpStatusCode.OK, issued.StatusCode);
         TableEntity before = await Read(id, referenceBiller);
-        Assert.AreEqual("ready-v1", before.GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(before));
         Assert.IsFalse(before.ContainsKey(nameof(Invoice.Delivered)));
         Assert.IsFalse(before.ContainsKey(nameof(Invoice.Token)));
 
@@ -310,7 +311,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.AreEqual(0, (await response.Content.ReadAsByteArrayAsync()).Length);
 
         TableEntity saved = await Read(id, referenceBiller);
-        Assert.AreEqual("frozen-v1", saved.GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(PreparationCheckpoint.Frozen, InvoiceCheckpoint.Read(saved));
         Assert.IsTrue(saved.ContainsKey(nameof(Invoice.Delivered)), "Manual sending must persist its enqueue acknowledgement.");
         Assert.IsTrue(saved.GetString(nameof(Invoice.RecipientEmail)) == recipient, "Only the approved test mailbox may receive this notification.");
         string? token = saved.GetString(nameof(Invoice.Token));
@@ -372,8 +373,7 @@ public sealed partial class DeployedInvoiceTests
         {
             // Owned synthetic fixture: exercise a frozen invoice without sending another notification.
             linkToken = Guid.NewGuid().ToString("N");
-            before[nameof(Invoice.Token)] = linkToken;
-            before[nameof(Invoice.IssuanceState)] = "frozen-v1";
+            InvoiceCheckpoint.FreezeOwnedFixture(before, linkToken);
             await tables.GetTableClient(nameof(Invoice)).UpdateEntityAsync(before, before.ETag, TableUpdateMode.Merge);
             before = await Read(id);
         }
@@ -396,7 +396,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsTrue(linkToken == null || !html.Contains(linkToken, StringComparison.Ordinal), "Debug HTML must not disclose the saved link token.");
         TableEntity after = await Read(id);
         Assert.AreEqual(before.ETag, after.ETag);
-        Assert.AreEqual(frozen ? "frozen-v1" : "ready-v1", after.GetString(nameof(Invoice.IssuanceState)));
+        Assert.AreEqual(frozen ? PreparationCheckpoint.Frozen : PreparationCheckpoint.Ready, InvoiceCheckpoint.Read(after));
         Assert.IsTrue(after.GetString(nameof(Invoice.Token)) == linkToken, "Debug viewing must not create or rotate a token.");
         Assert.IsFalse(after.ContainsKey(nameof(Invoice.Delivered)));
         List<string> itemsAfter = [];

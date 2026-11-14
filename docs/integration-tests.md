@@ -25,6 +25,22 @@ Unknown-outcome storage failures and definite rejection injection are covered by
 the unit suite. The partial integration test explicitly creates an acknowledged
 partial checkpoint; it does not simulate a network timeout or prove safe takeover.
 
+## Lifecycle checkpoint compatibility preparation
+
+The deployed harness independently recognizes the existing preparation checkpoints
+and the reviewed additive `lifecycle-v1` representation in `LifecycleData` version
+1. It still requires the exact expected preparation stage. Unknown versions,
+malformed data and mismatched legacy/new columns fail verification. The synthetic
+saved-link fixture preserves lifecycle evidence instead of replacing its checkpoint
+with an older representation. Twelve local harness cases exercise both supported
+formats, rejection boundaries and preservation of unrelated fixture fields.
+
+This change prepares the immutable-main verifier for the subsequent cancellation
+implementation. It does not introduce application lifecycle behavior or change
+pipeline definitions, production routes, credentials or review protections. The
+preparation PR must pass the existing candidate and trusted deployed suites and
+merge through the normal process before a lifecycle implementation can be certified.
+
 ## Run locally
 
 Use a disposable Table-only Azurite process. The task used installed Azurite with
