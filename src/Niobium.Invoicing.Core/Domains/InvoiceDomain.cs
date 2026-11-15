@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 using Niobium.Invoicing.Options;
 using Niobium.Invoicing.History;
+using Niobium.Invoicing.Payments;
 
 namespace Niobium.Invoicing.Domains;
 
@@ -17,7 +18,9 @@ public partial class InvoiceDomain(
     IEnumerable<IDomainEventHandler<IDomain<Invoice>>> eventHandlers,
     IDomainRepository<InvoiceHistoryDomain, InvoiceRevision> history,
     IRepository<InvoiceItem> historyItems,
-    TimeProvider clock)
+    TimeProvider clock,
+    IRepository<InvoicePayment> paymentRepository,
+    IRepository<InvoicePaymentPosting> paymentPostingRepository, IRepository<InvoicePaymentIndex> paymentIndexRepository)
       : GenericDomain<Invoice>(repo, eventHandlers)
 {
     /// <summary>
@@ -64,6 +67,12 @@ public partial class InvoiceDomain(
             ?? throw new ApplicationException(InternalError.InternalServerError, "Missing invoice template.");
         Dictionary<string, string> parameters = entity.BuildTemplateParameters(timezone, culture).ToDictionary();
         InvoiceLifecycleSnapshot lifecycle = Lifecycle(entity);
+        if (lifecycle.Payments != null)
+        {
+            InvoicePaymentBalance balance = PaymentBalance(entity);
+            parameters["SETTLED"] = new Niobium.Finance.Amount(balance.SettledCents, balance.Currency).ToString();
+            parameters["DUE"] = new Niobium.Finance.Amount(balance.OutstandingCents, balance.Currency).ToString();
+        }
         bool cancelled = lifecycle.Cancellation != null;
         parameters["INVOICE_STATUS"] = cancelled ? "Cancelled" : String.Empty;
         parameters["DUE_LABEL"] = cancelled ? "CANCELLED INVOICE" : "TOTAL AMOUNT DUE";

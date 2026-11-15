@@ -57,7 +57,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
 
             // Real invoice domain with mocked infra
             InvoiceDomain invDomain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>(),
-                new HistoryScenario().Domains(), historyItems.Object, TimeProvider.System);
+                new HistoryScenario().Domains(), historyItems.Object, TimeProvider.System, new PaymentScenario().Payments.Object, new PaymentScenario().Postings.Object, new PaymentScenario().Index.Object);
             string pk = Invoice.BuildPartitionKey(invoice.Biller);
             string rk = Invoice.BuildRowKey(invoice.GetID());
             invDomain.Initialize(pk, rk);

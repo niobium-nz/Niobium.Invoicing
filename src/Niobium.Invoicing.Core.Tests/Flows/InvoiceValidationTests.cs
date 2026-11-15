@@ -227,7 +227,8 @@ public class InvoiceValidationTests
             GetInvoiceEndpoint = "https://invoice.example.invalid",
             InvoiceTokenSecretSalt = "synthetic-secret"
         }), new Lazy<IRepository<Invoice>>(() => scenario.InvoiceRepo.Object), [],
-            scenario.History.Domains(), scenario.ItemRepo.Object, TimeProvider.System);
+            scenario.History.Domains(), scenario.ItemRepo.Object, TimeProvider.System,
+            scenario.PaymentRecords.Payments.Object, scenario.PaymentRecords.Postings.Object, scenario.PaymentRecords.Index.Object);
         domain.Initialize(scenario.Stored);
         string html = await domain.BuildHTMLAsync("synthetic-link-token", CancellationToken.None);
         if (!string.IsNullOrEmpty(value))

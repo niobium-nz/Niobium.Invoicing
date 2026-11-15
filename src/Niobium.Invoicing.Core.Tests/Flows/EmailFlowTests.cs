@@ -70,7 +70,7 @@ namespace Niobium.Invoicing.Core.Tests.Flows
 
             // Real domain with mocked infra
             InvoiceDomain domain = new(options, new Lazy<IRepository<Invoice>>(() => invoiceRepo.Object), Enumerable.Empty<IDomainEventHandler<IDomain<Invoice>>>(),
-                new HistoryScenario().Domains(), itemRepo.Object, TimeProvider.System);
+                new HistoryScenario().Domains(), itemRepo.Object, TimeProvider.System, new PaymentScenario().Payments.Object, new PaymentScenario().Postings.Object, new PaymentScenario().Index.Object);
 
             // Initialize keys so GenericDomain can load using mocked repo
             string pk = Invoice.BuildPartitionKey(invoice.Biller);

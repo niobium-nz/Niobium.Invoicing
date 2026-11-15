@@ -34,10 +34,10 @@ For example, an invoicing management group can oversee a restaurant and a playgr
 | Edit before sending, freeze at enqueue | Implemented for cooperative Core flows | Q04/Q10/Q21; upsert loads the existing aggregate and conditional preparation/freeze protects it. Uncoordinated direct storage writers remain outside that guarantee. |
 | Cancel only before any payment | Implemented in this change | Authenticated cancellation, preserved links/audit and reconciliation for unknown history; [lifecycle](invoice-lifecycle.md) |
 | Delivery confirmation | In progress across services | Notification receipt implementation awaits configuration/verification; Invoicing retains Unknown/Delivering until authenticated confirmation is integrated |
-| Manual bank-transfer settlement | Business use confirmed; recording partial | Payment instructions and request `Settled` exist; historical eligibility reconciliation is implemented; no payment ledger or settlement endpoint |
+| Manual bank-transfer settlement | Implemented in this candidate; delivery pending | Owner-authenticated immutable receipts, partial/full reversals, exact retries and committed balances; [payment contract and rollout](invoice-payments.md). Records external evidence without moving money. |
 | Processor collection/direct debit/reconciliation | Planned | No processor integrations or reconciliation workflows |
 | MCP tools | Planned | No MCP server or tool contracts in repository |
-| Ten-year retention and version audit | Planned | Q28 supersedes the original five-year duration; no retention schedule, soft-delete or historical-version store |
+| Ten-year retention and version audit | History writer/reader implemented; retention controls pending | Committed invoice/line snapshots and authenticated history browsing exist. Ten-year policy, soft deletion, holds and restore proof remain separate work; [history](invoice-history.md). |
 | Accounting | Out of scope | Q01 |
 
 Evidence entry points: [Contracts](../src/Niobium.Invoicing.Contracts), [Core flows](../src/Niobium.Invoicing.Core/Flows), [Server](../src/Niobium.Invoicing.Server). Tests and their limits are mapped in [testing](testing-and-conventions.md).
@@ -52,7 +52,7 @@ These are **Owner-confirmed requirements**, not claims that every row is enforce
 | R02 | Stage 1 supports New Zealand and Australia, their currencies and tax rules. | Q03; NZD/AUD formatters exist, but country/currency/tax compatibility is not comprehensively validated. No legal-compliance certification implied. |
 | R03 | Final displayed grand total includes tax. Tax treatment is per biller; 0% represents exemption in the product. | Q09 clarified at approval; current subtotal + tax meets this arithmetic interpretation. |
 | R04 | An invoice has a due date; use the seven-day default when no valid override is supplied. | Q03; shared validation and default preservation are implemented under B03. |
-| R05 | Manual bank transfers may overpay. Future automated collection charges the exact remaining balance. | Q03; displayed due is clamped at zero; processor path absent. |
+| R05 | Manual bank transfers may overpay. Future automated collection charges the exact remaining balance. | Q03; the payment candidate records overpayment and bounded reversals, with live due clamped at zero. Frozen issuance values remain unchanged; processor path absent. |
 | R06 | Content can change before sending and is frozen when notification is queued. | Q04/Q10/Q21; cooperative Core checkpoints and conservative uncertain-send freeze are implemented. Direct writers remain outside that guarantee. |
 | R07 | Allow cancellation at any delivery stage before any payment has occurred. Preserve history and show Cancelled on existing links; a late delivery event cannot undo it. | Q28 #3/Q29; conditional cancellation and historical eligibility reconciliation implemented in this change. Zero current settlement, refunds or reversals cannot prove that no payment ever occurred. In-flight email cannot be recalled reliably. |
 | R08 | Replay recognises the same invoice and preserves its state; the same outgoing message may be published again. | Q11; conditional preparation, stable identity and frozen replay content implemented. |

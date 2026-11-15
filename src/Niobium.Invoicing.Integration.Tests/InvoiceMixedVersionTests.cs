@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Options;
 using Niobium.Invoicing.History;
+using Niobium.Invoicing.Payments;
 using OldInvoice = Niobium.Invoicing.Integration.Tests.Legacy.Invoice;
 using OldDomain = Niobium.Invoicing.Integration.Tests.Legacy.Domains.InvoiceDomain;
 
@@ -109,5 +110,8 @@ public sealed partial class StorageFlowTests
     private static InvoiceDomain CurrentDomain(IRepository<Invoice> storage)
         => new(host!.Services.GetRequiredService<IOptions<BillingOptions>>(), new(() => storage), [],
             host.Services.GetRequiredService<IDomainRepository<InvoiceHistoryDomain, InvoiceRevision>>(),
-            host.Services.GetRequiredService<IRepository<InvoiceItem>>(), TimeProvider.System);
+            host.Services.GetRequiredService<IRepository<InvoiceItem>>(), TimeProvider.System,
+            host.Services.GetRequiredService<IRepository<InvoicePayment>>(),
+            host.Services.GetRequiredService<IRepository<InvoicePaymentPosting>>(),
+            host.Services.GetRequiredService<IRepository<InvoicePaymentIndex>>());
 }

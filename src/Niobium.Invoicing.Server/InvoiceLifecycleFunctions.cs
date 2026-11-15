@@ -8,7 +8,7 @@ using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribut
 
 namespace Niobium.Invoicing.Server;
 
-public sealed class InvoiceLifecycleFunctions(InvoiceLifecycleFlow flow)
+public sealed partial class InvoiceLifecycleFunctions(InvoiceLifecycleFlow flow)
 {
     [Function(nameof(GetInvoiceHistory))]
     public async Task<IActionResult> GetInvoiceHistory(

@@ -12,6 +12,7 @@
     <Compile Include="../../test-support/InvoicePaymentIndexFixture.cs" Link="Support/InvoicePaymentIndexFixture.cs" />
     <Compile Include="../../test-support/InvoiceHistoryFixture.cs" Link="Support/InvoiceHistoryFixture.cs" />
     <Compile Include="../../test-support/HistoryScenario.cs" Link="Support/HistoryScenario.cs" />
+    <Compile Include="../../test-support/PaymentScenario.cs" Link="Support/PaymentScenario.cs" />
     <Compile Include="../../test-support/DeployedHostDiagnostics.cs" Link="Support/DeployedHostDiagnostics.cs" />
   </ItemGroup>
 </Project>

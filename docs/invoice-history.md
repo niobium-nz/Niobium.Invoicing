@@ -81,11 +81,19 @@ and say Verified. Failed preparation retains its Proposed record. This does not
 make the separate invoice/item writes transactional or relax the rule that an
 uncertain active writer requires investigation before recovery.
 
-Cancellation, payment-history reconciliation, freeze, access-token creation and
+Cancellation, payment-history reconciliation, manual receipts/reversals, freeze, access-token creation and
 enqueue acknowledgement retain their history alongside the existing lifecycle
 rules. Exact replays do not add a material revision. A conditional conflict can
 leave an unreferenced candidate, while the winning invoice and history remain
 unchanged. Later payment evidence and enqueue acknowledgement preserve cancellation.
+
+The manual payment candidate uses history envelope version 2 when a snapshot has
+a payment summary. Its operation and business balance are auditable without
+exposing posting/index storage references. Version-1 envelopes remain readable and
+unchanged for invoices without payment records. The proposed payment position is
+captured in the target snapshot before the verified revision and payment root are
+anchored together by the invoice ETag. The owner can use the operation to retrieve
+the detailed [payment evidence](invoice-payments.md).
 
 ## Identity, representation and attribution
 

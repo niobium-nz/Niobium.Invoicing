@@ -35,6 +35,8 @@ internal sealed class IssuanceScenario
     internal List<MessagingEntry<NotifyCommand>> Messages { get; } = [];
     internal List<CancellationToken> Tokens { get; } = [];
     internal HistoryScenario History { get; } = new();
+    internal PaymentScenario PaymentRecords { get; } = new();
+    internal bool LoseInvoiceWriteResponse { get; set; }
     internal Mock<IRepository<Invoice>> InvoiceRepo { get; } = new(MockBehavior.Strict);
     internal Mock<IRepository<InvoiceItem>> ItemRepo { get; } = new(MockBehavior.Strict);
     internal Mock<IRepository<Billee>> BilleeRepo { get; } = new(MockBehavior.Strict);
@@ -179,7 +181,7 @@ internal sealed class IssuanceScenario
         IOptions<BillingOptions> options = Microsoft.Extensions.Options.Options.Create(Options);
         GenericDomainRepository<InvoiceDomain, Invoice> domains = new(
             () => new InvoiceDomain(options, new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object), [],
-                History.Domains(), ItemRepo.Object, TimeProvider.System),
+                History.Domains(), ItemRepo.Object, TimeProvider.System, PaymentRecords.Payments.Object, PaymentRecords.Postings.Object, PaymentRecords.Index.Object),
             new Lazy<IRepository<Invoice>>(() => InvoiceRepo.Object));
         Mock<IMessagingBroker<NotifyCommand>> broker = new(MockBehavior.Strict);
         broker.Setup(b => b.EnqueueAsync(It.IsAny<IEnumerable<MessagingEntry<NotifyCommand>>>(), It.IsAny<CancellationToken>()))
@@ -194,7 +196,7 @@ internal sealed class IssuanceScenario
     internal InvoiceDomain Domain()
     {
         InvoiceDomain domain = new(Microsoft.Extensions.Options.Options.Create(Options), new(() => InvoiceRepo.Object), [],
-            History.Domains(), ItemRepo.Object, TimeProvider.System);
+            History.Domains(), ItemRepo.Object, TimeProvider.System, PaymentRecords.Payments.Object, PaymentRecords.Postings.Object, PaymentRecords.Index.Object);
         domain.Initialize(Invoice.BuildPartitionKey(Request.BillerID), Invoice.BuildRowKey(Request.InvoiceID));
         return domain;
     }
@@ -205,6 +207,8 @@ internal sealed class IssuanceScenario
         InvoiceWrites++;
         Stored = Copy(input);
         Stored.ETag = (++version).ToString();
+        if (LoseInvoiceWriteResponse)
+            throw new TimeoutException("Synthetic uncertain invoice write");
         Invoice result = Copy(Stored);
         if (DropWriteEtags)
         {

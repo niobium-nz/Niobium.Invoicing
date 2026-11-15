@@ -29,7 +29,8 @@ public sealed record InvoicePaymentHistoryDecision(Guid Operation, Guid Actor, I
 // model alone encodes this snapshot into its mapped scalar column.
 public sealed record InvoiceLifecycleSnapshot
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
+    private const int HistoryVersion = 2;
     private const int UnanchoredVersion = 1;
     [JsonInclude]
     public int Version
@@ -39,6 +40,12 @@ public sealed record InvoiceLifecycleSnapshot
     [JsonInclude] public string WriteID { get; private init; } = String.Empty;
     [JsonInclude]
     public Guid? HistoryRevision
+    {
+        get; private init;
+    }
+    [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public InvoicePaymentPosition? Payments
     {
         get; private init;
     }
@@ -90,13 +97,33 @@ public sealed record InvoiceLifecycleSnapshot
         => revision == Guid.Empty ? throw new InvalidOperationException("A history revision is required.")
             : this with
             {
-                Version = CurrentVersion,
+                Version = Payments == null ? HistoryVersion : CurrentVersion,
                 HistoryRevision = revision
             };
 
+    internal InvoiceLifecycleSnapshot CapturePayments(InvoicePaymentPosition position)
+        => HistoryRevision.HasValue && HistoryRevision.Value != Guid.Empty && ValidPaymentPosition(position)
+            ? this with
+            {
+                Version = CurrentVersion,
+                Payments = position
+            }
+            : throw new InvalidOperationException("Unsupported invoice payment position.");
+
     internal bool HasSupportedRepresentation()
-        => Version == UnanchoredVersion ? HistoryRevision == null
-            : Version == CurrentVersion && HistoryRevision.HasValue && HistoryRevision.Value != Guid.Empty;
+        => Version switch
+        {
+            UnanchoredVersion => HistoryRevision == null && Payments == null,
+            HistoryVersion => HistoryRevision.HasValue && HistoryRevision.Value != Guid.Empty && Payments == null,
+            CurrentVersion => HistoryRevision.HasValue && HistoryRevision.Value != Guid.Empty && ValidPaymentPosition(Payments),
+            _ => false
+        };
+
+    private static bool ValidPaymentPosition(InvoicePaymentPosition? position)
+        => position != null && !String.IsNullOrWhiteSpace(position.Head) && position.Head.Length <= 160
+            && position.Head == position.Head.Trim() && position.Sequence > 0 && position.Operation != Guid.Empty
+            && !String.IsNullOrWhiteSpace(position.Index) && position.Index.Length <= 160 && position.Index == position.Index.Trim()
+            && position.Currency is { Length: 3 } && position.Currency.All(c => c is >= 'A' and <= 'Z');
 }
 
 public partial class Invoice
@@ -158,7 +185,8 @@ public partial class Invoice
         if (!snapshot.HasSupportedRepresentation() || !Enum.IsDefined(snapshot.Preparation))
             throw InvalidLifecycle();
         InvoiceLifecycleSnapshot? current = ReadLifecycle();
-        if (current?.HistoryRevision != null && snapshot.HistoryRevision == null)
+        if ((current?.HistoryRevision != null && snapshot.HistoryRevision == null)
+            || (current?.Payments != null && snapshot.Payments == null))
             throw InvalidLifecycle();
         string serialized = JsonSerializer.Serialize(snapshot.CaptureWrite(), LifecycleJson);
         if (Encoding.UTF8.GetByteCount(serialized) > MaximumLifecycleBytes)
@@ -182,6 +210,12 @@ public partial class Invoice
     {
         InvoiceLifecycleSnapshot snapshot = ReadLifecycle() ?? InvoiceLifecycleSnapshot.Create(GetPreparationStage());
         StoreLifecycle(snapshot.CaptureHistory(revision));
+    }
+
+    public void ReferencePayments(InvoicePaymentPosition position)
+    {
+        InvoiceLifecycleSnapshot snapshot = ReadLifecycle() ?? InvoiceLifecycleSnapshot.Create(GetPreparationStage());
+        StoreLifecycle(snapshot.CapturePayments(position));
     }
 
     private static InvalidOperationException InvalidLifecycle() => new("Unsupported invoice lifecycle representation.");

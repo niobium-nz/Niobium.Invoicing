@@ -6,14 +6,14 @@ external event; it does not execute a refund, move money or restore cancellation
 eligibility. Historical opening settlement is an observed amount, not an invented
 list of earlier transactions. See [lifecycle](invoice-lifecycle.md).
 
-## Readiness stage
+## Baseline readiness
 
-This change prepares the independent test harness and provisions three empty
+The separately reviewed [PR #27](https://github.com/niobium-nz/Niobium.Invoicing/pull/27)
+prepares the independent test harness and provisions three empty
 application tables: `InvoicePayment`, `InvoicePaymentPosting` and
-`InvoicePaymentIndex`. The application still writes lifecycle schemas 1/2 and
-history snapshot version 1. Payment endpoints and the schema-3 writer belong to a
-subsequent application change; this readiness change does not claim they are
-delivered.
+`InvoicePaymentIndex`. That baseline retained lifecycle schemas 1/2 and history
+snapshot version 1. The application candidate below adds payment endpoints and the
+schema-3 writer on top of the actual readiness merge.
 
 The default `STORAGE_TABLE_NAMES` list in `infra/main.bicepparam` includes the new
 tables. Deployments that explicitly override that input must include the complete
@@ -90,3 +90,57 @@ production read-only and package results. Then base the payment application
 change on that actual merge and repeat the complete delivery process, including
 deployed payment/reversal/retry/concurrency cases. No production payment creation,
 data migration, notification or processor action is authorized by these tests.
+
+## Application candidate: manual receipt API
+
+The application candidate adds authenticated owner routes below. Delivery is not
+complete until its feature suites, native review, independent approval, protected
+merge and terminal production/package checks succeed. It is based on readiness
+merge `b2154c9bfea52d9be567d3008738415dc11056a6`. The prerequisite's production
+verification must finish before this candidate is published for activation.
+
+All paths begin `/{issuer}/invoices/{invoice}`. The biller's access-token Sid must
+match `issuer`, and GroupSid must match the stored management group. Existing
+invoice-link tokens and Functions keys do not grant payment mutation authority.
+No payment-table resource entitlements or blanket MCP privileges are added.
+
+| Method and suffix | Request/result |
+| --- | --- |
+| `POST /payments` | `RecordInvoicePaymentRequest`; returns current committed `InvoicePaymentBalance` |
+| `POST /payments/reversals` | `ReverseInvoicePaymentRequest`, including the original receipt operation; returns current committed balance |
+| `GET /payments/balance` | Current opening amount, committed settlement, outstanding/overpaid cents and entry count |
+| `GET /payments/{operation}` | One committed receipt/reversal with its evidence and actor; uncommitted candidates return 404 |
+
+Each mutation supplies a nonempty operation UUID, positive integer cents,
+matching NZD/AUD currency, an occurrence time no later than the server clock,
+a nonblank reason (at most 500 characters) and evidence reference (at most 1,000).
+The first immutable receipt retains its server recording time. Exact retries
+preserve one committed effect; reuse with different business evidence returns
+409. A conflict after a competing write or an unknown transport outcome requires
+a fresh request with exactly the same operation and payload. Do not allocate a
+new operation merely to retry. Balance and payment responses are non-cacheable.
+
+A reversal must reference a committed received payment on the same invoice,
+cannot predate that receipt, and cannot exceed its remaining unreversed amount.
+Partial and complete reversals are supported. They record external evidence;
+this service neither initiates refunds nor contacts a payment processor. They
+never reset permanent payment history or permit cancellation after a payment.
+Late real payment evidence can be recorded after cancellation while retaining
+the cancelled state. Active noncancelled preparation must finish before payment
+recording. Existing opening settlement cannot be silently rewritten once a ledger
+exists; reconciliation does not manufacture missing historical transactions.
+
+New payments leave the original `Invoice.SettledCents`, saved link token,
+issuance fingerprint and frozen notification payload unchanged. Live HTML derives
+its amount due from the committed payment position. Authenticated history adds a
+payment summary and operation ID, from which the owner can retrieve the detailed
+record. Recording or reversing payment evidence does not enqueue notifications.
+
+The bounded index tests cover 256 operations and the maximum shared UUID prefix.
+Their limits count payment repository reads, in addition to loading the invoice:
+at most 36 for balance, 70 for a selected operation and 71 for an exact retry.
+These are structural read bounds, not latency or throughput guarantees. Selected
+paths and current posting evidence are verified online; older snapshots and
+unvisited nodes are verified when read or by a separate complete audit. No
+production full-audit service, bank reconciliation import or processor integration
+is claimed by this increment.

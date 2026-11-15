@@ -14,6 +14,7 @@ using Niobium.Notification;
 using Niobium.Profile;
 using Niobium.Invoicing.Testing;
 using Niobium.Invoicing.History;
+using Niobium.Invoicing.Payments;
 
 namespace Niobium.Invoicing.Integration.Tests;
 
@@ -42,7 +43,7 @@ public sealed partial class StorageFlowTests
         TableClientOptions options = new();
         options.Retry.MaxRetries = 0;
         tableService = new TableServiceClient(uri, new TableSharedKeyCredential("devstoreaccount1", EmulatorKey), options);
-        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, InvoicePaymentFixture.PaymentsTable, InvoicePaymentFixture.PostingsTable, InvoicePaymentIndexFixture.Table })
+        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, nameof(InvoicePayment), nameof(InvoicePaymentPosting), nameof(InvoicePaymentIndex) })
         {
             await tableService.CreateTableAsync(prefix + table);
         }
@@ -80,7 +81,7 @@ public sealed partial class StorageFlowTests
         host?.Dispose();
         if (tableService != null)
         {
-            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, InvoicePaymentFixture.PaymentsTable, InvoicePaymentFixture.PostingsTable, InvoicePaymentIndexFixture.Table })
+            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, nameof(InvoicePayment), nameof(InvoicePaymentPosting), nameof(InvoicePaymentIndex) })
             {
                 await tableService.DeleteTableAsync(prefix + table);
             }
@@ -259,7 +260,8 @@ public sealed partial class StorageFlowTests
         public Task<TableServiceClient> CreateClientAsync(IEnumerable<DatabasePermissions> permissions, string table, string? partition = null, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (table is not (nameof(Invoice) or nameof(InvoiceItem) or nameof(Billee) or nameof(InvoiceRevision) or nameof(InvoiceRevisionPart)))
+            if (table is not (nameof(Invoice) or nameof(InvoiceItem) or nameof(Billee) or nameof(InvoiceRevision) or nameof(InvoiceRevisionPart)
+                or nameof(InvoicePayment) or nameof(InvoicePaymentPosting) or nameof(InvoicePaymentIndex)))
             {
                 throw new InvalidOperationException("Unexpected integration table.");
             }
