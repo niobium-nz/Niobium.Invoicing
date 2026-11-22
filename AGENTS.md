@@ -37,6 +37,14 @@ a named result; do not hide actions inside conditions.
 
 ## Infrastructure composition
 
+Use `rg-niobium-<service-slug>-<env>` for resource groups and
+`<prefix>-<abbr>-<env>` for named service resources such as Functions and
+vaults. Functions deployment packages use `<prefix>sts<env>` and application
+data uses `<prefix>std<env>`. The `AzureWebJobsStorage` Blob and Table endpoints
+in `infra/main.bicep` use the `std` account.
+Invoicing uses the service slug `invoicing` and compact prefix `niobiuminvoicing`.
+[Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/f437f5a77dbec45296c0586b5bbe828d36eeb38b/docs/azure-resource-naming.md) · [Current DevOps documentation](https://github.com/niobium-nz/Niobium.DevOps/tree/main/docs)
+
 The owner clarified these module boundaries on 2026-11-05 (Pacific/Auckland). They govern application settings and the reusable host module.
 
 - Keep Bicep environment agnostic. Environment names select resource-name suffixes and supplied values; do not add a test-only application-configuration path to a reusable host module because an integration test exposed missing runtime configuration.
