@@ -42,7 +42,7 @@ Use `rg-niobium-<service-slug>-<env>` for resource groups and
 vaults. Functions host/package storage uses `<prefix>sts<env>` and application
 data storage uses `<prefix>std<env>`.
 Invoicing uses the service slug `invoicing` and compact prefix `niobiuminvoicing`.
-[Shared Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/main/docs/azure-resource-naming.md)
+[Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/453d80db4c965223623e1dbacd9775b929e09a07/docs/azure-resource-naming.md) · [Current DevOps documentation](https://github.com/niobium-nz/Niobium.DevOps/tree/main/docs)
 
 The owner clarified these module boundaries on 2026-11-05 (Pacific/Auckland). They govern application settings and the reusable host module.
 
