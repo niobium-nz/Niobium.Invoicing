@@ -25,7 +25,8 @@ public sealed partial class StorageFlowTests
 {
     private static IHost? host;
     private static TableServiceClient? tableService;
-    private static readonly string prefix = "InvTest" + Guid.NewGuid().ToString("N");
+    // Retain the complete unique suffix within the Table Storage name limit.
+    private static readonly string prefix = "Inv" + Guid.NewGuid().ToString("N");
     private static readonly Dictionary<(Guid, Guid), Biller> profiles = [];
     private static readonly List<MessagingEntry<NotifyCommand>> messages = [];
     // Published Azurite development account key. This is an emulator fixture, never a cloud credential.
