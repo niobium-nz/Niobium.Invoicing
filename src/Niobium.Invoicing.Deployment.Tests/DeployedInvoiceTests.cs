@@ -534,6 +534,24 @@ public sealed partial class DeployedInvoiceTests
         if (lower.Contains("resourcenotfound", StringComparison.Ordinal)
             || lower.Contains("entitynotfound", StringComparison.Ordinal))
             return "resource-missing";
+        if (lower.Contains("aadsts", StringComparison.Ordinal)
+            || lower.Contains("could not retrieve access token", StringComparison.Ordinal))
+            return "token-read-failed";
+        if (lower.Contains("certificate verify failed", StringComparison.Ordinal)
+            || lower.Contains("sslcertverificationerror", StringComparison.Ordinal))
+            return "tls-read-failed";
+        if (lower.Contains("connection reset", StringComparison.Ordinal)
+            || lower.Contains("name resolution", StringComparison.Ordinal)
+            || lower.Contains("max retries exceeded", StringComparison.Ordinal)
+            || lower.Contains("readtimeout", StringComparison.Ordinal))
+            return "transport-read-failed";
+        if (lower.Contains("serviceunavailable", StringComparison.Ordinal)
+            || lower.Contains("gatewaytimeout", StringComparison.Ordinal)
+            || lower.Contains("too many requests", StringComparison.Ordinal))
+            return "service-read-failed";
+        if (lower.Contains("badrequest", StringComparison.Ordinal)
+            || lower.Contains("bad request", StringComparison.Ordinal))
+            return "query-rejected";
         return "read-failed";
     }
 

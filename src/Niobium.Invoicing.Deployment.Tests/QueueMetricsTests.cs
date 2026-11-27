@@ -70,7 +70,7 @@ public sealed partial class DeployedInvoiceTests
                 "--resource", "https://api.applicationinsights.io", "--url", url, "--query", "tables[0].rows[0][0]");
             if (code != 0)
             {
-                Assert.IsTrue(reason is not ("access-denied" or "query-rejected") && ++consecutiveReadFailures <= 1,
+                Assert.IsTrue(reason is not ("access-denied" or "query-rejected" or "token-read-failed" or "tls-read-failed") && ++consecutiveReadFailures <= 1,
                     $"The test metrics query failed ({reason}).");
                 await Task.Delay(TimeSpan.FromSeconds(10));
                 continue;
