@@ -122,6 +122,15 @@ jobs:
           azd deploy --no-prompt
       - name: Prepare deployed integration credentials
         run: python scripts/test-resources.py credentials
+      - name: Refresh Azure login for deployed verification
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Prepare Application Insights access
+        # Cache the test query audience while the federated assertion is current.
+        run: az account get-access-token --resource https://api.applicationinsights.io --only-show-errors --output none
       - name: Run deployed integration tests
         # The asynchronous/read-only waits alone can consume 15 minutes; leave time for cleanup.
         timeout-minutes: 30
@@ -203,6 +212,10 @@ jobs:
       - name: Prepare trusted integration credentials
         if: steps.source.outputs.available == 'true'
         run: python scripts/test-resources.py credentials
+      - name: Prepare Application Insights access
+        if: steps.source.outputs.available == 'true'
+        # Cache the test query audience while the federated assertion is current.
+        run: az account get-access-token --resource https://api.applicationinsights.io --only-show-errors --output none
       - name: Run trusted deployed integration tests at ${{ steps.source.outputs.sha }}
         if: steps.source.outputs.available == 'true'
         timeout-minutes: 30
