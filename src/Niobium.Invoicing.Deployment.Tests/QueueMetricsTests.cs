@@ -63,10 +63,19 @@ public sealed partial class DeployedInvoiceTests
             """;
         string url = $"https://api.applicationinsights.io/v1/apps/{insights:D}/query?query={Uri.EscapeDataString(query)}";
         Stopwatch ingestion = Stopwatch.StartNew();
+        int consecutiveReadFailures = 0;
         while (ingestion.Elapsed < TimeSpan.FromMinutes(6))
         {
-            string observed = await ReadAzureValue("rest", "--method", "get", "--resource", "https://api.applicationinsights.io",
-                "--url", url, "--query", "tables[0].rows[0][0]");
+            (int code, string observed, string reason) = await QueryAzureAsync("tsv", "rest", "--method", "get",
+                "--resource", "https://api.applicationinsights.io", "--url", url, "--query", "tables[0].rows[0][0]");
+            if (code != 0)
+            {
+                Assert.IsTrue(reason is not ("access-denied" or "query-rejected") && ++consecutiveReadFailures <= 1,
+                    $"The test metrics query failed ({reason}).");
+                await Task.Delay(TimeSpan.FromSeconds(10));
+                continue;
+            }
+            consecutiveReadFailures = 0;
             bool parsed = int.TryParse(observed, out int count);
             Assert.IsTrue(parsed && count is >= 0 and <= 3, "The test metrics query must return an instrument count.");
             if (count == 3)

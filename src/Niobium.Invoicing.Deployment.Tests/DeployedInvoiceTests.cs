@@ -215,17 +215,29 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(token));
         using HttpResponseMessage html = await http.GetAsync($"/{sender}/invoices/{id}?token={token}");
         Assert.AreEqual(HttpStatusCode.OK, html.StatusCode);
-        await Eventually(async () =>
+        int? statusCode = null;
+        InvoiceDeliveryState? delivery = null;
+        try
         {
-            using HttpRequestMessage statusRequest = new(HttpMethod.Get, $"/{sender}/invoices/{id}/status");
-            statusRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token(sender, group));
-            using HttpResponseMessage statusResponse = await http.SendAsync(statusRequest);
-            if (!statusResponse.IsSuccessStatusCode)
-                return false;
-            InvoiceLifecycleStatus? status = JsonSerializer.Deserialize<InvoiceLifecycleStatus>(
-                await statusResponse.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            return status is { Delivery: InvoiceDeliveryState.Delivered, ConfirmedDeliveredAt: not null, Notification: not null };
-        }, "The owned invoice did not project a verified provider delivery receipt.");
+            await Eventually(async () =>
+            {
+                using HttpRequestMessage statusRequest = new(HttpMethod.Get, $"/{sender}/invoices/{id}/status");
+                statusRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token(sender, group));
+                using HttpResponseMessage statusResponse = await http.SendAsync(statusRequest);
+                statusCode = (int)statusResponse.StatusCode;
+                if (!statusResponse.IsSuccessStatusCode)
+                    return false;
+                InvoiceLifecycleStatus? status = JsonSerializer.Deserialize<InvoiceLifecycleStatus>(
+                    await statusResponse.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                delivery = status?.Delivery;
+                return status is { Delivery: InvoiceDeliveryState.Delivered, ConfirmedDeliveredAt: not null, Notification: not null };
+            }, "The owned invoice did not project a verified provider delivery receipt.");
+        }
+        catch (AssertFailedException)
+        {
+            string evidence = await DescribeReceiptBoundaryAsync(sender, id);
+            Assert.Fail($"The owned invoice did not project a verified delivery receipt. HTTP {statusCode}; delivery {delivery}. {evidence}");
+        }
     }
 
     [TestMethod]
@@ -470,6 +482,13 @@ public sealed partial class DeployedInvoiceTests
 
     private static async Task<string> ReadAzureValue(params string[] arguments)
     {
+        (int code, string value, string reason) = await QueryAzureAsync("tsv", arguments);
+        Assert.AreEqual(0, code, $"Unable to read the existing test app through the workflow Azure identity ({reason}).");
+        return value;
+    }
+
+    private static async Task<(int Code, string Value, string Reason)> QueryAzureAsync(string output, params string[] arguments)
+    {
         ProcessStartInfo start = new("az")
         {
             UseShellExecute = false,
@@ -478,19 +497,19 @@ public sealed partial class DeployedInvoiceTests
         };
         foreach (string argument in arguments)
             start.ArgumentList.Add(argument);
-        foreach (string argument in new[] { "--only-show-errors", "--output", "tsv" })
+        foreach (string argument in new[] { "--only-show-errors", "--output", output })
             start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("Azure CLI could not start.");
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
-        Task<string> output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        Task<string> result = process.StandardOutput.ReadToEndAsync(timeout.Token);
         Task<string> error = process.StandardError.ReadToEndAsync(timeout.Token);
         try
         {
             await process.WaitForExitAsync(timeout.Token);
-            string value = await output;
-            _ = await error; // Never include CLI responses, which can contain keys, in test output.
-            Assert.AreEqual(0, process.ExitCode, "Unable to read the existing test app through the workflow Azure identity.");
-            return value.Trim();
+            string value = await result;
+            string detail = await error;
+            // Return only fixed error categories. Azure CLI output can include credentials or test data.
+            return (process.ExitCode, value.Trim(), AzureReadReason(detail));
         }
         catch
         {
@@ -498,6 +517,24 @@ public sealed partial class DeployedInvoiceTests
                 process.Kill(entireProcessTree: true);
             throw;
         }
+    }
+
+    private static string AzureReadReason(string detail)
+    {
+        string lower = detail.ToLowerInvariant();
+        if (lower.Contains("authorizationpermissionmismatch", StringComparison.Ordinal)
+            || lower.Contains("authorizationfailed", StringComparison.Ordinal)
+            || lower.Contains("insufficientaccess", StringComparison.Ordinal)
+            || lower.Contains("forbidden", StringComparison.Ordinal)
+            || lower.Contains("unauthorized", StringComparison.Ordinal))
+            return "access-denied";
+        if (lower.Contains("semanticerror", StringComparison.Ordinal)
+            || lower.Contains("badargumenterror", StringComparison.Ordinal))
+            return "query-rejected";
+        if (lower.Contains("resourcenotfound", StringComparison.Ordinal)
+            || lower.Contains("entitynotfound", StringComparison.Ordinal))
+            return "resource-missing";
+        return "read-failed";
     }
 
     private static async Task VerifyReadOnlyClient(long id, string token)
