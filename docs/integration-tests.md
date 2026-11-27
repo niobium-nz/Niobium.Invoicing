@@ -185,6 +185,15 @@ Measure recovered data age and restoration time in the authorized test
 environment before reporting Q28's one-hour RPO and four-hour RTO targets
 as met. The production read-only suite has its own evidence scope.
 
+The deployed restore drill captures a serialized copy of one line from a newly
+created synthetic invoice with a blank recipient. It conditionally removes
+that owned line by ETag, confirms the row is missing, and reinserts the copy
+through the StorageTable repository. The test compares the recovered line and
+checks the parent version and committed history chain. The copy stays in the
+runner's memory. `test-invoice-line-restore.json` records the exact commit and the
+elapsed time for insertion and read-back. Account-level recovery, recovery from
+a separately retained backup, and RPO/RTO measurement require a broader drill.
+
 ## Read-only production suite
 
 Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide records the service boundary: Invoicing owns invoice-specific integration tests, while Notification owns generic notification tests without biller/invoice fixtures.
