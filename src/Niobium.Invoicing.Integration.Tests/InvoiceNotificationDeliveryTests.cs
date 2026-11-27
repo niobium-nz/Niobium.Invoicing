@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.DependencyInjection;
 using Niobium.Invoicing.Delivery;
@@ -139,8 +140,9 @@ public sealed partial class StorageFlowTests
         NotificationDeliveryEvent delivered = Receipt(request, NotificationDeliveryKind.Delivered, "delivered", at.AddSeconds(2));
         NotificationDeliveryEvent delayed = Receipt(request, NotificationDeliveryKind.Delayed, "delayed", at.AddSeconds(1));
         await first.RecordAsync(delivered, request.BillerID, request.InvoiceID, default);
-        await Assert.ThrowsExactlyAsync<ApplicationException>(() =>
+        RequestFailedException conflict = await Assert.ThrowsExactlyAsync<RequestFailedException>(() =>
             stale.RecordAsync(delayed, request.BillerID, request.InvoiceID, default));
+        Assert.AreEqual(412, conflict.Status);
         await Receive(consumer, delayed);
 
         InvoiceLifecycleStatus status = await host.Services.GetRequiredService<InvoiceLifecycleFlow>()
