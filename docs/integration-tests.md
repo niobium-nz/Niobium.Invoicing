@@ -205,6 +205,17 @@ runner's memory. `test-invoice-line-restore.json` records the exact commit and t
 elapsed time for insertion and read-back. Account-level recovery, recovery from
 a separately retained backup, and RPO/RTO measurement require a broader drill.
 
+A second drill covers an unpaid synthetic invoice, its line, and every linked
+committed revision and history part. It captures a temporary typed file with
+the original Table keys and values. The drill uses the captured ETags to
+remove the owned rows, confirms their absence, checks the file digest, and
+restores with create-only inserts. The parent row is restored after its
+dependencies. Read-back compares the typed rows and exercises the history
+reader against the restored revision chain. The temporary file is deleted
+when the drill closes. The uploaded `test-invoice-aggregate-restore.json`
+contains the commit, counts and elapsed time. A complete recovery exercise
+from a separately retained backup remains necessary to measure RPO and RTO.
+
 ## Read-only production suite
 
 Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide records the service boundary: Invoicing owns invoice-specific integration tests, while Notification owns generic notification tests without biller/invoice fixtures.
