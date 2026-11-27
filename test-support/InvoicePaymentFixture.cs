@@ -28,16 +28,36 @@ internal static class InvoicePaymentFixture
     internal static async Task RemoveAsync(TableClient payments, TableClient postings, TableClient indexes, TableEntity owned,
         Guid biller, long invoice, Guid customer, Func<Task> deleteOwnedInvoice, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(deleteOwnedInvoice);
+        var rows = await ReadOwnedAsync(payments, postings, indexes, owned, biller, invoice, customer, cancellationToken: cancellationToken);
+
+        // The callback validates history before conditionally deleting the observed
+        // parent. Failed or unknown parent writes must leave all payment evidence intact.
+        await deleteOwnedInvoice();
+        foreach (TableEntity row in rows.Postings)
+            await postings.DeleteEntityAsync(row.PartitionKey, row.RowKey, row.ETag, cancellationToken);
+        foreach (TableEntity row in rows.Indexes)
+            await indexes.DeleteEntityAsync(row.PartitionKey, row.RowKey, row.ETag, cancellationToken);
+        foreach (TableEntity row in rows.Receipts)
+            await payments.DeleteEntityAsync(row.PartitionKey, row.RowKey, row.ETag, cancellationToken);
+    }
+
+    internal static async Task<(List<TableEntity> Receipts, List<TableEntity> Postings, List<TableEntity> Indexes)> ReadOwnedAsync(
+        TableClient payments, TableClient postings, TableClient indexes, TableEntity owned, Guid biller, long invoice, Guid customer,
+        bool includeAllProperties = false, CancellationToken cancellationToken = default)
+    {
         if (biller == Guid.Empty || customer == Guid.Empty || owned.PartitionKey != Invoice.BuildPartitionKey(biller)
             || owned.RowKey != Invoice.BuildRowKey(invoice) || owned.GetGuid(nameof(Invoice.Billee)) != customer
             || owned.GetGuid(nameof(Invoice.Tenant)) is not Guid tenant || tenant == Guid.Empty || !Conditional(owned))
             throw Invalid();
-        ArgumentNullException.ThrowIfNull(deleteOwnedInvoice);
         InvoiceCheckpoint.PaymentPosition? position = InvoiceCheckpoint.ReadPaymentPosition(owned);
         DateTimeOffset created = Invoice.ParseID(invoice);
-        List<TableEntity> receipts = await ReadAsync(payments, owned.PartitionKey, created, ReceiptFields, position != null, cancellationToken);
-        List<TableEntity> links = await ReadAsync(postings, owned.PartitionKey, created, PostingFields, position != null, cancellationToken);
-        List<TableEntity> indexRows = await ReadAsync(indexes, owned.PartitionKey, created, InvoicePaymentIndexFixture.Fields, position != null, cancellationToken);
+        List<TableEntity> receipts = await ReadAsync(payments, owned.PartitionKey, created,
+            includeAllProperties ? null : ReceiptFields, position != null, cancellationToken);
+        List<TableEntity> links = await ReadAsync(postings, owned.PartitionKey, created,
+            includeAllProperties ? null : PostingFields, position != null, cancellationToken);
+        List<TableEntity> indexRows = await ReadAsync(indexes, owned.PartitionKey, created,
+            includeAllProperties ? null : InvoicePaymentIndexFixture.Fields, position != null, cancellationToken);
         Dictionary<string, Entry> entries = [];
         Dictionary<string, TableEntity> receiptRows = [];
         foreach (TableEntity row in receipts)
@@ -69,16 +89,7 @@ internal static class InvoicePaymentFixture
                 throw Invalid();
         if (position != null)
             VerifyCommitted(position, positions, entries, index);
-
-        // The callback validates history before conditionally deleting the observed
-        // parent. Failed or unknown parent writes must leave all payment evidence intact.
-        await deleteOwnedInvoice();
-        foreach (TableEntity row in links)
-            await postings.DeleteEntityAsync(row.PartitionKey, row.RowKey, row.ETag, cancellationToken);
-        foreach (TableEntity row in indexRows)
-            await indexes.DeleteEntityAsync(row.PartitionKey, row.RowKey, row.ETag, cancellationToken);
-        foreach (TableEntity row in receipts)
-            await payments.DeleteEntityAsync(row.PartitionKey, row.RowKey, row.ETag, cancellationToken);
+        return (receipts, links, indexRows);
     }
 
     private static void VerifyCommitted(InvoiceCheckpoint.PaymentPosition position,
@@ -168,7 +179,7 @@ internal static class InvoicePaymentFixture
     }
 
     private static async Task<List<TableEntity>> ReadAsync(TableClient table, string biller, DateTimeOffset invoice,
-        string[] fields, bool required, CancellationToken cancellationToken)
+        string[]? fields, bool required, CancellationToken cancellationToken)
     {
         List<TableEntity> result = [];
         try

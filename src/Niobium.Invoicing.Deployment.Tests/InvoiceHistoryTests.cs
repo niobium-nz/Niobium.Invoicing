@@ -131,12 +131,14 @@ public sealed partial class DeployedInvoiceTests
             "The actual freeze and acknowledgement must retain a history snapshot matching the live invoice.");
     }
 
-    private static async Task<List<(InvoiceRevision Revision, InvoiceRevisionSnapshot Snapshot)>> ReadHistory(long id, Guid? issuer = null)
+    private static async Task<List<(InvoiceRevision Revision, InvoiceRevisionSnapshot Snapshot)>> ReadHistory(
+        long id, Guid? issuer = null, int expectedLifecycleVersion = 2)
     {
         Guid owner = issuer ?? biller;
         Invoice invoice = (await services.GetRequiredService<IRepository<Invoice>>().RetrieveAsync(Invoice.BuildPartitionKey(owner), Invoice.BuildRowKey(id)))!;
-        Assert.AreEqual(2, invoice.ReadLifecycle()!.Version);
-        Guid? revisionID = invoice.ReadLifecycle()!.HistoryRevision;
+        InvoiceLifecycleSnapshot? lifecycle = invoice.ReadLifecycle();
+        Assert.IsTrue(lifecycle?.Version == expectedLifecycleVersion, "The invoice history must use the expected lifecycle version.");
+        Guid? revisionID = lifecycle?.HistoryRevision;
         Assert.IsNotNull(revisionID);
         List<(InvoiceRevision, InvoiceRevisionSnapshot)> result = [];
         while (revisionID.HasValue)
