@@ -92,15 +92,17 @@ public sealed partial class DeployedInvoiceTests
             Console.WriteLine("The test storage recovery evidence artifact could not be written.");
         }
 
+        string? summary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        if (String.IsNullOrWhiteSpace(summary))
+            return;
+
         try
         {
-            // MSTest captures Console.Out. Write the sanitized receipt to the runner log.
-            using StreamWriter log = new(Console.OpenStandardOutput(), leaveOpen: true);
-            log.WriteLine($"Storage recovery evidence {json}");
+            await File.AppendAllTextAsync(summary, $"\n### Test storage recovery evidence\n\n```json\n{json}\n```\n");
         }
-        catch (IOException)
+        catch (Exception)
         {
-            Console.WriteLine("The test storage recovery evidence log could not be written.");
+            Console.WriteLine("The test storage recovery summary could not be written.");
         }
     }
 

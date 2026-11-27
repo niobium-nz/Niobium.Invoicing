@@ -164,8 +164,9 @@ assumed to land on the same Azure instance. No notification is added by this cas
 ### Test storage recovery evidence
 
 After verifying the deployed commit through `/health`, the deployed harness
-writes `test-storage-recovery.json` and logs the same sanitized receipt. It records
-the verified commit, capture time, storage account SKU and kind, and the account's
+writes `test-storage-recovery.json` to the deployed evidence artifact and adds
+the same sanitized receipt to the GitHub Actions job summary. It records the
+verified commit, capture time, storage account SKU and kind, and the account's
 Blob versioning, soft-delete and point-in-time recovery settings.
 It also records matching backup instances visible in Data Protection vaults
 in the existing test resource group. The vault scan is bounded and records
