@@ -213,7 +213,17 @@ restores with create-only inserts. The parent row is restored after its
 dependencies. Read-back compares the typed rows and exercises the history
 reader against the restored revision chain. The temporary file is deleted
 when the drill closes. The uploaded `test-invoice-aggregate-restore.json`
-contains the commit, counts and elapsed time. A complete recovery exercise
+contains the commit, counts and elapsed time.
+
+The payment variant records and fully reverses a synthetic manual receipt through
+the authenticated routes. The typed copy includes the payment records, their
+postings, and the operation index. Before removing any rows, the drill validates
+their ownership and their links to the committed invoice. After restoration, it
+checks the balance and both operations through the API, replays both operations
+against the restored index, and verifies that an additional reversal is refused.
+It checks that the invoice retains its payment history and cancellation guard
+with a zero settled balance. The uploaded `test-invoice-payment-restore.json`
+includes the restored operation and index row counts. A complete recovery exercise
 from a separately retained backup remains necessary to measure RPO and RTO.
 
 ## Read-only production suite

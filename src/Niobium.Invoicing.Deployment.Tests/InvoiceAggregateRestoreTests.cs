@@ -5,13 +5,16 @@ using System.Text.Json;
 using Azure;
 using Azure.Data.Tables;
 using Niobium.Invoicing.History;
+using Niobium.Invoicing.Testing;
 
 namespace Niobium.Invoicing.Deployment.Tests;
 
 public sealed partial class DeployedInvoiceTests
 {
     [TestMethod]
-    public async Task Deployed_unpaid_invoice_and_committed_history_restore_from_a_typed_file()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Deployed_invoice_history_and_payment_evidence_restore_from_a_typed_file(bool withPayments)
     {
         await VerifiedTestFunctionApp();
         string commit = verifiedTestCommit ?? throw new InvalidOperationException("A verified test deployment is required.");
@@ -26,12 +29,28 @@ public sealed partial class DeployedInvoiceTests
         using (HttpResponseMessage updated = await Post(request, Token(biller, tenant)))
             Assert.AreEqual(HttpStatusCode.OK, updated.StatusCode);
 
+        RecordInvoicePaymentRequest receipt = ManualReceipt(12000);
+        ReverseInvoicePaymentRequest reversal = ManualReversal(receipt, receipt.AmountCents);
+        InvoicePaymentBalance expectedBalance = new("NZD", 0, 0, 23000, 0, 2);
+        if (withPayments)
+        {
+            string credential = Token(biller, tenant);
+            using HttpResponseMessage received = await LifecycleRequest(id, "payments", receipt, credential);
+            Assert.IsTrue(await PaymentResult(received) == new InvoicePaymentBalance("NZD", 0, 12000, 11000, 0, 1),
+                "The synthetic payment must be committed before the reversal.");
+            using HttpResponseMessage reversed = await LifecycleRequest(id, "payments/reversals", reversal, credential);
+            Assert.IsTrue(await PaymentResult(reversed) == expectedBalance,
+                "The synthetic reversal must restore the full outstanding balance.");
+        }
+
         TableEntity owner = await Read(id);
-        Assert.IsTrue(owner.GetGuid(nameof(Invoice.Billee)) == customer
+        Assert.IsTrue(owner.GetGuid(nameof(Invoice.Billee)) == customer && owner.GetGuid(nameof(Invoice.Tenant)) == tenant
             && !owner.ContainsKey(nameof(Invoice.Token)) && !owner.ContainsKey(nameof(Invoice.Delivered)),
             "The drill requires this test's own unsent invoice.");
-        InvoiceRevision[] revisions = (await ReadHistory(id)).Select(entry => entry.Revision).ToArray();
-        Assert.IsTrue(revisions.Length == 5 && revisions.Any(revision => revision.PartCount > 1),
+        int lifecycleVersion = withPayments ? 3 : 2;
+        InvoiceRevision[] revisions = (await ReadHistory(id, expectedLifecycleVersion: lifecycleVersion))
+            .Select(entry => entry.Revision).ToArray();
+        Assert.IsTrue(revisions.Length == (withPayments ? 7 : 5) && revisions.Any(revision => revision.PartCount > 1),
             "The fixture must have its committed edits and multipart history.");
 
         List<CapturedRestoreRow> captured = [];
@@ -51,6 +70,25 @@ public sealed partial class DeployedInvoiceTests
                 StorageKey part = revision.GetPartKey(index);
                 Capture(parts, (await parts.GetEntityAsync<TableEntity>(part.PartitionKey, part.RowKey)).Value);
             }
+        }
+        int restoredPaymentIndexRows = 0;
+        if (withPayments)
+        {
+            TableClient payments = tables.GetTableClient(InvoicePaymentFixture.PaymentsTable);
+            TableClient postings = tables.GetTableClient(InvoicePaymentFixture.PostingsTable);
+            TableClient indexes = tables.GetTableClient(InvoicePaymentIndexFixture.Table);
+            var evidence = await InvoicePaymentFixture.ReadOwnedAsync(payments, postings, indexes,
+                owner, biller, id, customer, includeAllProperties: true);
+            Assert.IsTrue(evidence.Receipts.Count == 2 && evidence.Postings.Count == 2 && evidence.Indexes.Count > 0
+                && evidence.Receipts.Select(row => row.GetGuid("Operation")).ToHashSet().SetEquals([receipt.Operation, reversal.Operation]),
+                "The capture requires the two owned payment operations, their postings and the operation index.");
+            foreach (TableEntity posting in evidence.Postings)
+                Capture(postings, posting);
+            foreach (TableEntity index in evidence.Indexes)
+                Capture(indexes, index);
+            foreach (TableEntity payment in evidence.Receipts)
+                Capture(payments, payment);
+            restoredPaymentIndexRows = evidence.Indexes.Count;
         }
         Assert.IsTrue(owner.ETag == (await Read(id)).ETag, "The captured invoice must retain its observed version.");
 
@@ -86,7 +124,7 @@ public sealed partial class DeployedInvoiceTests
             Assert.IsTrue(SHA256.HashData(retained).SequenceEqual(digest), "The retained copy must match the captured digest.");
             RestoreRow[] restore = JsonSerializer.Deserialize<RestoreRow[]>(retained)
                 ?? throw new InvalidOperationException("The retained copy could not be read.");
-            // Restore the dependencies first so an invoice lookup sees the complete history.
+            // Restore the dependencies first so an invoice lookup sees the complete history and payment evidence.
             for (int index = restore.Length - 1; index >= 0; index--)
                 await tables.GetTableClient(restore[index].TableName).AddEntityAsync(restore[index].BuildEntity());
 
@@ -98,12 +136,14 @@ public sealed partial class DeployedInvoiceTests
             }
             Assert.IsTrue(snapshot.SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(restored.ToArray())),
                 "The restored keys, types and values must match the retained invoice copy.");
-            var restoredHistory = await ReadHistory(id);
+            var restoredHistory = await ReadHistory(id, expectedLifecycleVersion: lifecycleVersion);
             Assert.IsTrue(revisions.Select(revision => revision.ID)
                 .SequenceEqual(restoredHistory.Select(entry => entry.Revision.ID)),
                 "The history reader must resolve and validate the restored chain.");
             Assert.IsTrue(restoredHistory[0].Snapshot.Invoice.GrandTotalCents == 23000L,
                 "The latest restored snapshot must retain its committed total.");
+            if (withPayments)
+                await VerifyRestoredPayments(id, receipt, reversal, expectedBalance);
             restoreTime.Stop();
         }
         catch (Exception failure)
@@ -133,7 +173,8 @@ public sealed partial class DeployedInvoiceTests
 
         string directory = Path.Combine(Required("GITHUB_WORKSPACE"), "artifacts", "deployed");
         Directory.CreateDirectory(directory);
-        await File.WriteAllTextAsync(Path.Combine(directory, "test-invoice-aggregate-restore.json"),
+        string reportName = withPayments ? "test-invoice-payment-restore.json" : "test-invoice-aggregate-restore.json";
+        await File.WriteAllTextAsync(Path.Combine(directory, reportName),
             JsonSerializer.Serialize(new
             {
                 schema = 1,
@@ -142,6 +183,8 @@ public sealed partial class DeployedInvoiceTests
                 completed = true,
                 restoredRows = captured.Count,
                 restoredRevisions = revisions.Length,
+                restoredPaymentOperations = withPayments ? expectedBalance.Entries : 0,
+                restoredPaymentIndexRows,
                 restoreMilliseconds = restoreTime.Elapsed.TotalMilliseconds,
             }));
 
@@ -150,6 +193,45 @@ public sealed partial class DeployedInvoiceTests
             Assert.IsTrue(entity.ETag != ETag.All && !String.IsNullOrWhiteSpace(entity.ETag.ToString()),
                 "Each captured row requires an observed conditional version.");
             captured.Add(new(table, entity.ETag, Backup(table, entity)));
+        }
+    }
+
+    private static async Task VerifyRestoredPayments(long id, RecordInvoicePaymentRequest receipt,
+        ReverseInvoicePaymentRequest reversal, InvoicePaymentBalance expected)
+    {
+        string credential = Token(biller, tenant);
+        ETag observed = (await Read(id)).ETag;
+        using (HttpResponseMessage balance = await LifecycleRequest(id, "payments/balance", null, credential))
+            Assert.IsTrue(await PaymentResult(balance) == expected, "The restored payment balance must match.");
+        InvoicePaymentEntry original = await ReadPayment(receipt.Operation);
+        InvoicePaymentEntry reversed = await ReadPayment(reversal.Operation);
+        Assert.IsTrue(original.Kind == InvoicePaymentKind.Received && original.Reverses == null
+            && original.AmountCents == receipt.AmountCents && original.Evidence == receipt.Evidence,
+            "The operation index must resolve the original receipt.");
+        Assert.IsTrue(reversed.Kind == InvoicePaymentKind.Reversed && reversed.Reverses == original.Operation
+            && reversed.AmountCents == reversal.AmountCents && reversed.Evidence == reversal.Evidence,
+            "The operation index must resolve the reversal and its receipt link.");
+        using (HttpResponseMessage replay = await LifecycleRequest(id, "payments", receipt, credential))
+            Assert.IsTrue(await PaymentResult(replay) == expected, "The restored receipt must remain idempotent.");
+        using (HttpResponseMessage replay = await LifecycleRequest(id, "payments/reversals", reversal, credential))
+            Assert.IsTrue(await PaymentResult(replay) == expected, "The restored reversal must remain idempotent.");
+        using (HttpResponseMessage excess = await LifecycleRequest(id, "payments/reversals", ManualReversal(receipt, 1), credential))
+            Assert.AreEqual(HttpStatusCode.Conflict, excess.StatusCode, "The index must retain the full reversed amount.");
+        InvoiceLifecycleStatus status = await LifecycleStatus(id);
+        Assert.IsTrue(status.PaymentHistory == InvoicePaymentHistory.PaymentOccurred && !status.CanCancel,
+            "The restored invoice must retain the history of its fully reversed payment.");
+        Assert.IsTrue(observed == (await Read(id)).ETag, "The verification must preserve the restored invoice version.");
+
+        async Task<InvoicePaymentEntry> ReadPayment(Guid operation)
+        {
+            using HttpResponseMessage result = await LifecycleRequest(id, "payments/" + operation, null, credential);
+            Assert.AreEqual(HttpStatusCode.OK, result.StatusCode);
+            Assert.IsTrue(result.Headers.CacheControl?.NoStore == true);
+            InvoicePaymentEntry? entry = JsonSerializer.Deserialize<InvoicePaymentEntry>(await result.Content.ReadAsStringAsync(),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            if (entry == null || entry.Operation != operation || entry.Actor != biller)
+                throw new InvalidOperationException("The restored payment must match the authenticated operation.");
+            return entry;
         }
     }
 
