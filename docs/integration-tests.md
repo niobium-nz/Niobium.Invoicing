@@ -161,6 +161,31 @@ unchanged, and permit a normal invoice write afterward. The candidate suite now
 has 44 cases; the immutable-main suite still has 39. These live requests are not
 assumed to land on the same Azure instance. No notification is added by this case.
 
+### Test storage recovery evidence
+
+After verifying the deployed commit through `/health`, the deployed harness
+writes `test-storage-recovery.json` to the deployed evidence artifact and adds
+the same sanitized receipt to the GitHub Actions job summary. The candidate job
+also publishes the selected metadata fields in its job log. The receipt records the
+verified commit, capture time, storage account SKU and kind, and the account's
+Blob versioning, soft-delete and point-in-time recovery settings.
+It also records matching backup instances visible in Data Protection vaults
+in the existing test resource group. The vault scan is bounded and records
+partial coverage when a read fails or additional pages remain.
+
+The evidence uses ARM metadata reads through the existing test workflow
+identity. The report distinguishes unavailable reads from a completed scan.
+Azure Storage redundancy replicates deletes and overwrites. Blob recovery
+settings and Blob backup instances apply to blobs. A Table recovery claim
+requires a recoverable Table data copy and a successful restore of an owned
+invoice fixture. [Azure Storage redundancy](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy) [Azure Backup support matrix](https://learn.microsoft.com/en-us/azure/backup/backup-support-matrix)
+
+The test resource-group scan has no visibility into external vaults or
+separately operated backups unless they are visible within that scope.
+Measure recovered data age and restoration time in the authorized test
+environment before reporting Q28's one-hour RPO and four-hour RTO targets
+as met. The production read-only suite has its own evidence scope.
+
 ## Read-only production suite
 
 Use the [environment configuration inventory](environment-configuration.md) for the existing fixture settings, their exact runner mappings and why `TEST_INVOICE_TOKEN` must remain configured. The same guide records the service boundary: Invoicing owns invoice-specific integration tests, while Notification owns generic notification tests without biller/invoice fixtures.

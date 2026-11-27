@@ -153,6 +153,10 @@ jobs:
               print('TEST_INVOICE_BILLER=' + fixture['biller'])
               print('TEST_INVOICE_ID=' + str(fixture['invoice']))
           PYREPORT
+      - name: Report test storage recovery evidence
+        if: always()
+        timeout-minutes: 1
+        run: python scripts/report-storage-recovery.py
       - name: Upload deployed test results
         if: always()
         uses: actions/upload-artifact@v4

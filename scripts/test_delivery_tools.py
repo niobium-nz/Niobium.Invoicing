@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -17,6 +18,7 @@ def load(name, filename):
 
 coverage = load("coverage_gate", "check-coverage.py")
 resources = load("resources", "test-resources.py")
+storage_recovery = load("storage_recovery", "report-storage-recovery.py")
 
 
 class CoverageGateTests(unittest.TestCase):
@@ -111,6 +113,74 @@ class ResourceBoundaryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unexpected test function hostname"):
                 resources.main()
             self.assertEqual(azure.call_count, 1)
+
+
+class StorageRecoveryEvidenceTests(unittest.TestCase):
+    commit = "7" * 40
+
+    def report(self):
+        return {
+            "schema": 1, "environment": "test", "commit": self.commit,
+            "capturedAt": "2026-11-27T12:30:00.1234567+00:00",
+            "storage": {"sku": "Standard_LRS", "kind": "StorageV2", "accountId": "private-account"},
+            "blobProtection": {
+                "versioning": False, "changeFeed": None, "blobSoftDelete": True,
+                "blobSoftDeleteDays": 7, "containerSoftDelete": False, "containerSoftDeleteDays": None,
+                "pointInTimeRestore": False, "pointInTimeRestoreDays": None,
+            },
+            "backupVaults": {
+                "scope": storage_recovery.VAULT_SCOPE, "complete": False, "visibleVaults": 1,
+                "vaultsRead": 0, "matchingBlobInstances": 0, "matchingTableInstances": 0,
+                "matchingOtherInstances": 0, "protectionConfigured": 0, "vaultId": "private-vault",
+            },
+            "unavailable": [],
+            "opaqueData": "private-detail",
+        }
+
+    def test_prints_only_allowlisted_metadata_from_the_current_test_deployment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test-storage-recovery.json"
+            path.write_text(json.dumps(self.report()), encoding="utf-8")
+            with patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "GITHUB_SHA": self.commit}), \
+                    contextlib.redirect_stdout(io.StringIO()) as log:
+                storage_recovery.main(path)
+        line = log.getvalue().strip()
+        self.assertTrue(line.startswith("Storage recovery evidence "))
+        self.assertNotIn("private-", line)
+        result = json.loads(line.removeprefix("Storage recovery evidence "))
+        self.assertEqual(result["storage"], {"sku": "Standard_LRS", "kind": "StorageV2"})
+        self.assertEqual(result["blobProtection"]["blobSoftDeleteDays"], 7)
+        self.assertFalse(result["backupVaults"]["complete"])
+
+    def test_retains_unavailable_sections_as_unknown(self):
+        report = self.report()
+        report.update(storage=None, blobProtection=None, backupVaults=None,
+                      unavailable=["test-storage-account"])
+        result = storage_recovery.verified_receipt(report, self.commit)
+        self.assertIsNone(result["storage"])
+        self.assertEqual(result["unavailable"], ["test-storage-account"])
+
+    def test_mismatched_and_malformed_reports_emit_only_a_fixed_status(self):
+        wrong_commit = self.report()
+        wrong_commit["commit"] = "8" * 40
+        untrusted_value = self.report()
+        untrusted_value["storage"]["sku"] = "::notice::do not echo this value"
+        invalid_count = self.report()
+        invalid_count["backupVaults"]["matchingTableInstances"] = True
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict(os.environ, {"AZURE_ENV_NAME": "test", "GITHUB_SHA": self.commit}):
+            path = Path(directory) / "test-storage-recovery.json"
+            for report in (wrong_commit, untrusted_value, invalid_count):
+                with self.subTest(report=report), contextlib.redirect_stdout(io.StringIO()) as log:
+                    path.write_text(json.dumps(report), encoding="utf-8")
+                    storage_recovery.main(path)
+                    self.assertEqual(log.getvalue(), "Test storage recovery evidence unavailable or invalid.\n")
+
+    def test_rejects_non_test_runs_before_opening_the_report(self):
+        with patch.dict(os.environ, {"AZURE_ENV_NAME": "prod"}), patch.object(Path, "open") as opening:
+            with self.assertRaisesRegex(ValueError, "only in the test environment"):
+                storage_recovery.main()
+            opening.assert_not_called()
 
 
 if __name__ == "__main__":
