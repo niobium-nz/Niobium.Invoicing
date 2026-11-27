@@ -260,5 +260,9 @@ public sealed record InvoiceLifecycleStatus(InvoicePreparationStage Preparation,
 
     /// <summary>Additional provider progress when an authenticated receipt was recorded.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public InvoiceNotificationProgress? Notification { get; init; }
+    public InvoiceNotificationProgress? Notification
+    {
+        get;
+        init;
+    }
 }

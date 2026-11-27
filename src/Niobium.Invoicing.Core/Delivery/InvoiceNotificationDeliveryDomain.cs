@@ -72,18 +72,39 @@ public sealed class InvoiceNotificationDeliveryDomain(
         switch (receipt.Kind)
         {
             case NotificationDeliveryKind.Submitted:
-                return Earlier(at, current.SubmittedAt, id, current.SubmittedEventID)
-                    ? current with { SubmittedEventID = id, SubmittedAt = at } : current;
+                if (!Earlier(at, current.SubmittedAt, id, current.SubmittedEventID))
+                    return current;
+                return current with
+                {
+                    SubmittedEventID = id,
+                    SubmittedAt = at,
+                };
             case NotificationDeliveryKind.Delivered:
-                return Earlier(at, current.DeliveredAt, id, current.DeliveredEventID)
-                    ? current with { DeliveredEventID = id, DeliveredAt = at } : current;
+                if (!Earlier(at, current.DeliveredAt, id, current.DeliveredEventID))
+                    return current;
+                return current with
+                {
+                    DeliveredEventID = id,
+                    DeliveredAt = at,
+                };
             case NotificationDeliveryKind.Delayed:
-                return Later(at, current.LastDelayedAt, id, current.DelayEventID)
-                    ? current with { DelayEventID = id, LastDelayedAt = at } : current;
+                if (!Later(at, current.LastDelayedAt, id, current.DelayEventID))
+                    return current;
+                return current with
+                {
+                    DelayEventID = id,
+                    LastDelayedAt = at,
+                };
             default:
                 InvoiceNotificationFailure failure = Failure(receipt.Kind);
-                return Later(at, current.LastFailureAt, id, current.FailureEventID)
-                    ? current with { FailureEventID = id, LastFailureAt = at, LastFailureCode = (int)failure } : current;
+                if (!Later(at, current.LastFailureAt, id, current.FailureEventID))
+                    return current;
+                return current with
+                {
+                    FailureEventID = id,
+                    LastFailureAt = at,
+                    LastFailureCode = (int)failure,
+                };
         }
     }
 
