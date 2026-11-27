@@ -95,6 +95,7 @@ public sealed partial class DeployedInvoiceTests
         if (bus != null)
             await bus.DisposeAsync();
         services?.Dispose();
+        await CaptureStorageRecoveryEvidence();
         await CaptureHostDiagnostics();
         http?.Dispose();
         if (failures.Count > 0)
@@ -430,7 +431,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsTrue(response.Headers.CacheControl?.NoStore == true);
     }
 
-    private static async Task<string> VerifiedTestFunctionApp()
+    private static async Task<string> VerifiedTestFunctionApp(CancellationToken cancellationToken = default)
     {
         Assert.AreEqual("test", Required("TEST_ENVIRONMENT"));
         Assert.AreEqual("test", Required("AZURE_ENV_NAME"));
@@ -439,7 +440,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsTrue(app.EndsWith("test", StringComparison.Ordinal) && endpoint.Scheme == "https"
             && endpoint.Host.EndsWith(".azurewebsites.net", StringComparison.Ordinal), "Only the existing test Functions app is allowed.");
         string group = Required("AZURE_RESOURCE_GROUP");
-        string hostname = await ReadAzureValue("resource", "show", "--resource-group", group, "--name", app,
+        string hostname = await ReadAzureValueAs("tsv", cancellationToken, "resource", "show", "--resource-group", group, "--name", app,
             "--resource-type", "Microsoft.Web/sites", "--api-version", "2024-11-01", "--query", "properties.defaultHostName");
         Assert.IsTrue(string.Equals(endpoint.Host, hostname, StringComparison.OrdinalIgnoreCase), "The test app must match the verified deployment host.");
         return app;
@@ -457,8 +458,12 @@ public sealed partial class DeployedInvoiceTests
         return key;
     }
 
-    private static async Task<string> ReadAzureValue(params string[] arguments)
+    private static Task<string> ReadAzureValue(params string[] arguments)
+        => ReadAzureValueAs("tsv", CancellationToken.None, arguments);
+
+    private static async Task<string> ReadAzureValueAs(string output, CancellationToken cancellationToken, params string[] arguments)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ProcessStartInfo start = new("az")
         {
             UseShellExecute = false,
@@ -467,16 +472,17 @@ public sealed partial class DeployedInvoiceTests
         };
         foreach (string argument in arguments)
             start.ArgumentList.Add(argument);
-        foreach (string argument in new[] { "--only-show-errors", "--output", "tsv" })
+        foreach (string argument in new[] { "--only-show-errors", "--output", output })
             start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("Azure CLI could not start.");
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
-        Task<string> output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(60));
+        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync(timeout.Token);
         Task<string> error = process.StandardError.ReadToEndAsync(timeout.Token);
         try
         {
             await process.WaitForExitAsync(timeout.Token);
-            string value = await output;
+            string value = await standardOutput;
             _ = await error; // Never include CLI responses, which can contain keys, in test output.
             Assert.AreEqual(0, process.ExitCode, "Unable to read the existing test app through the workflow Azure identity.");
             return value.Trim();
