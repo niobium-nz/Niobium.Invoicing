@@ -22,7 +22,7 @@ public sealed partial class DeployedInvoiceTests
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
 
         TableEntity owner = await Read(id);
-        Assert.AreEqual<Guid?>(customer, owner.GetGuid(nameof(Invoice.Billee)),
+        Assert.IsTrue(owner.GetGuid(nameof(Invoice.Billee)) == customer,
             "The restore fixture must belong to this test.");
         Guid[] revisions = (await ReadHistory(id)).Select(entry => entry.Revision.ID).ToArray();
         Assert.IsTrue(revisions.Length > 0, "The test invoice must have committed history.");
@@ -31,7 +31,7 @@ public sealed partial class DeployedInvoiceTests
         string row = InvoiceItem.BuildRowKey(1);
         TableClient table = tables.GetTableClient(nameof(InvoiceItem));
         TableEntity observed = (await table.GetEntityAsync<TableEntity>(partition, row)).Value;
-        Assert.AreEqual(itemSubject, observed.GetString(nameof(InvoiceItem.Subject)),
+        Assert.IsTrue(observed.GetString(nameof(InvoiceItem.Subject)) == itemSubject,
             "The line must belong to this test.");
         Assert.IsTrue(observed.ETag != ETag.All && !String.IsNullOrWhiteSpace(observed.ETag.ToString()),
             "The drill requires an observed conditional version.");
@@ -39,9 +39,9 @@ public sealed partial class DeployedInvoiceTests
         IRepository<InvoiceItem> lines = services.GetRequiredService<IRepository<InvoiceItem>>();
         InvoiceItem captured = await lines.RetrieveAsync(partition, row)
             ?? throw new InvalidOperationException("The owned line could not be captured.");
-        Assert.AreEqual(observed.ETag.ToString(), captured.ETag, "The copy must match the observed version.");
-        Assert.AreEqual(id, captured.GetInvoiceID());
-        Assert.AreEqual(1L, captured.ID);
+        Assert.IsTrue(observed.ETag.ToString() == captured.ETag, "The copy must match the observed version.");
+        Assert.IsTrue(captured.GetInvoiceID() == id && captured.ID == 1,
+            "The captured line must have this test's invoice and line identity.");
         captured.UpdatedAt = null;
         captured.ETag = null;
         byte[] backup = JsonSerializer.SerializeToUtf8Bytes(captured);
@@ -74,8 +74,8 @@ public sealed partial class DeployedInvoiceTests
         recovered.ETag = null;
         Assert.IsTrue(backup.SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(recovered)),
             "The stored line must match the captured copy.");
-        Assert.AreEqual(owner.ETag, (await Read(id)).ETag, "The owning invoice must retain its version.");
-        CollectionAssert.AreEqual(revisions, (await ReadHistory(id)).Select(entry => entry.Revision.ID).ToArray(),
+        Assert.IsTrue(owner.ETag == (await Read(id)).ETag, "The owning invoice must retain its version.");
+        Assert.IsTrue(revisions.SequenceEqual((await ReadHistory(id)).Select(entry => entry.Revision.ID)),
             "The normal history reader must resolve the original committed chain.");
 
         string directory = Path.Combine(Required("GITHUB_WORKSPACE"), "artifacts", "deployed");

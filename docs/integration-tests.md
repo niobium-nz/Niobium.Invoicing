@@ -185,6 +185,12 @@ Measure recovered data age and restoration time in the authorized test
 environment before reporting Q28's one-hour RPO and four-hour RTO targets
 as met. The production read-only suite has its own evidence scope.
 
+On 27 November 2026 the deployed inventory reported `Standard_LRS` on the
+`StorageV2` test data account, seven days of Blob soft delete and disabled
+Blob versioning. The test resource-group scan completed with zero visible
+Data Protection vaults and zero matching backup instances. The receipt covers
+that resource group. [Observed test receipt](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/46031132024/job/140615711470)
+
 The deployed restore drill captures a serialized copy of one line from a newly
 created synthetic invoice with a blank recipient. It conditionally removes
 that owned line by ETag, confirms the row is missing, and reinserts the copy
