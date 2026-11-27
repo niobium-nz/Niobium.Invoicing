@@ -55,7 +55,7 @@ Notification validates and persists the signed provider receipt, then publishes
 the invoice channel to its explicitly configured
 `notificationdeliveryevent-invoicing` queue. The Invoicing Functions listener
 reuses the Notification namespace connection and its user-assigned managed
-identity. Notification's infrastructure grants the receiver role on this queue.
+identity. The Invoicing deployment grants its own receiver role on this queue.
 The framework's typed canonical queue keeps its type-derived name. See the
 [Niobium messaging convention](https://github.com/niobium-nz/Niobium/blob/ba660a5c12ca92ae0026625b368eb03e631a34e3/docs/messaging.md#confirmed-routing-convention).
 

@@ -71,9 +71,12 @@ The test and production deployments use the existing
 provisions the `InvoiceNotificationDelivery` table. Include that table in
 any explicit `STORAGE_TABLE_NAMES` override.
 
-Provision the `notificationdeliveryevent-invoicing` queue and its scoped
-Service Bus Data Receiver grant in the Notification deployment before starting
-the Invoicing listener. Refer to the [delivery contract](invoice-lifecycle.md#provider-delivery-receipts).
+The Notification deployment provisions `notificationdeliveryevent-invoicing`
+before Invoicing enables the listener. Invoicing derives the namespace from its
+existing Notification connection and scopes the managed identity's Service Bus
+Data Receiver assignment to that queue. Its deployment identity needs authority
+to deploy this grant in the Notification resource group.
+See the [delivery contract](invoice-lifecycle.md#provider-delivery-receipts).
 Development deployments without the Notification destination disable the consumer.
 For local Functions startup without that connection, set
 `AzureWebJobs.InvoiceNotificationDeliveryConsumer.Disabled` to `true` in the

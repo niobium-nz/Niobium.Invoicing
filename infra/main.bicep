@@ -20,8 +20,8 @@ param customDomainName string = ''
 @description('Name of the Queues, separated by comma.')
 param serviceBusQueueNames string = ''
 
-@description('Enables the explicitly provisioned Notification receipt destination for this deployment.')
-param useNotificationDeliveryQueue bool = false
+@description('Resource group that owns the configured Notification receipt destination.')
+param notificationReceiptResourceGroup string = ''
 
 @description('Names of storage tables, separated by comma.')
 param storageTableNames string = ''
@@ -66,6 +66,20 @@ var serviceBusSettings = [
         value: sharedManagedIdentity.outputs.clientId
     }
 ]
+
+var useNotificationDeliveryQueue = !empty(notificationReceiptResourceGroup)
+var notificationNamespaceSettings = filter(appSettings, setting => toLower(setting.name) == 'notificationqueueoptions__fullyqualifiednamespace')
+var notificationNamespaceName = empty(notificationNamespaceSettings) ? '' : first(split(string(notificationNamespaceSettings[0].value), '.'))
+
+module notificationReceiptReceiver 'receipt-reader.bicep' = if (useNotificationDeliveryQueue) {
+  name: 'invoicing-receipt-receiver'
+  scope: resourceGroup(notificationReceiptResourceGroup)
+  params: {
+    serviceBusNamespaceName: notificationNamespaceName
+    queueName: 'notificationdeliveryevent-invoicing'
+    principalId: sharedManagedIdentity.outputs.principalId
+  }
+}
 
 var notificationReceiptSettings = useNotificationDeliveryQueue ? [
   {
@@ -138,6 +152,9 @@ var storageSettings = [
 ]
 
 module app 'function-app.bicep' = {
+  dependsOn: [
+    notificationReceiptReceiver
+  ]
   params: {
     appShortName: appShortName
     // Request binding also allocates in the Functions host before Core validation.

@@ -3,7 +3,7 @@ using 'main.bicep'
 var targetEnvironment = readEnvironmentVariable('AZURE_ENV_NAME', 'dev')
 
 param environmentName = targetEnvironment
-param useNotificationDeliveryQueue = targetEnvironment == 'test' || targetEnvironment == 'prod'
+param notificationReceiptResourceGroup = targetEnvironment == 'test' || targetEnvironment == 'prod' ? 'rg-niobium-notify-${targetEnvironment}' : ''
 param appShortName = readEnvironmentVariable('APP_SHORT_NAME', 'niobiuminvoicing')
 param customDomainName = readEnvironmentVariable('CUSTOM_DOMAIN_NAME', '')
 param serviceBusQueueNames = readEnvironmentVariable('SERVICE_BUS_QUEUE_NAMES', 'issueinvoicecommand')
