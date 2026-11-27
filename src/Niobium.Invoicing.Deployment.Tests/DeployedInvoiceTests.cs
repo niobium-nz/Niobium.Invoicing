@@ -171,16 +171,25 @@ public sealed partial class DeployedInvoiceTests
         };
         await using ServiceBusSender sender = bus.CreateSender("issueinvoicecommand");
         await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
-        await Eventually(async () => (await Read(id)).GetInt64(nameof(Invoice.GrandTotalCents)) == 11500L, "The real queue consumer did not persist the invoice.");
-        TableEntity saved = await Read(id);
-        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.ReadActive(saved));
+        TableEntity saved = await WaitForPreparedInvoice(11500L);
         Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Token)));
         Assert.IsFalse(saved.ContainsKey(nameof(Invoice.Delivered)));
         // Observe a second completed processing cycle without competing with the real notification consumer.
         command.InvoiceItems[0].Quantity = 2;
         await sender.SendMessageAsync(new ServiceBusMessage(JsonMarshaller.Marshall(command)) { MessageId = Guid.NewGuid().ToString(), ContentType = "application/json" });
-        await Eventually(async () => (await Read(id)).GetInt64(nameof(Invoice.GrandTotalCents)) == 23000L, "The real queue consumer did not persist the update.");
-        Assert.AreEqual(PreparationCheckpoint.Ready, InvoiceCheckpoint.ReadActive(await Read(id)));
+        await WaitForPreparedInvoice(23000L);
+
+        async Task<TableEntity> WaitForPreparedInvoice(long total)
+        {
+            TableEntity? prepared = null;
+            await Eventually(async () =>
+            {
+                prepared = await Read(id);
+                return prepared.GetInt64(nameof(Invoice.GrandTotalCents)) == total
+                    && InvoiceCheckpoint.ReadActive(prepared) == PreparationCheckpoint.Ready;
+            }, "The real queue consumer did not finish preparing the expected invoice.");
+            return prepared!;
+        }
     }
 
     [TestMethod]
