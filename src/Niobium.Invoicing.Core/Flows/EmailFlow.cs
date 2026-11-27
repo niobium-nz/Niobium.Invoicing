@@ -24,11 +24,6 @@ public class EmailFlow(
     ILogger<EmailFlow> logger) : IFlow
 {
     /// <summary>
-    /// Channel used to select the downstream sender-specific invoice template.
-    /// </summary>
-    private const string NotificationInvoiceChannel = "Invoice";
-
-    /// <summary>
     /// Loads an invoice and queues its notification unless recipient email is blank.
     /// </summary>
     /// <param name="issuer">Issuing biller identifier.</param>
@@ -84,7 +79,7 @@ public class EmailFlow(
             {
                 ID = entity.GetFullID(),
                 Tenant = issuer,
-                Channel = NotificationInvoiceChannel,
+                Channel = Constants.InvoiceNotificationChannel,
                 Destination = entity.RecipientEmail,
                 DestinationDisplayName = entity.BilleeName,
                 Parameters = parameters,

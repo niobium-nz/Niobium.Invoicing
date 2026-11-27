@@ -1,3 +1,4 @@
+using System.Globalization;
 using Niobium.Profile;
 
 namespace Niobium.Invoicing;
@@ -541,6 +542,26 @@ public partial class Invoice
     public static string BuildFullID(Guid biller, long id)
     {
         return BuildFullID(biller.ToString(), id.ToString());
+    }
+
+    /// <summary>Reads a canonical full invoice reference produced by <see cref="BuildFullID(Guid, long)"/>.</summary>
+    public static bool TryParseFullID(string? value, out Guid biller, out long id)
+    {
+        biller = Guid.Empty;
+        id = 0;
+        if (value is not { Length: >= 38 and <= 56 })
+            return false;
+        int separator = value.IndexOf('@');
+        if (separator < 1
+            || !long.TryParse(value.AsSpan(0, separator), NumberStyles.None, CultureInfo.InvariantCulture, out long invoice)
+            || invoice <= 0
+            || !Guid.TryParseExact(value.AsSpan(separator + 1), "D", out Guid issuer)
+            || issuer == Guid.Empty
+            || value != BuildFullID(issuer, invoice))
+            return false;
+        biller = issuer;
+        id = invoice;
+        return true;
     }
 
     /// <summary>

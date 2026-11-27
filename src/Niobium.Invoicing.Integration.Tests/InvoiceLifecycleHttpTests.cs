@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Moq;
+using Niobium.Invoicing.Delivery;
 using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.History;
@@ -25,7 +26,8 @@ public sealed class InvoiceLifecycleHttpTests
     {
         Guid biller = Guid.NewGuid(), tenant = Guid.NewGuid();
         Mock<IDomainRepository<InvoiceDomain, Invoice>> repository = new(MockBehavior.Strict);
-        InvoiceLifecycleFunctions handler = new(new(repository.Object, TimeProvider.System));
+        InvoiceLifecycleFunctions handler = new(new(repository.Object, TimeProvider.System,
+            Mock.Of<IDomainRepository<InvoiceNotificationDeliveryDomain, InvoiceNotificationDelivery>>()));
         HttpRequest request = await Request(biller, tenant, scenario);
         long invoice = scenario == "invalid-invoice" ? 0 : Invoice.ParseID(DateTimeOffset.UtcNow);
         IActionResult[] results =
@@ -70,7 +72,8 @@ public sealed class InvoiceLifecycleHttpTests
         items.Setup(r => r.GetAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).Returns(EmptyLines());
         GenericDomainRepository<InvoiceDomain, Invoice> domains = new(() => new(Microsoft.Extensions.Options.Options.Create(new BillingOptions { InvoiceTokenSecretSalt = "synthetic-test-salt", GetInvoiceEndpoint = "https://invoice.example.test" }), lazy, [],
             history.Domains(), items.Object, TimeProvider.System, new PaymentScenario().Payments.Object, new PaymentScenario().Postings.Object, new PaymentScenario().Index.Object), lazy);
-        InvoiceLifecycleFunctions handler = new(new(domains, TimeProvider.System));
+        InvoiceLifecycleFunctions handler = new(new(domains, TimeProvider.System,
+            Mock.Of<IDomainRepository<InvoiceNotificationDeliveryDomain, InvoiceNotificationDelivery>>()));
         HttpRequest request = await Request(biller, tenant);
         Assert.AreEqual(InvoicePaymentHistory.Unknown, ((InvoiceLifecycleStatus)((OkObjectResult)await handler.GetInvoiceStatus(request, biller, invoice, default)).Value!).PaymentHistory);
         Assert.AreEqual("no-store", request.HttpContext.Response.Headers.CacheControl.ToString());

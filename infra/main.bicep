@@ -20,6 +20,9 @@ param customDomainName string = ''
 @description('Name of the Queues, separated by comma.')
 param serviceBusQueueNames string = ''
 
+@description('Enables the explicitly provisioned Notification receipt destination for this deployment.')
+param useNotificationDeliveryQueue bool = false
+
 @description('Names of storage tables, separated by comma.')
 param storageTableNames string = ''
 
@@ -62,6 +65,22 @@ var serviceBusSettings = [
         name: 'AzureWebJobsServiceBus__clientId'
         value: sharedManagedIdentity.outputs.clientId
     }
+]
+
+var notificationReceiptSettings = useNotificationDeliveryQueue ? [
+  {
+    name: 'NotificationQueueOptions__credential'
+    value: 'managedidentity'
+  }
+  {
+    name: 'NotificationQueueOptions__clientId'
+    value: sharedManagedIdentity.outputs.clientId
+  }
+] : [
+  {
+    name: 'AzureWebJobs.InvoiceNotificationDeliveryConsumer.Disabled'
+    value: 'true'
+  }
 ]
 
 var dataStorageAccountName = replace('${appShortName}-${abbrs.storageStorageAccounts}d${environmentName}', '-', '')
@@ -127,7 +146,7 @@ module app 'function-app.bicep' = {
     httpPerInstanceConcurrency: 2
     userAssignedManagedIdentityName: sharedManagedIdentityName
     environmentName: environmentName
-    appSettings: concat(appSettings, serviceBusSettings, storageSettings)
+    appSettings: concat(appSettings, serviceBusSettings, notificationReceiptSettings, storageSettings)
     customDomainName: customDomainName
     userIdentityPrincipalId: userIdentityPrincipalId
     isInteractiveDeployer: isInteractiveDeployer

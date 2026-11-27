@@ -1,7 +1,7 @@
 namespace Niobium.Invoicing;
 
 /// <summary>
-/// Embedded-resource names used by invoice rendering.
+/// Names used by invoice rendering and notification dispatch.
 /// </summary>
 internal class Constants
 {
@@ -13,4 +13,6 @@ internal class Constants
     /// Email-template resource name; no matching resource is embedded or used by current flows.
     /// </summary>
     public const string EmailTemplateResourceName = "Niobium.Invoicing.EmailTemplate.html";
+
+    public const string InvoiceNotificationChannel = "Invoice";
 }

@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using Niobium.Database.StorageTable;
+using Niobium.Invoicing.Delivery;
 using Niobium.Invoicing.Domains;
 using Niobium.Invoicing.Flows;
 using Niobium.Invoicing.Server;
@@ -43,7 +44,7 @@ public sealed partial class StorageFlowTests
         TableClientOptions options = new();
         options.Retry.MaxRetries = 0;
         tableService = new TableServiceClient(uri, new TableSharedKeyCredential("devstoreaccount1", EmulatorKey), options);
-        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, nameof(InvoicePayment), nameof(InvoicePaymentPosting), nameof(InvoicePaymentIndex) })
+        foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, nameof(InvoicePayment), nameof(InvoicePaymentPosting), nameof(InvoicePaymentIndex), nameof(InvoiceNotificationDelivery) })
         {
             await tableService.CreateTableAsync(prefix + table);
         }
@@ -81,7 +82,7 @@ public sealed partial class StorageFlowTests
         host?.Dispose();
         if (tableService != null)
         {
-            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, nameof(InvoicePayment), nameof(InvoicePaymentPosting), nameof(InvoicePaymentIndex) })
+            foreach (string table in new[] { nameof(Invoice), nameof(InvoiceItem), nameof(Billee), InvoiceHistoryFixture.RevisionsTable, InvoiceHistoryFixture.PartsTable, nameof(InvoicePayment), nameof(InvoicePaymentPosting), nameof(InvoicePaymentIndex), nameof(InvoiceNotificationDelivery) })
             {
                 await tableService.DeleteTableAsync(prefix + table);
             }
@@ -261,7 +262,7 @@ public sealed partial class StorageFlowTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (table is not (nameof(Invoice) or nameof(InvoiceItem) or nameof(Billee) or nameof(InvoiceRevision) or nameof(InvoiceRevisionPart)
-                or nameof(InvoicePayment) or nameof(InvoicePaymentPosting) or nameof(InvoicePaymentIndex)))
+                or nameof(InvoicePayment) or nameof(InvoicePaymentPosting) or nameof(InvoicePaymentIndex) or nameof(InvoiceNotificationDelivery)))
             {
                 throw new InvalidOperationException("Unexpected integration table.");
             }

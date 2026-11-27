@@ -62,3 +62,19 @@ See the [runtime configuration catalog](configuration-and-development.md#runtime
 5. Verify the latest run's actual deployment, candidate/trusted suites and read-only report. A local pass, an old green run, a skipped suite or configuration confirmation is not current deployment evidence. Use names and sanitized error codes in diagnostics, never credential or mailbox values.
 
 Update this inventory and [agent memory](../AGENTS.md) when a setting's owner, consumer or scope changes. Record verification in the normal PR and delivery checkpoint; retain the [delivery process](delivery-and-operations.md) for documentation changes too.
+
+## Notification receipt consumer
+
+The test and production deployments use the existing
+`NotificationQueueOptions__fullyQualifiedNamespace` in each environment.
+`infra/main.bicep` supplies the connection's managed-identity settings and
+provisions the `InvoiceNotificationDelivery` table. Include that table in
+any explicit `STORAGE_TABLE_NAMES` override.
+
+Provision the `notificationdeliveryevent-invoicing` queue and its scoped
+Service Bus Data Receiver grant in the Notification deployment before starting
+the Invoicing listener. Refer to the [delivery contract](invoice-lifecycle.md#provider-delivery-receipts).
+Development deployments without the Notification destination disable the consumer.
+For local Functions startup without that connection, set
+`AzureWebJobs.InvoiceNotificationDeliveryConsumer.Disabled` to `true` in the
+local settings file.

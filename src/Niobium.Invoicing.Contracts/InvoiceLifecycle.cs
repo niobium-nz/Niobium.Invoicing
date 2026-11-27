@@ -244,9 +244,21 @@ public sealed class ReconcileInvoicePaymentHistoryRequest
     public string Evidence { get; set; } = String.Empty;
 }
 
+public enum InvoiceNotificationFailure
+{
+    Bounced = 1, Failed = 2, Suppressed = 3, Complained = 4
+}
+
+public sealed record InvoiceNotificationProgress(DateTimeOffset? SubmittedAt, DateTimeOffset? LastDelayedAt,
+    DateTimeOffset? LastFailureAt, InvoiceNotificationFailure? LastFailure);
+
 public sealed record InvoiceLifecycleStatus(InvoicePreparationStage Preparation, InvoiceDeliveryState Delivery,
     InvoicePaymentHistory PaymentHistory, bool Cancelled, DateTimeOffset? CancelledAt,
     DateTimeOffset? QueuedAt, DateTimeOffset? ConfirmedDeliveredAt, InvoiceCancellationBlock CancellationBlock)
 {
     public bool CanCancel => CancellationBlock == InvoiceCancellationBlock.None;
+
+    /// <summary>Additional provider progress when an authenticated receipt was recorded.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public InvoiceNotificationProgress? Notification { get; init; }
 }

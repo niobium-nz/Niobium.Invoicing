@@ -32,6 +32,7 @@ public sealed partial class DeployedInvoiceTests
     private static Guid referenceBiller;
     private static long referenceInvoice;
     private const string ReferenceTerms = "Niobium.Invoicing CI reference fixture";
+    private const string NotificationDeliveryTable = "InvoiceNotificationDelivery";
 
     [ClassInitialize]
     public static async Task Initialize(TestContext context)
@@ -182,7 +183,7 @@ public sealed partial class DeployedInvoiceTests
     }
 
     [TestMethod]
-    public async Task Real_test_notification_service_accepts_an_invoice_for_the_approved_mailbox()
+    public async Task Real_test_notification_service_confirms_delivery_for_the_approved_mailbox()
     {
         string recipient = Required("TEST_NOTIFICATION_RECIPIENT");
         Assert.IsTrue(System.Net.Mail.MailAddress.TryCreate(recipient, out _), "A valid approved test mailbox is required.");
@@ -214,7 +215,17 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(token));
         using HttpResponseMessage html = await http.GetAsync($"/{sender}/invoices/{id}?token={token}");
         Assert.AreEqual(HttpStatusCode.OK, html.StatusCode);
-        // Delivered is an enqueue acknowledgement, not a provider receipt. Do not steal the real consumer's messages.
+        await Eventually(async () =>
+        {
+            using HttpRequestMessage statusRequest = new(HttpMethod.Get, $"/{sender}/invoices/{id}/status");
+            statusRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token(sender, group));
+            using HttpResponseMessage statusResponse = await http.SendAsync(statusRequest);
+            if (!statusResponse.IsSuccessStatusCode)
+                return false;
+            InvoiceLifecycleStatus? status = JsonSerializer.Deserialize<InvoiceLifecycleStatus>(
+                await statusResponse.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return status is { Delivery: InvoiceDeliveryState.Delivered, ConfirmedDeliveredAt: not null, Notification: not null };
+        }, "The owned invoice did not project a verified provider delivery receipt.");
     }
 
     [TestMethod]
@@ -615,6 +626,10 @@ public sealed partial class DeployedInvoiceTests
                 await tables.GetTableClient(nameof(Invoice)).DeleteEntityAsync(owned.PartitionKey, owned.RowKey, owned.ETag);
                 foreach (TableEntity item in ownedItems)
                     await items.DeleteEntityAsync(item.PartitionKey, item.RowKey, item.ETag);
+                TableClient deliveries = tables.GetTableClient(NotificationDeliveryTable);
+                NullableResponse<TableEntity> delivery = await deliveries.GetEntityIfExistsAsync<TableEntity>(owned.PartitionKey, owned.RowKey);
+                if (delivery.HasValue)
+                    await deliveries.DeleteEntityAsync(owned.PartitionKey, owned.RowKey, delivery.Value.ETag);
             }));
     }
 

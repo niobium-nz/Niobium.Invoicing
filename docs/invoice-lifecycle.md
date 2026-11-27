@@ -6,8 +6,9 @@ implements those rules in `InvoiceDomain`, with authenticated HTTP access throug
 `InvoiceLifecycleFlow` and `InvoiceLifecycleFunctions`. The
 [manual payment candidate](invoice-payments.md) records receipts/reversals and
 preserves permanent payment evidence. [Committed history](invoice-history.md)
-covers material changes and authenticated browsing. Provider-confirmed delivery
-and the remaining retention/restore controls are separate work.
+covers material changes and authenticated browsing. Authenticated provider receipts
+add delivery evidence to the invoice status while the remaining retention and restore
+controls continue under B08.
 The [delivery ledger](implementation-progress.md) records verification;
 source presence alone does not establish a production release.
 
@@ -47,6 +48,45 @@ the acknowledgement loop never sends another message. EmailFlow re-reads cancell
 before enqueue, but a cancellation racing an already-started send cannot recall
 mail or create an atomic transaction with Service Bus. A missing recipient keeps
 the established no-send behavior.
+
+## Provider delivery receipts
+
+Notification validates and persists the signed provider receipt, then publishes
+the invoice channel to its explicitly configured
+`notificationdeliveryevent-invoicing` queue. The Invoicing Functions listener
+reuses the Notification namespace connection and its user-assigned managed
+identity. Notification's infrastructure grants the receiver role on this queue.
+The framework's typed canonical queue keeps its type-derived name. See the
+[Niobium messaging convention](https://github.com/niobium-nz/Niobium/blob/ba660a5c12ca92ae0026625b368eb03e631a34e3/docs/messaging.md#confirmed-routing-convention).
+
+The consumer checks the Service Bus envelope ID against the event ID. It resolves
+the canonical `invoiceID@biller` reference, requires the `Invoice` channel and
+the exact tenant used by the original notification, and loads that particular
+invoice. The invoice domain requires the saved frozen operation and link context.
+The projected row is keyed by the business properties `Biller` and `InvoiceID`,
+mapped to Table Storage keys with `EntityKey`. It binds the opaque submission
+and provider-message identifiers without knowing their representation.
+
+The domain retains the earliest verified submission and mail-server acceptance,
+and the latest observed delay and provider failure. Delays, bounces, failures,
+suppressions and complaints are additional progress evidence. Received order
+does not override event time. A retry of the same event leaves its evidence
+unchanged. A concurrent stale write is retried through normal broker redelivery
+with a fresh conditional version. Distinct source events remain in Notification's
+receipt history.
+
+A verified Delivered event sets `ConfirmedDeliveredAt` even when enqueue
+acknowledgement is still pending. An older legacy enqueue remains visible as
+`QueuedAt` with Unknown confirmation until there is verified delivery evidence.
+The status retains cancellation, payment history and cancellation eligibility
+from the invoice. The separate projection protects those facts during receipt
+redelivery and lets existing invoice writers retain their current schema.
+
+The authenticated status may include a `notification` object with `submittedAt`,
+`lastDelayedAt`, `lastFailureAt` and `lastFailure`. The existing saved customer
+link and public HTML continue to use the invoice's cancellation and token rules.
+Templates and provider submissions that cannot produce a correlated receipt
+require the separate definitive-outcome work in the roadmap.
 
 ## HTTP contracts
 
@@ -131,7 +171,7 @@ recovery implementation. The manual payment candidate adds schema 3 with real
 history and payment references, fencing prior schema-2 writers before they can
 discard the new representation. Receipt and reversal rules, verification limits
 and delivery state are documented in [manual payments](invoice-payments.md).
-The separate Notification receipt contract
-must be published and consumed before Invoicing can project authenticated recipient
-mail-server acceptance. No provider-submission or enqueue observation is presented
-as that confirmation.
+The existing approved-mailbox test polls the authenticated status of its own
+invoice until the signed provider receipt is reflected as Delivered. Local Azure
+Table tests cover envelope identity, tenant and frozen-operation correlation,
+replays, out-of-order progress and late delivery after cancellation.
