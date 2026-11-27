@@ -163,9 +163,10 @@ assumed to land on the same Azure instance. No notification is added by this cas
 
 ### Test storage recovery evidence
 
-The deployed harness writes `test-storage-recovery.json` with the exact
-deployed commit, capture time, storage account SKU and kind, and the
-account's Blob versioning, soft-delete and point-in-time recovery settings.
+After verifying the deployed commit through `/health`, the deployed harness
+writes `test-storage-recovery.json` and logs the same sanitized receipt. It records
+the verified commit, capture time, storage account SKU and kind, and the account's
+Blob versioning, soft-delete and point-in-time recovery settings.
 It also records matching backup instances visible in Data Protection vaults
 in the existing test resource group. The vault scan is bounded and records
 partial coverage when a read fails or additional pages remain.

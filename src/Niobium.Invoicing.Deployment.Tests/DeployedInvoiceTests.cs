@@ -48,7 +48,7 @@ public sealed partial class DeployedInvoiceTests
         Assert.IsTrue(busHost.EndsWith("test.servicebus.windows.net", StringComparison.Ordinal), "A test Service Bus namespace is required.");
         http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = endpoint, Timeout = TimeSpan.FromSeconds(40) };
         string expected = Required("TEST_EXPECTED_COMMIT");
-        Assert.AreEqual(40, expected.Length, "The exact tested commit is required.");
+        Assert.IsTrue(expected.Length == 40 && expected.All(Char.IsAsciiHexDigit), "The exact tested commit is required.");
         await Eventually(async () =>
         {
             try
@@ -63,6 +63,7 @@ public sealed partial class DeployedInvoiceTests
             catch (TaskCanceledException) { return false; }
             catch (JsonException) { return false; }
         }, "The deployed binary did not report the expected commit.");
+        verifiedTestCommit = expected;
         tables = new TableServiceClient(new Uri($"https://{account}.table.core.windows.net"), new TableSharedKeyCredential(account, Required("TEST_STORAGE_KEY")));
         ServiceCollection collection = new();
         collection.AddLogging();

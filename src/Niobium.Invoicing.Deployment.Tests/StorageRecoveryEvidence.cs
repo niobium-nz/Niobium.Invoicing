@@ -5,14 +5,14 @@ namespace Niobium.Invoicing.Deployment.Tests;
 public sealed partial class DeployedInvoiceTests
 {
     private const string AzureManagement = "https://management.azure.com";
+    private static string? verifiedTestCommit;
 
     private static async Task CaptureStorageRecoveryEvidence()
     {
-        if (http == null || Environment.GetEnvironmentVariable("AZURE_ENV_NAME") != "test"
+        if (verifiedTestCommit is not string commit || Environment.GetEnvironmentVariable("AZURE_ENV_NAME") != "test"
             || Environment.GetEnvironmentVariable("TEST_ENVIRONMENT") != "test")
             return;
 
-        string? commit = null;
         object? storage = null;
         JsonElement? blobProtection = null;
         object? backupVaults = null;
@@ -23,13 +23,10 @@ public sealed partial class DeployedInvoiceTests
         {
             string account = Required("TEST_STORAGE_ACCOUNT");
             string group = Required("AZURE_RESOURCE_GROUP");
-            string expectedCommit = Required("TEST_EXPECTED_COMMIT");
-            if (expectedCommit.Length != 40 || !expectedCommit.All(Char.IsAsciiHexDigit)
-                || account.Length is < 3 or > 24 || !account.EndsWith("test", StringComparison.Ordinal)
+            if (account.Length is < 3 or > 24 || !account.EndsWith("test", StringComparison.Ordinal)
                 || account.Any(c => !Char.IsAsciiLetterLower(c) && !Char.IsAsciiDigit(c))
                 || group.Any(c => !Char.IsAsciiLetterOrDigit(c) && !"_-.()".Contains(c)))
                 throw new InvalidOperationException("A valid test deployment and storage target are required.");
-            commit = expectedCommit;
             await VerifiedTestFunctionApp(budget.Token);
             using JsonDocument accountResponse = JsonDocument.Parse(await ReadAzureValueAs("json", budget.Token, "resource", "show",
                 "--resource-group", group, "--name", account, "--resource-type", "Microsoft.Storage/storageAccounts",
@@ -84,7 +81,6 @@ public sealed partial class DeployedInvoiceTests
             backupVaults,
             unavailable
         });
-        Console.WriteLine($"Storage recovery evidence {json}");
         try
         {
             string directory = Path.Combine(Required("GITHUB_WORKSPACE"), "artifacts", "deployed");
@@ -94,6 +90,17 @@ public sealed partial class DeployedInvoiceTests
         catch (Exception)
         {
             Console.WriteLine("The test storage recovery evidence artifact could not be written.");
+        }
+
+        try
+        {
+            // MSTest captures Console.Out. Write the sanitized receipt to the runner log.
+            using StreamWriter log = new(Console.OpenStandardOutput(), leaveOpen: true);
+            log.WriteLine($"Storage recovery evidence {json}");
+        }
+        catch (IOException)
+        {
+            Console.WriteLine("The test storage recovery evidence log could not be written.");
         }
     }
 
