@@ -99,6 +99,11 @@ dotnet test --project src/Niobium.Invoicing.Deployment.Tests/Niobium.Invoicing.D
 
 Fifteen cases cover four HTTP authentication/ownership rejection cases; successful issuance with persistence, validation, exact replay and saved-token HTML; ingestion and update through the real incoming queue; enqueue through the real Notification service to the approved mailbox; safe fixture-ID collision rejection; reference retention after successful issuance and cleanup after rejected issuance; and manual email behavior: missing/invalid keys and bearer-only calls rejected, valid-key notification enqueue, and a valid-key missing-recipient skip. The health response must first identify the exact feature commit. Notification tests leave the downstream queue to its real consumer; they do not receive/complete unrelated messages or assert provider delivery from an enqueue acknowledgement.
 
+The queue issuance case waits for both the expected total and the `Ready`
+checkpoint in the same invoice read before checking the result or sending the
+next command. The worker can publish totals during `Preparing` while its item
+writes are still in progress.
+
 Q26 restores the historical key-guarded debug endpoint. The separately reviewed preparatory harness permits 404 or 401 so the absent route can transition to host authorization without changing protection settings. The restoration candidate strictly requires 401 for missing/invalid keys and bearer-only requests to an existing ready invoice, an unchanged invoice ETag on rejection, and 201 for valid-key calls. It uses the workflow's existing Azure CLI identity to read the test app's default host function key after matching its ARM hostname to the verified test endpoint. It does not create/rotate keys or use a master key. Credentials and CLI output are captured without logging; requests carry the key only in a header. The authorized-send case uses the approved mailbox and checks freeze, token, enqueue acknowledgement and public HTML; the empty-recipient case checks the historical skip without a write. Production's GET allowlist remains limited to health and invoice viewing; the manual email route is never part of read-only production tests.
 
 Q27 adds six deployed debug-view cases: missing/invalid keys and bearer-only requests return 401; a valid existing test key renders tokenless drafts and frozen invoices without changing invoice/item ETags, token, issuance state or enqueue acknowledgement; missing invoices return 404. Responses must be HTML with `Cache-Control: no-store` and preserve HTML encoding. Tests verify that public token checks remain mandatory even with a function key, saved links still work, drafts stay editable and frozen updates remain rejected. These cases reuse the test-only key reader and existing resources; they do not send additional notifications. Local component tests also execute the handler results and exercise reads through the pinned Table adapter against disposable Azurite.
@@ -184,6 +189,21 @@ separately operated backups unless they are visible within that scope.
 Measure recovered data age and restoration time in the authorized test
 environment before reporting Q28's one-hour RPO and four-hour RTO targets
 as met. The production read-only suite has its own evidence scope.
+
+On 27 November 2026 the deployed inventory reported `Standard_LRS` on the
+`StorageV2` test data account, seven days of Blob soft delete and disabled
+Blob versioning. The test resource-group scan completed with zero visible
+Data Protection vaults and zero matching backup instances. The receipt covers
+that resource group. [Observed test receipt](https://github.com/niobium-nz/Niobium.Invoicing/actions/runs/46031132024/job/140615711470)
+
+The deployed restore drill captures a serialized copy of one line from a newly
+created synthetic invoice with a blank recipient. It conditionally removes
+that owned line by ETag, confirms the row is missing, and reinserts the copy
+through the StorageTable repository. The test compares the recovered line and
+checks the parent version and committed history chain. The copy stays in the
+runner's memory. `test-invoice-line-restore.json` records the exact commit and the
+elapsed time for insertion and read-back. Account-level recovery, recovery from
+a separately retained backup, and RPO/RTO measurement require a broader drill.
 
 ## Read-only production suite
 
