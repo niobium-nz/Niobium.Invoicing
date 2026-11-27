@@ -1,5 +1,30 @@
 # Niobium integration
 
+## Dependency baseline for provider delivery receipts
+
+Invoicing needs the released `NotificationDeliveryEvent` contract for the B06
+consumer. Notification Contracts `2.0.23` includes it and requires
+`Niobium.Abstractions` and `Niobium.Messaging` at `4.2.66`. Align the existing
+direct framework dependencies across the solution so the receipt package and
+existing functions use a compatible graph.
+[Published receipt package](https://www.nuget.org/packages/Niobium.Notification.Contracts/2.0.23)
+
+| Existing direct references | Published version | Source baseline |
+| --- | --- | --- |
+| Abstractions, Helper, Profile, Finance, Identity, Database.StorageTable and Messaging | 4.2.66 | [Framework release source](https://github.com/niobium-nz/Niobium/tree/5c527723a607c1d03c002d4aa70531c9a55a767e) |
+| Platform.Functions and Platform.Profile | 4.2.70 | [Framework release source](https://github.com/niobium-nz/Niobium/tree/f5b1b46a4a8c83e8771d7a3e9ae9dcc7044b62f0) |
+| Platform.Identity, Platform.StorageTable and Platform.ServiceBus | 4.2.80 | [Multiple role correction](https://github.com/niobium-nz/Niobium/pull/6) |
+| Notification.Contracts | 2.0.23 | [Notification receipt release](https://github.com/niobium-nz/Niobium.Notification/pull/14) |
+
+The existing framework publication metadata can declare minimum dependencies at
+`4.2.0`. Check the actual resolved versions and restore warnings when verifying
+the feature run. [Package alignment convention](https://github.com/niobium-nz/Niobium/blob/main/docs/package-upgrades.md)
+
+This package change prepares the consumer. A later increment will give Invoicing
+its own receipt queue path and project authenticated events into invoice history.
+The versioned provenance below describes the discovery baseline before this
+package alignment.
+
 ## Provenance and package map
 
 **Verified provenance:** installed NuGet `.nuspec` repository commits and portable-PDB SourceLink mappings agree for the relevant packages. Source snapshots were inspected outside this repository. This establishes a source/version correspondence, not the identity of a deployed application.
